@@ -1,2 +1,3 @@
-# bubuku
-Second version of buku
+Introduction
+============
+Bubuku - supervisor for kafka

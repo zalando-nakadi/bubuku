@@ -1,0 +1,67 @@
+import logging
+import os
+from collections import namedtuple
+
+_LOG = logging.getLogger('bubuku.properties')
+
+Config = namedtuple('Config', ('kafka_dir', 'kafka_settings_template', 'zk_stack_name',
+                               'zk_prefix', 'id_policy', 'features'))
+
+
+class KafkaProperties(object):
+    def __init__(self, template: str, kafka_dir: str):
+        self.lines = []
+        self.settings_file = '{}/config/server.properties'.format(kafka_dir)
+        _LOG.info('Loading template properties from {}'.format(self.settings_file))
+        with open(template, 'r') as f:
+            for l in f.readlines():
+                self.lines.append(_make_clean_line(l))
+
+    def get_property(self, name: str) -> str:
+        idx = self._get_property_idx(name)
+        if idx is not None:
+            return self.lines[idx].split('=', 1)[1]
+        return None
+
+    def _get_property_idx(self, name: str):
+        search = '{}='.format(name)
+        for idx in range(0, len(self.lines)):
+            if self.lines[idx].startswith(search):
+                return idx
+        return None
+
+    def delete_property(self, name):
+        idx = self._get_property_idx(name)
+        if idx is not None:
+            del self.lines[idx]
+
+    def set_property(self, name, value):
+        idx = self._get_property_idx(name)
+        if idx is not None:
+            self.lines[idx] = '{}={}'.format(name, value)
+        else:
+            self.lines.append('{}={}'.format(name, value))
+
+    def dump(self):
+        _LOG.info('Dumping kafka properties to {}'.format(self.settings_file))
+        with open(self.settings_file, mode='w') as f:
+            f.writelines(self.lines)
+
+
+def load_config() -> Config:
+    return Config(
+        kafka_dir=os.getenv('KAFKA_DIR'),
+        kafka_settings_template=os.getenv('KAFKA_SETTINGS'),
+        zk_stack_name=os.getenv('ZOOKEEPER_STACK_NAME'),
+        zk_prefix=os.getenv('ZOOKEEPER_PREFIX', '/'),
+        id_policy=os.getenv('BROKER_ID_POLICY', 'ip').lower(),
+        features=os.getenv('BUKU_FEATURES', '').lower(),
+    )
+
+
+def _make_clean_line(l: str) -> str:
+    result = l.strip()
+    if result.startswith('#'):
+        return result
+    n, v = result.split('=', 1)
+    return '{}={}'.format(n.strip(), v)
