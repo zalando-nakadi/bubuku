@@ -4,10 +4,6 @@ import logging
 import boto3
 import requests
 
-__NONE_DOCUMENT = object()
-__DOCUMENT = None
-__AWS_ADDR = '169.254.169.254'
-
 _LOG = logging.getLogger('bubuku.amazon')
 
 
