@@ -46,6 +46,9 @@ class RebalanceChange(Change):
         self.stale_data = {}  # partition count to topic data
         self.shuffled_broker_ids = None
 
+    def get_name(self) -> str:
+        return 'rebalance'
+
     def can_run(self, current_actions):
         return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'stop']])
 
