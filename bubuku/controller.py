@@ -99,7 +99,7 @@ class Controller(object):
             if self.running:
                 for check in self.checks:
                     _LOG.info('Executing check {}'.format(check))
-                    change = check.run()
+                    change = check.check()
                     if change:
                         _LOG.info('Adding change {} to pending changes'.format(change.get_name()))
                         self.changes.append(change)

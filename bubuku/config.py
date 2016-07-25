@@ -57,7 +57,7 @@ def load_config() -> Config:
         zk_prefix=os.getenv('ZOOKEEPER_PREFIX', '/'),
         id_policy=os.getenv('BROKER_ID_POLICY', 'ip').lower(),
         features=os.getenv('BUKU_FEATURES', '').lower(),
-        health_port=os.getenv('HEALTH_PORT', '').lower(),
+        health_port=int(os.getenv('HEALTH_PORT', '8888')),
     )
 
 
