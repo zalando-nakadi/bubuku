@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import inspect
@@ -36,7 +36,7 @@ KEYWORDS = 'aws kafka supervisor'
 # Add here all kinds of additional classifiers as defined under
 # https://pypi.python.org/pypi?%3Aaction=list_classifiers
 CLASSIFIERS = [
-    'Development Status :: 3 - Alfa',
+    'Development Status :: 3 - Alpha',
     'Environment :: Console',
     'Intended Audience :: Developers',
     'Intended Audience :: System Administrators',
@@ -66,7 +66,7 @@ def read(fname):
 
 
 def setup_package():
-    command_options = {'test': {'test_suite': ('setup.py', 'tests'), 'cov': ('setup.py', MAIN_PACKAGE)}}
+    command_options = {'test': {'test_suite': ('setup.py', 'tests')}}
 
     setup(
         name=NAME,
