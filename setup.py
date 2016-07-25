@@ -28,7 +28,7 @@ MAIN_PACKAGE = 'bubuku'
 VERSION = read_version(MAIN_PACKAGE)
 DESCRIPTION = 'AWS support for kafka broker'
 LICENSE = 'Apache License 2.0'
-URL = 'https://github.com/zalando/bubuku'
+URL = 'https://github.com/zalando-incubator/bubuku'
 AUTHOR = 'Dmitry Sorokin'
 EMAIL = 'dmitriy.sorokin@zalando.de'
 KEYWORDS = 'aws kafka supervisor'
@@ -47,7 +47,7 @@ CLASSIFIERS = [
     'Programming Language :: Python :: Implementation :: CPython',
 ]
 
-CONSOLE_SCRIPTS = ['bukubuku = bubuku.daemon:main']
+CONSOLE_SCRIPTS = ['bubuku = bubuku.daemon:main']
 
 
 class PyTest(test):
