@@ -22,7 +22,8 @@ def main():
 
     config = load_config()
     _LOG.info("Using configuration: {}".format(config))
-    kafka_properties = KafkaProperties(config.kafka_settings_template, config.kafka_dir)
+    kafka_properties = KafkaProperties(config.kafka_settings_template,
+                                       '{}/config/server.properties'.format(config.kafka_dir))
 
     amazon = Amazon()
 

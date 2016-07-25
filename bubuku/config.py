@@ -9,9 +9,9 @@ Config = namedtuple('Config', ('kafka_dir', 'kafka_settings_template', 'zk_stack
 
 
 class KafkaProperties(object):
-    def __init__(self, template: str, kafka_dir: str):
+    def __init__(self, template: str, kafka_settings: str):
         self.lines = []
-        self.settings_file = '{}/config/server.properties'.format(kafka_dir)
+        self.settings_file = kafka_settings
         _LOG.info('Loading template properties from {}'.format(self.settings_file))
         with open(template, 'r') as f:
             for l in f.readlines():
@@ -45,7 +45,8 @@ class KafkaProperties(object):
     def dump(self):
         _LOG.info('Dumping kafka properties to {}'.format(self.settings_file))
         with open(self.settings_file, mode='w') as f:
-            f.writelines(self.lines)
+            for l in self.lines:
+                f.write('{}\n'.format(l))
 
 
 def load_config() -> Config:
@@ -61,7 +62,7 @@ def load_config() -> Config:
 
 def _make_clean_line(l: str) -> str:
     result = l.strip()
-    if result.startswith('#'):
+    if result.startswith('#') or not result:
         return result
     n, v = result.split('=', 1)
     return '{}={}'.format(n.strip(), v)
