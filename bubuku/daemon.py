@@ -3,6 +3,7 @@
 
 import logging
 
+from bubuku import health
 from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
 from bubuku.config import load_config, KafkaProperties
@@ -31,7 +32,7 @@ def main():
     exhibitor = load_exhibitor(amazon.get_addresses_by_lb_name(config.zk_stack_name), config.zk_prefix)
 
     _LOG.info("Loading broker_id policy")
-    broker_id_manager = get_broker_id_policy(config.id_policy, exhibitor, kafka_properties)
+    broker_id_manager = get_broker_id_policy(config.id_policy, exhibitor, kafka_properties, amazon)
 
     _LOG.info("Building broker manager")
     broker = BrokerManager(config.kafka_dir, exhibitor, broker_id_manager, kafka_properties)
@@ -53,7 +54,10 @@ def main():
         else:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
-    _LOG.info("Starting main controller loop")
+    _LOG.info('Starting health server')
+    health.start_server(config.health_port)
+
+    _LOG.info('Starting main controller loop')
     controller.loop()
 
 
