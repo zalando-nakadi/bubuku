@@ -3,7 +3,7 @@ import functools
 import logging
 import os
 import re
-from time import sleep
+from time import sleep, time
 
 from kazoo.client import NoNodeError
 
@@ -31,8 +31,11 @@ class BrokerIdGenerator(object):
         except NoNodeError:
             return False
 
-    def wait_for_broker_id_presence(self):
+    def wait_for_broker_id_presence(self, timeout) -> bool:
+        start = time()
         while not self.is_registered():
+            if (time() - start) > timeout:
+                return False
             sleep(1)
         return True
 

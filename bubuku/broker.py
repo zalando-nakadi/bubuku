@@ -16,6 +16,7 @@ class BrokerManager(object):
         self.exhibitor = exhibitor
         self.kafka_properties = kafka_properties
         self.process = None
+        self.wait_timeout = 5 * 60
 
     def is_running_and_registered(self):
         if not self.process:
@@ -63,3 +64,10 @@ class BrokerManager(object):
         _LOG.info('Staring kafka process')
         self.process = subprocess.Popen(
             [self.kafka_dir + "/bin/kafka-server-start.sh", self.kafka_properties.settings_file])
+
+        _LOG.info('Waiting for kafka to start up with timeout {} seconds'.format(self.wait_timeout))
+        if not self.id_manager.wait_for_broker_id_presence(self.wait_timeout):
+            self.wait_timeout += 60
+            _LOG.error(
+                'Failed to wait for broker to start up, probably will kill, increasing timeout to {} seconds'.format(
+                    self.wait_timeout))
