@@ -104,7 +104,7 @@ class RebalanceChange(Change):
         # Next actions are split into steps, because they are relatively long-running
 
         # Load existing data from zookeeper and try to split it for different purposes
-        if not self.shuffled_broker_ids:
+        if self.shuffled_broker_ids is None:
             self.shuffled_broker_ids = {}
             for d in self.load_current_data():
                 replication_factor = len(d['replicas'])
