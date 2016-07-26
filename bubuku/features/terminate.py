@@ -39,7 +39,7 @@ def register_terminate_on_interrupt(controller: Controller, broker: BrokerManage
     if __REGISTERED:
         return
 
-    def _sig_handler():
+    def _sig_handler(*args, **kwargs):
         _LOG.info('Signal was caught, stopping controller gracefully')
         controller.stop(StopBrokerChange(broker))
 
