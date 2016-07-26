@@ -68,7 +68,7 @@ class Controller(object):
                     if change.can_run(_exclude_self(ip, name, running_changes)):
                         if name not in running_changes:
                             _LOG.info('Registering change in zk: {}'.format(name))
-                            self.zk.create('/bubuku/changes/{}'.format(name), ip, ephemeral=True)
+                            self.zk.create('/bubuku/changes/{}'.format(name), ip.encode('utf-8'), ephemeral=True)
                             running_changes[name] = ip
                     else:
                         _LOG.info('Change {} is waiting for others: {}'.format(change.get_name(), running_changes))
