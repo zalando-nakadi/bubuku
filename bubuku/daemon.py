@@ -13,9 +13,24 @@ from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
-from bubuku.zookeeper import load_exhibitor
+from bubuku.zookeeper import load_exhibitor, Exhibitor
 
 _LOG = logging.getLogger('bubuku.main')
+
+
+def apply_features(features: str, controller: Controller, exhibitor: Exhibitor, broker: BrokerManager,
+                   kafka_properties: KafkaProperties, amazon: Amazon) -> list:
+    for feature in set(features.split(',')):
+        if feature == 'restart_on_exhibitor':
+            controller.add_check(CheckExhibitorAddressChanged(exhibitor, broker))
+        elif feature == 'rebalance_on_start':
+            controller.add_check(RebalanceOnStartCheck(exhibitor, broker))
+        elif feature == 'graceful_terminate':
+            register_terminate_on_interrupt(controller, broker)
+        elif feature == 'use_ip_address':
+            kafka_properties.set_property('advertised.host.name', amazon.get_own_ip())
+        else:
+            _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
 
 def main():
@@ -42,17 +57,7 @@ def main():
 
     controller.add_check(CheckBrokerStopped(broker, exhibitor))
 
-    for feature in set(config.features.split(',')):
-        if feature == 'restart_on_exhibitor':
-            controller.add_check(CheckExhibitorAddressChanged(exhibitor, broker))
-        elif feature == 'rebalance_on_start':
-            controller.add_check(RebalanceOnStartCheck(exhibitor))
-        elif feature == 'graceful_terminate':
-            register_terminate_on_interrupt(controller, broker)
-        elif feature == 'use_ip_address':
-            kafka_properties.set_property('advertised.host.name', amazon.get_own_ip())
-        else:
-            _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
+    apply_features(config.features, controller, exhibitor, broker, kafka_properties, amazon)
 
     _LOG.info('Starting health server')
     health.start_server(config.health_port)

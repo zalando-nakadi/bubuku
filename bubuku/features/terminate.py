@@ -25,10 +25,24 @@ class StopBrokerChange(Change):
         return True
 
 
+__REGISTERED = None
+
+
+def get_registration():
+    if not __REGISTERED:
+        return None, None
+    return __REGISTERED
+
+
 def register_terminate_on_interrupt(controller: Controller, broker: BrokerManager):
+    global __REGISTERED
+    if __REGISTERED:
+        return
+
     def _sig_handler():
         _LOG.info('Signal was caught, stopping controller gracefully')
         controller.stop(StopBrokerChange(broker))
 
     _LOG.info('Registering signal handler')
     signal.signal(signal.SIGTERM, _sig_handler)
+    __REGISTERED = (controller, broker)

@@ -57,6 +57,11 @@ producer.purgatory.purge.interval.requests=100
 __FNAME = ''
 
 
+def build_test_properties():
+    __create_kafak_props_file()
+    return KafkaProperties(__FNAME, __FNAME)
+
+
 def __create_kafak_props_file():
     global __FNAME
     if not __FNAME:
@@ -69,13 +74,13 @@ __create_kafak_props_file()
 
 
 def test_parse_kafka_properties():
-    props = KafkaProperties(__FNAME, __FNAME)
+    props = build_test_properties()
 
     assert props.get_property('log.retention.hours') == '168'
 
 
 def test_update_kafka_properties():
-    props = KafkaProperties(__FNAME, __FNAME)
+    props = build_test_properties()
 
     assert '100' == props.get_property('producer.purgatory.purge.interval.requests')
 
