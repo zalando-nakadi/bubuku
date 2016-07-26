@@ -62,6 +62,7 @@ class Controller(object):
                     change: self.zk.get('/bubuku/changes/{}'.format(change))[0]
                     for change in self.zk.get_children('/bubuku/changes')
                     }
+                _LOG.debug("Running changes: {}".format(running_changes))
                 # Register changes to run
                 for change in self.changes:
                     name = change.get_name()
