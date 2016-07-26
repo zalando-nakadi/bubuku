@@ -59,7 +59,7 @@ class Controller(object):
                 _LOG.debug('Lock is taken')
                 # Get list of current running changes
                 running_changes = {
-                    change: self.zk.get('/bubuku/changes/{}'.format(change))
+                    change: self.zk.get('/bubuku/changes/{}'.format(change))[0]
                     for change in self.zk.get_children('/bubuku/changes')
                     }
                 # Register changes to run

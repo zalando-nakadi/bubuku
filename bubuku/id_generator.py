@@ -27,7 +27,8 @@ class BrokerIdGenerator(object):
 
     def _is_registered_in_zk(self, id_):
         try:
-            return self.zk.get('/brokers/ids/{}'.format(id_)) is not None
+            _, stat = self.zk.get('/brokers/ids/{}'.format(id_))
+            return stat is not None
         except NoNodeError:
             return False
 
