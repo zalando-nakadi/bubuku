@@ -74,14 +74,13 @@ class RebalanceChange(Change):
             return v[0], _removal_func
 
         if self.shuffled_broker_ids:
-            for repl_factor, data in self.shuffled_broker_ids:
+            for repl_factor, data in self.shuffled_broker_ids.items():
                 min_length = min([len(v) for v in data.values()])
                 max_length = max([len(v) for v in data.values()])
                 if (max_length - min_length) < 2:
                     continue
                 return pop_with_length(data.values(), max_length)
-        else:
-            return None, None
+        return None, None
 
     def run(self, current_actions):
         # Stop rebalance if someone is restarting

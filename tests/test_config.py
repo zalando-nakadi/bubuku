@@ -90,6 +90,6 @@ def test_update_kafka_properties():
 
     props.dump()
 
-    props2 = KafkaProperties(__FNAME, __FNAME)
+    props2 = build_test_properties()
 
     assert '180' == props2.get_property('producer.purgatory.purge.interval.requests')
