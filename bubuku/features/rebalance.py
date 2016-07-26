@@ -3,6 +3,7 @@ import logging
 
 from kazoo.exceptions import NodeExistsError
 
+from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
 from bubuku.zookeeper import Exhibitor
 
@@ -172,12 +173,15 @@ class RebalanceChange(Change):
 
 
 class RebalanceOnStartCheck(Check):
-    def __init__(self, zk):
+    def __init__(self, zk, broker: BrokerManager):
         self.zk = zk
+        self.broker = broker
         self.executed = False
 
     def check(self):
         if self.executed:
+            return None
+        if not self.broker.is_running_and_registered():
             return None
         _LOG.info("Rebalance on start, triggering rebalance")
         self.executed = True

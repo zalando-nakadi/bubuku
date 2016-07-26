@@ -89,15 +89,15 @@ class Exhibitor:
 
     def set(self, *args, **kwargs):
         self._poll_exhibitor()
-        return self.client.retry(self.client.set(*args, **kwargs))
+        return self.client.retry(self.client.set, *args, **kwargs)
 
     def create(self, *args, **kwargs):
         self._poll_exhibitor()
-        return self.client.retry(self.client.create(*args, **kwargs))
+        return self.client.retry(self.client.create, *args, **kwargs)
 
     def delete(self, *args, **kwargs):
         self._poll_exhibitor()
-        return self.client.retry(self.client.delete(*args, **kwargs))
+        return self.client.retry(self.client.delete, *args, **kwargs)
 
     def get_children(self, *params):
         self._poll_exhibitor()
