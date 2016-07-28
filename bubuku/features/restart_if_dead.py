@@ -23,7 +23,8 @@ class StartBrokerChange(Change):
         if self.broker.is_running_and_registered():
             return False
         _LOG.info('Waiting for complete death')
-        self.broker.stop_kafka_process()
+        if not self.broker.stop_kafka_process():
+            return True
         _LOG.info('Starting up again')
         self.broker.start_kafka_process(self.zk.exhibitor.zookeeper_hosts + self.zk.prefix)
         return False

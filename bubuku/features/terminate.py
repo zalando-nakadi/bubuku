@@ -19,7 +19,7 @@ class StopBrokerChange(Change):
 
     def run(self, current_actions):
         _LOG.info('Stopping kafka process')
-        self.broker.stop_kafka_process()
+        return not self.broker.stop_kafka_process()
 
     def can_run_at_exit(self):
         return True

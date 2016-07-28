@@ -1,3 +1,4 @@
+import json
 import logging
 import subprocess
 
@@ -24,8 +25,37 @@ class BrokerManager(object):
         return self.id_manager.is_registered()
 
     def stop_kafka_process(self):
+        """
+        Stops kafka process (if it is running) and says if this topic is still is a leader on in ISR list for some
+        partitions
+        :return: True, if broker is stopped and is not a leader or a isr.
+        """
         self._terminate_process()
         self._wait_for_zk_absence()
+        return not self._have_leadership()
+
+    def _have_leadership(self):
+        # Only wait when unclean leader election is disabled
+        unclean_election = self.kafka_properties.get_property('unclean.leader.election.enable') == 'true'
+        if unclean_election:
+            return False
+        broker_id = str(self.id_manager.get_broker_id())
+        if not broker_id:
+            return False
+        for topic in self.exhibitor.get_children('/brokers/topics'):
+            for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
+                state = json.loads(
+                    self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(topic, partition))[0].decode(
+                        'utf-8'))
+                if str(state['leader']) == broker_id:
+                    _LOG.warn('Broker {} is still a leader for {} {} ({})'.format(broker_id, topic, partition,
+                                                                                  json.dumps(state)))
+                    return True
+                if any([str(x) == broker_id for x in state['isr']]):
+                    _LOG.warn('Broker {} is still is in ISR for {} {} ({})'.format(broker_id, topic, partition,
+                                                                                   json.dumps(state)))
+                    return True
+        return False
 
     def _terminate_process(self):
         if self.process is not None:
@@ -62,8 +92,7 @@ class BrokerManager(object):
         self.kafka_properties.dump()
 
         _LOG.info('Staring kafka process')
-        self.process = subprocess.Popen(
-            [self.kafka_dir + "/bin/kafka-server-start.sh", self.kafka_properties.settings_file])
+        self.process = self._open_process()
 
         _LOG.info('Waiting for kafka to start up with timeout {} seconds'.format(self.wait_timeout))
         if not self.id_manager.wait_for_broker_id_presence(self.wait_timeout):
@@ -71,3 +100,7 @@ class BrokerManager(object):
             _LOG.error(
                 'Failed to wait for broker to start up, probably will kill, increasing timeout to {} seconds'.format(
                     self.wait_timeout))
+
+    def _open_process(self):
+        return subprocess.Popen(
+            [self.kafka_dir + "/bin/kafka-server-start.sh", self.kafka_properties.settings_file])
