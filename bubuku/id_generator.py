@@ -18,7 +18,7 @@ class BrokerIdGenerator(object):
     def __init__(self, zk: Exhibitor):
         self.zk = zk
 
-    def get_broker_id(self):
+    def get_broker_id(self) -> str:
         raise NotImplementedError('Not implemented')
 
     def wait_for_broker_id_absence(self):
@@ -44,7 +44,7 @@ class BrokerIdGenerator(object):
         raise NotImplementedError('Not implemented')
 
 
-def _create_rfc1918_address_hash(ip: str) -> int:
+def _create_rfc1918_address_hash(ip: str) -> (str, str):
     address = [int(v) for v in ip.split('.')]
     # the goal of this hashing is to get positive 4-bytes int which can not be changed during restarts
     if address[0] == 10:
@@ -55,13 +55,14 @@ def _create_rfc1918_address_hash(ip: str) -> int:
         address[0] = 3
     else:
         return None
-    return str(functools.reduce(lambda o, v: o * 256 + v, address, 0))
+    return str(functools.reduce(lambda o, v: o * 256 + v, address, 0)), str(256 * 256 * 256 * 3 + 1)
 
 
 class BrokerIDByIp(BrokerIdGenerator):
-    def __init__(self, zk: Exhibitor, ip: str):
+    def __init__(self, zk: Exhibitor, ip: str, kafka_props: KafkaProperties):
         super().__init__(zk)
-        self.broker_id = _create_rfc1918_address_hash(ip)
+        self.broker_id, max_id = _create_rfc1918_address_hash(ip)
+        kafka_props.set_property('reserved.broker.max.id', max_id)
         _LOG.info('Built broker id {} from ip: {}'.format(self.broker_id, ip))
         if self.broker_id is None:
             raise NotImplementedError('Broker id from ip address supported only for rfc1918 private addresses')
@@ -97,7 +98,7 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
 
 def get_broker_id_policy(policy: str, zk: Exhibitor, kafka_props: KafkaProperties, amazon: Amazon) -> BrokerIdGenerator:
     if policy == 'ip':
-        return BrokerIDByIp(zk, amazon.get_own_ip())
+        return BrokerIDByIp(zk, amazon.get_own_ip(), kafka_props)
     elif policy == 'auto':
         return BrokerIdAutoAssign(zk, kafka_props)
     else:
