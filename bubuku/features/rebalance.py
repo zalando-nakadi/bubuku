@@ -1,7 +1,7 @@
 import json
 import logging
 
-from kazoo.exceptions import NodeExistsError
+from kazoo.exceptions import NodeExistsError, NoNodeError
 
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
@@ -41,9 +41,9 @@ def pop_with_length(arrays, length):
 
 
 class RebalanceChange(Change):
-    def __init__(self, zk: Exhibitor):
+    def __init__(self, zk: Exhibitor, broker_list):
         self.zk = zk
-        self.broker_ids = None
+        self.broker_ids = broker_list
         self.stale_data = {}  # partition count to topic data
         self.shuffled_broker_ids = None
 
@@ -88,17 +88,12 @@ class RebalanceChange(Change):
             _LOG.warning("Rebalance stopped, because other blocking events running: {}".format(current_actions))
             return False
 
-        new_broker_ids = self.zk.get_children('/brokers/ids')
+        new_broker_ids = sorted(self.zk.get_children('/brokers/ids'))
 
-        if self.broker_ids is None:
-            self.broker_ids = new_broker_ids
-            _LOG.info("Using broker ids: {}".format(self.broker_ids))
-        else:
-            if not all([id_ in self.broker_ids for id_ in new_broker_ids]) or not all(
-                    [id_ in new_broker_ids for id_ in self.broker_ids]):
-                _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(self.broker_ids,
-                                                                                                    new_broker_ids))
-                return False
+        if new_broker_ids != self.broker_ids:
+            _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(self.broker_ids,
+                                                                                                new_broker_ids))
+            return False
 
         # Next actions are split into steps, because they are relatively long-running
 
@@ -184,4 +179,27 @@ class RebalanceOnStartCheck(Check):
             return None
         _LOG.info("Rebalance on start, triggering rebalance")
         self.executed = True
-        return RebalanceChange(self.zk)
+        return RebalanceChange(self.zk, sorted(self.zk.get_children('/brokers/ids')))
+
+
+class RebalanceOnBrokerListChange(Check):
+    def __init__(self, zk, broker: BrokerManager):
+        self.zk = zk
+        self.broker = broker
+        self.old_broker_list = []
+
+    def check(self):
+        if not self.broker.is_running_and_registered():
+            return None
+        try:
+            rebalance_data = self.zk.get('/admin/reassign_partitions')[0].decode('utf-8')
+            _LOG.info('Rebalance check disabled, old rebalance is still in progress: {}'.format(rebalance_data))
+            return None
+        except NoNodeError:
+            pass
+        new_list = sorted(self.zk.get_children('/brokers/ids'))
+        if not new_list == self.old_broker_list:
+            _LOG.info('Broker list changed from {} to {}, triggering rebalance'.format(self.old_broker_list, new_list))
+            self.old_broker_list = new_list
+            return RebalanceChange(self.zk, new_list)
+        return None
