@@ -39,6 +39,8 @@ def __create_zk_for_topics(topic_data) -> Exhibitor:
             topic = path[len('/brokers/topics/'):]
             return json.dumps({'partitions': {k[1]: br for k, br in topic_data.items() if k[0] == topic}}).encode(
                 'utf-8'), object()
+        elif path == '/admin/reassign_partitions':
+            raise NoNodeError()
         raise NotImplementedError('get {} is not supported'.format(path))
 
     def _create(path, value: bytes):
