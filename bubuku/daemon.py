@@ -25,6 +25,8 @@ def apply_features(features: str, controller: Controller, exhibitor: Exhibitor, 
             controller.add_check(CheckExhibitorAddressChanged(exhibitor, broker))
         elif feature == 'rebalance_on_start':
             controller.add_check(RebalanceOnStartCheck(exhibitor, broker))
+        elif feature == 'rebalance_on_brokers_change':
+            controller.add_check(RebalanceOnStartCheck(exhibitor, broker))
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':
