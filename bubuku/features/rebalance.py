@@ -88,6 +88,13 @@ class RebalanceChange(Change):
             _LOG.warning("Rebalance stopped, because other blocking events running: {}".format(current_actions))
             return False
 
+        try:
+            rebalance_data = self.zk.get('/admin/reassign_partitions')[0].decode('utf-8')
+            _LOG.info('Old rebalance is still in progress: {}, waiting'.format(rebalance_data))
+            return True
+        except NoNodeError:
+            pass
+
         new_broker_ids = sorted(self.zk.get_children('/brokers/ids'))
 
         if new_broker_ids != self.broker_ids:
@@ -148,6 +155,7 @@ class RebalanceChange(Change):
                             v.append(to_move)
                         return True
             to_move, removal_func = self.take_next()
+
         _LOG.info("Current allocation: \n{}".format(self.dump_allocations()))
         return False
 
@@ -191,12 +199,6 @@ class RebalanceOnBrokerListChange(Check):
     def check(self):
         if not self.broker.is_running_and_registered():
             return None
-        try:
-            rebalance_data = self.zk.get('/admin/reassign_partitions')[0].decode('utf-8')
-            _LOG.info('Rebalance check disabled, old rebalance is still in progress: {}'.format(rebalance_data))
-            return None
-        except NoNodeError:
-            pass
         new_list = sorted(self.zk.get_children('/brokers/ids'))
         if not new_list == self.old_broker_list:
             _LOG.info('Broker list changed from {} to {}, triggering rebalance'.format(self.old_broker_list, new_list))
