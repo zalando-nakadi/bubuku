@@ -30,7 +30,6 @@ class RestartBrokerChange(Change):
             _LOG.info('Executing restart to update ZK to {}'.format(new_zk_connect))
             if not self.broker.stop_kafka_process():
                 return True
-            self.broker.start_kafka_process(new_zk_connect)
         else:
             _LOG.info('ZK connect string already configured correctly {}, will not restart'.format(new_zk_connect))
         return False
