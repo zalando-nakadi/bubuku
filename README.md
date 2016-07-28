@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/zalando-incubator/bubuku.svg)](https://travis-ci.org/zalando-incubator/bubuku)
+
 # Introduction
 
 Bubuku - supervisor for kafka
