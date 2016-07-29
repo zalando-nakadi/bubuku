@@ -1,6 +1,7 @@
+import os
 from tempfile import mkstemp
 
-from bubuku.config import KafkaProperties
+from bubuku.config import KafkaProperties, load_config
 
 __PROPS = """
 log.dirs=/data/kafka-logs
@@ -93,3 +94,18 @@ def test_update_kafka_properties():
     props2 = build_test_properties()
 
     assert '180' == props2.get_property('producer.purgatory.purge.interval.requests')
+
+
+def test_zk_prefix_replacement():
+    if os.getenv('ZOOKEEPER_PREFIX', None):
+        os.unsetenv('ZOOKEEPER_PREFIX')
+    assert load_config().zk_prefix == '/'
+
+    os.environ['ZOOKEEPER_PREFIX'] = '/'
+    assert load_config().zk_prefix == '/'
+
+    os.environ['ZOOKEEPER_PREFIX'] = 'test'
+    assert load_config().zk_prefix == '/test'
+
+    os.environ['ZOOKEEPER_PREFIX'] = '/test'
+    assert load_config().zk_prefix == '/test'
