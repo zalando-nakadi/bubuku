@@ -10,24 +10,29 @@ from bubuku.zookeeper import Exhibitor
 _LOG = logging.getLogger('bubuku.features.rebalance')
 
 
-def join_shuffle(ids, length):
+def _optimise_broker_ids(ids: list) -> str:
+    if len(ids) > 1:
+        ids[1:] = sorted(ids[1:])
+    return ','.join(ids)
+
+
+def combine_broker_ids(ids, length) -> list:
     result = []
 
-    def _join_shuffle(start, left, length_):
+    def _combine(start, left, length_):
         if not left or length_ == 0:
             result.append(start)
             return
         for i in range(0, len(left)):
-            copy = [x for x in left]
-            del copy[i]
-            _join_shuffle(
-                '{},{}'.format(start, left[i]) if start else str(left[i]),
-                copy,
-                length_ - 1
-            )
+            left_copy = list(left)
+            del left_copy[i]
+            next_copy = list(start)
+            next_copy.append(left[i])
+            _combine(next_copy, left_copy, length_ - 1)
 
-    _join_shuffle(None, ids, length)
-    return result
+    _combine([], ids, length)
+
+    return sorted(set([_optimise_broker_ids(x) for x in result]))
 
 
 def pop_with_length(arrays, length):
@@ -115,9 +120,9 @@ class RebalanceChange(Change):
                     continue
                 if replication_factor not in self.shuffled_broker_ids:
                     self.shuffled_broker_ids[replication_factor] = {
-                        k: [] for k in join_shuffle(self.broker_ids, replication_factor)
+                        k: [] for k in combine_broker_ids(self.broker_ids, replication_factor)
                         }
-                name = ','.join([str(i) for i in d['replicas']])
+                name = _optimise_broker_ids([str(i) for i in d['replicas']])
                 if name not in self.shuffled_broker_ids[replication_factor]:
                     if name not in self.stale_data:
                         self.stale_data[name] = []
