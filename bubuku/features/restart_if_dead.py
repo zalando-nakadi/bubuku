@@ -11,6 +11,7 @@ class StartBrokerChange(Change):
     def __init__(self, broker: BrokerManager, zk: Exhibitor):
         self.broker = broker
         self.zk = zk
+        self.stopped = False
 
     def get_name(self) -> str:
         return 'start'
@@ -23,9 +24,18 @@ class StartBrokerChange(Change):
         if self.broker.is_running_and_registered():
             return False
         _LOG.info('Waiting for complete death')
-        self.broker.stop_kafka_process()
+        if not self.stopped:
+            self.broker.stop_kafka_process()
+            self.stopped = True
+
+        if self.broker.has_leadership():
+            return True  # Wait for leadership transfer
         _LOG.info('Starting up again')
-        self.broker.start_kafka_process(self.zk.exhibitor.zookeeper_hosts + self.zk.prefix)
+        try:
+            self.broker.start_kafka_process(self.zk.exhibitor.zookeeper_hosts + self.zk.prefix)
+        except Exception as ex:
+            _LOG.warn('Failed to start kafka process', exc_info=ex)
+            return True
         return False
 
 
