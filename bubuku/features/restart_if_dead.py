@@ -25,9 +25,11 @@ class StartBrokerChange(Change):
             return False
         _LOG.info('Waiting for complete death')
         if not self.stopped:
-            if not self.broker.stop_kafka_process():
-                return True
+            self.broker.stop_kafka_process()
             self.stopped = True
+
+        if self.broker.has_leadership():
+            return True  # Wait for leadership transfer
         _LOG.info('Starting up again')
         try:
             self.broker.start_kafka_process(self.zk.exhibitor.zookeeper_hosts + self.zk.prefix)

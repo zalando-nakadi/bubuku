@@ -29,20 +29,18 @@ class BrokerManager(object):
         return self.id_manager.is_registered()
 
     def stop_kafka_process(self):
-        """
-        Stops kafka process (if it is running) and says if this broker is still a leader for partitions
-         or in ISR list for some partitions
-        :return: True, if broker is stopped and is not a leader or a isr.
-        """
         self._terminate_process()
         self._wait_for_zk_absence()
-        return not self._has_leadership()
 
     def _is_clean_election(self):
         value = self.kafka_properties.get_property('unclean.leader.election.enable')
         return value == 'false'
 
-    def _has_leadership(self):
+    def has_leadership(self):
+        """
+        Says if this broker is still a leader for partitions or in ISR list for some partitions
+        :return: True, if broker is a leader or have isr.
+        """
         # Only wait when unclean leader election is disabled
         if not self._is_clean_election():
             return False

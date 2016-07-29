@@ -46,12 +46,12 @@ def test_broker_checks_death():
 
     manager = FakeProcessManager('kafka_dir', exhibitor, id_manager, kafka_props)
 
-    assert manager.stop_kafka_process()
+    assert not manager.has_leadership()
 
     kafka_props.set_property('unclean.leader.election.enable', 'false')
     for i in range(0, 4):
-        assert not manager.stop_kafka_process(), 'For iteration {}'.format(i)
-    assert manager.stop_kafka_process()
+        assert manager.has_leadership(), 'For iteration {}'.format(i)
+    assert not manager.has_leadership()
 
 
 def __prepare_for_start_fail(broker_ids, leader, isr):
