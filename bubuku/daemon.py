@@ -8,7 +8,7 @@ from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
 from bubuku.config import load_config, KafkaProperties
 from bubuku.controller import Controller
-from bubuku.features.rebalance import RebalanceOnStartCheck
+from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
 from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import register_terminate_on_interrupt
@@ -26,7 +26,7 @@ def apply_features(features: str, controller: Controller, exhibitor: Exhibitor, 
         elif feature == 'rebalance_on_start':
             controller.add_check(RebalanceOnStartCheck(exhibitor, broker))
         elif feature == 'rebalance_on_brokers_change':
-            controller.add_check(RebalanceOnStartCheck(exhibitor, broker))
+            controller.add_check(RebalanceOnBrokerListChange(exhibitor, broker))
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':
