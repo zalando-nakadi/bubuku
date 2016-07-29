@@ -80,7 +80,7 @@ def setup_package():
         classifiers=CLASSIFIERS,
         test_suite='tests',
         packages=setuptools.find_packages(exclude=['tests', 'tests.*']),
-        install_requires=['kazoo>=2.2.1', 'boto3>=1.3.1', 'requests>=1.3.1'],
+        install_requires=[req for req in open(os.path.join(__location__, 'requirements.txt')).read().split('\\n') if req != ''],
         cmdclass={'test': PyTest},
         tests_require=['pytest-cov', 'pytest'],
         command_options=command_options,
