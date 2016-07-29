@@ -2,12 +2,14 @@ import functools
 import json
 from unittest.mock import MagicMock
 
-from bubuku.features.rebalance import RebalanceChange
+from kazoo.exceptions import NoNodeError
+
+from bubuku.features.rebalance import RebalanceChange, RebalanceOnBrokerListChange
 from bubuku.zookeeper import Exhibitor
 
 
 def test_rebalance_can_run():
-    o = RebalanceChange(object())
+    o = RebalanceChange(object(), [])
 
     blocked_actions = ['restart', 'start', 'stop', 'rebalance']
 
@@ -20,7 +22,7 @@ def test_rebalance_can_run():
 
 
 def test_rebalance_get_name():
-    o = RebalanceChange(object())
+    o = RebalanceChange(object(), [])
     assert o.get_name() == 'rebalance'
 
 
@@ -37,6 +39,8 @@ def __create_zk_for_topics(topic_data) -> Exhibitor:
             topic = path[len('/brokers/topics/'):]
             return json.dumps({'partitions': {k[1]: br for k, br in topic_data.items() if k[0] == topic}}).encode(
                 'utf-8'), object()
+        elif path == '/admin/reassign_partitions':
+            raise NoNodeError()
         raise NotImplementedError('get {} is not supported'.format(path))
 
     def _create(path, value: bytes):
@@ -50,12 +54,12 @@ def __create_zk_for_topics(topic_data) -> Exhibitor:
     a.get_children = _get_children
     a.get = _get
     a.create = _create
-    return a
+    return sorted(list(set(functools.reduce(lambda x, y: x + y, topic_data.values(), [])))), a
 
 
 def test_rebalance_on_empty1():
-    a = __create_zk_for_topics({})
-    o = RebalanceChange(a)
+    brokers, zk = __create_zk_for_topics({})
+    o = RebalanceChange(zk, brokers)
     while o.run([]):
         pass
 
@@ -84,8 +88,8 @@ def test_rebalance_on_filled1():
         ('t0', '2'): ['1'],
         ('t0', '3'): ['1'],
     }
-    a = __create_zk_for_topics(distribution)
-    o = RebalanceChange(a)
+    brokers, zk = __create_zk_for_topics(distribution)
+    o = RebalanceChange(zk, brokers)
     # broker to partitions
     while o.run([]):
         pass
@@ -103,10 +107,27 @@ def test_rebalance_on_filled2():
         ('t0', '5'): ['1', '2'],
         ('t0', '6'): ['1', '2'],
     }
-    a = __create_zk_for_topics(distribution)
-    o = RebalanceChange(a)
+    brokers, zk = __create_zk_for_topics(distribution)
+    o = RebalanceChange(zk, brokers)
     # broker to partitions
     while o.run([]):
         pass
 
     __verify_balanced(('1', '2'), distribution)
+
+
+def test_rebalance_invoked_on_broker_list_change():
+    zk = MagicMock()
+
+    zk.get = MagicMock(side_effect=NoNodeError)
+
+    check = RebalanceOnBrokerListChange(zk, MagicMock())
+    zk.get_children = lambda x: ['1', '2', '3']
+
+    assert check.check() is not None
+    assert check.check() is None
+    zk.get_children = lambda x: ['2', '1', '3']
+    assert check.check() is None
+    zk.get_children = lambda x: ['2', '1', '4']
+    assert check.check() is not None
+    assert check.check() is None
