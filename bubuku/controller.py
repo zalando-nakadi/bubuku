@@ -1,5 +1,5 @@
 import logging
-from time import sleep
+from time import sleep, time
 
 from kazoo.exceptions import NodeExistsError
 
@@ -25,6 +25,20 @@ class Change(object):
 
 
 class Check(object):
+
+    check_interval_s = 5
+    __last_check_timestamp_s = 0
+
+    def check_if_time(self) -> Change:
+        current_time_s = time()
+        if current_time_s - self.__last_check_timestamp_s >= self.check_interval_s:
+            self.__last_check_timestamp_s = current_time_s
+            return self.check()
+        return None
+
+    def time_till_check(self):
+        return self.__last_check_timestamp_s + self.check_interval_s - time()
+
     def check(self) -> Change:
         raise NotImplementedError('Not implemented')
 
@@ -101,7 +115,7 @@ class Controller(object):
             if self.running:
                 for check in self.checks:
                     _LOG.info('Executing check {}'.format(check))
-                    change = check.check()
+                    change = check.check_if_time()
                     if change:
                         _LOG.info('Adding change {} to pending changes'.format(change.get_name()))
                         self.changes.append(change)
@@ -109,7 +123,9 @@ class Controller(object):
             if self.changes:
                 sleep(0.5)
             else:
-                sleep(5)
+                min_time_till_check = min([check.time_till_check() for check in self.checks])
+                if min_time_till_check > 0:
+                    sleep(min_time_till_check)
 
     def stop(self, change: Change):
         _LOG.info('Stopping controller with additional change: {}'.format(change.get_name() if change else None))
