@@ -62,7 +62,8 @@ class PyTest(test):
 
 
 def read(fname):
-    return open(os.path.join(__location__, fname)).read()
+    with open(os.path.join(__location__, fname)) as f:
+        return f.read()
 
 
 def setup_package():
@@ -80,7 +81,7 @@ def setup_package():
         classifiers=CLASSIFIERS,
         test_suite='tests',
         packages=setuptools.find_packages(exclude=['tests', 'tests.*']),
-        install_requires=[req for req in open(os.path.join(__location__, 'requirements.txt')).read().split('\\n') if req != ''],
+        install_requires=[req for req in read('requirements.txt').split('\\n') if req != ''],
         cmdclass={'test': PyTest},
         tests_require=['pytest-cov', 'pytest'],
         command_options=command_options,
