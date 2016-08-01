@@ -25,9 +25,9 @@ class Change(object):
 
 
 class Check(object):
-
-    check_interval_s = 5
-    __last_check_timestamp_s = 0
+    def __init__(self, check_interval_s = 5):
+        self.check_interval_s = check_interval_s
+        self.__last_check_timestamp_s = 0
 
     def check_if_time(self) -> Change:
         if self.time_till_check() <= 0:

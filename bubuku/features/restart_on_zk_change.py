@@ -38,6 +38,7 @@ class RestartBrokerChange(Change):
 
 class CheckExhibitorAddressChanged(Check):
     def __init__(self, zk: Exhibitor, broker: BrokerManager):
+        super().__init__()
         self.zk = zk
         self.broker = broker
         self.zk_address = None

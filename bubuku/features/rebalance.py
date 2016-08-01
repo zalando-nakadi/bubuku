@@ -181,6 +181,7 @@ class RebalanceChange(Change):
 
 class RebalanceOnStartCheck(Check):
     def __init__(self, zk, broker: BrokerManager):
+        super().__init__()
         self.zk = zk
         self.broker = broker
         self.executed = False
@@ -197,6 +198,7 @@ class RebalanceOnStartCheck(Check):
 
 class RebalanceOnBrokerListChange(Check):
     def __init__(self, zk, broker: BrokerManager):
+        super().__init__()
         self.zk = zk
         self.broker = broker
         self.old_broker_list = []
