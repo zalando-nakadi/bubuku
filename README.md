@@ -46,7 +46,7 @@ Bubuku provides:
     
  - Ip address discovery using AWS
  - Exhibitor discovery using AWS load balancer name
- - Rebalance partitions on startup
+ - Rebalance partitions on different events
  - React on exhibitor topology change
  - Automatic kafka restart in case if broker is considered dead
  - Graceful broker termination in case of supervisor stop
@@ -61,6 +61,8 @@ Pluggable features are defined in configuration and are disabled by default. Lis
  all at the same time)
  - `rebalance_on_start` - Rebalance partition distribution across cluster (using partition count and leader count
  per broker as optimization strategy) during initial broker startup
+ - `rebalance_on_brokers_change` - Rebalance partition distribution across cluster (using partition count and leader 
+ count per broker as optimization strategy) on any broker list change (new broker started, old broker died)
  - `graceful_terminate` - In case when bubuku is killed, try to gracefully terminate kafka process.
  - `use_ip_address` - Use ip address when registering kafka instance. By default kafka registers itself in 
  zookeeper using hostname. Sometimes (for example on migration between AWS regions) it makes sense to use ip 
