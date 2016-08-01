@@ -41,6 +41,7 @@ class StartBrokerChange(Change):
 
 class CheckBrokerStopped(Check):
     def __init__(self, broker: BrokerManager, zk: Exhibitor):
+        super().__init__()
         self.broker = broker
         self.zk = zk
 
