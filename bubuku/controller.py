@@ -30,9 +30,8 @@ class Check(object):
     __last_check_timestamp_s = 0
 
     def check_if_time(self) -> Change:
-        current_time_s = time()
-        if current_time_s - self.__last_check_timestamp_s >= self.check_interval_s:
-            self.__last_check_timestamp_s = current_time_s
+        if self.time_till_check() <= 0:
+            self.__last_check_timestamp_s = time()
             return self.check()
         return None
 
