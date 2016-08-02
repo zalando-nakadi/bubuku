@@ -56,10 +56,6 @@ class BrokerManager(object):
                     _LOG.warn('Broker {} is still a leader for {} {} ({})'.format(broker_id, topic, partition,
                                                                                   json.dumps(state)))
                     return True
-                if any([str(x) == broker_id for x in state['isr']]):
-                    _LOG.warn('Broker {} is still is in ISR for {} {} ({})'.format(broker_id, topic, partition,
-                                                                                   json.dumps(state)))
-                    return True
         return False
 
     def _terminate_process(self):

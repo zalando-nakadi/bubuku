@@ -49,7 +49,7 @@ def test_broker_checks_death():
     assert not manager.has_leadership()
 
     kafka_props.set_property('unclean.leader.election.enable', 'false')
-    for i in range(0, 4):
+    for i in range(0, 2):
         assert manager.has_leadership(), 'For iteration {}'.format(i)
     assert not manager.has_leadership()
 
