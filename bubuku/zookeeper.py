@@ -77,10 +77,13 @@ class Exhibitor:
     def session_listener(self, state):
         pass
 
+    def get_conn_str(self):
+        return self.exhibitor.zookeeper_hosts + self.prefix
+
     def _poll_exhibitor(self):
         if self.exhibitor.poll():
             self.client.stop()
-            self.client.set_hosts(self.exhibitor.zookeeper_hosts + self.prefix)
+            self.client.set_hosts(self.get_conn_str())
             self.client.start()
 
     def get(self, *params):

@@ -91,16 +91,16 @@ class Controller(object):
             actions_to_remove = []
             for change in self.changes:
                 if change.get_name() in running_changes and running_changes[change.get_name()] == ip:
-                    _LOG.info('Executing action {} step'.format(change.get_name()))
+                    _LOG.info('Executing action {} step'.format(change))
                     if self.running or change.can_run_at_exit():
                         if not change.run(_exclude_self(ip, change.get_name(), running_changes)):
-                            _LOG.info('Action {} completed'.format(change.get_name()))
+                            _LOG.info('Action {} completed'.format(change))
                             actions_to_remove.append(change.get_name())
                         else:
-                            _LOG.info('Action {} will be executed on next loop step'.format(change.get_name()))
+                            _LOG.info('Action {} will be executed on next loop step'.format(change))
                     else:
                         _LOG.info(
-                            'Action {} can not be run while stopping, forcing to stop it'.format(change.get_name()))
+                            'Action {} can not be run while stopping, forcing to stop it'.format(change))
                         actions_to_remove.append(change.get_name())
 
             # remove processed actions

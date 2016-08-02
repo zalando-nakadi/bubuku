@@ -52,6 +52,11 @@ class RebalanceChange(Change):
         self.stale_data = {}  # partition count to topic data
         self.shuffled_broker_ids = None
 
+    def __str__(self):
+        return 'Rebalance({}), stale_count: {}'.format(
+            self.get_name(),
+            sum([len(v) for v in self.stale_data.values()]))
+
     def get_name(self) -> str:
         return 'rebalance'
 
@@ -195,6 +200,9 @@ class RebalanceOnStartCheck(Check):
         self.executed = True
         return RebalanceChange(self.zk, sorted(self.zk.get_children('/brokers/ids')))
 
+    def __str__(self):
+        return 'RebalanceOnStartCheck (executed={})'.format(self.executed)
+
 
 class RebalanceOnBrokerListChange(Check):
     def __init__(self, zk, broker: BrokerManager):
@@ -212,3 +220,6 @@ class RebalanceOnBrokerListChange(Check):
             self.old_broker_list = new_list
             return RebalanceChange(self.zk, new_list)
         return None
+
+    def __str__(self):
+        return 'RebalanceOnBrokerListChange, cached list: {}'.format(self.old_broker_list)
