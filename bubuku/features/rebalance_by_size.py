@@ -69,7 +69,7 @@ class GenerateDataSizeStatistics():
         topic_stats = self.__get_topics_stats()
         disk_stats = self.__get_disk_stats()
         stats = {"disk": disk_stats, "topics": topic_stats}
-        self.__write_stat_to_zk(stats)
+        self.__write_stats_to_zk(stats)
 
     def __get_topics_stats(self):
         topic_stats = {}
@@ -109,7 +109,7 @@ class GenerateDataSizeStatistics():
                 total_free += int(free)
         return {"used": total_used, "free": total_free}
 
-    def __write_stat_to_zk(self, stats):
+    def __write_stats_to_zk(self, stats):
         broker_id = self.broker.id_manager.get_broker_id()
         data = json.dumps(stats, sort_keys=True, separators=(',', ':')).encode("utf-8")
         path = "/bubuku/size_stats/{}".format(broker_id)
