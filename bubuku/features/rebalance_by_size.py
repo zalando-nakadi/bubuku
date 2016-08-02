@@ -61,6 +61,7 @@ class GenerateDataSizeStatistics():
             _LOG.info("Generating data size statistics")
             try:
                 self.__generate_stats()
+                _LOG.info("Data size statistics successfully written to zk")
             except Exception:
                 _LOG.warn("Error occurred when collecting size statistics", exc_info=True)
         return None
