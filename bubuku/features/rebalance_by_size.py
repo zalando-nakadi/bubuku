@@ -55,17 +55,17 @@ class GenerateDataSizeStatistics(Check):
         self.kafka_log_dirs = kafka_log_dirs
 
     def check(self):
-        if self.broker.is_running_and_registered():
-            _LOG.info("Generating data size statistics")
-            self.__generate_stats()
+        # if self.broker.is_running_and_registered():
+        _LOG.info("Generating data size statistics")
+        self.__generate_stats()
         return None
 
     def __generate_stats(self):
         topic_stats = self.__get_topics_stats()
-        disk_stats = self.get_disk_stats()
+        disk_stats = self.__get_disk_stats()
         stats = {"disk": disk_stats, "topics": topic_stats}
-        print(json.dumps(stats, indent=4))
-
+        self.__write_stat_to_zk(stats)
+        print(json.dumps(stats, indent=2))
 
     def __get_topics_stats(self):
         topic_stats = {}
@@ -95,8 +95,21 @@ class GenerateDataSizeStatistics(Check):
                     topic_stats[topic] = {}
                 topic_stats[topic][partition] = int(size_kb)
 
-    def get_disk_stats(self):
-        return None
+    @staticmethod
+    def __get_disk_stats():
+        output = subprocess.check_output("df -k | tail -n +2 |  awk '{ print $3, $4 }'", shell=True)
+        disks = output.decode("utf-8").split("\n")
+        total_used = total_free = 0
+        for disk in disks:
+            parts = disk.split(" ")
+            if len(parts) == 2:
+                used, free = tuple(parts)
+                total_used += int(used)
+                total_free += int(free)
+        return {"used": total_used, "free": total_free}
+
+    def __write_stat_to_zk(self, stats):
+        pass
 
 
 statistics = GenerateDataSizeStatistics(None, None, "/Users/vstepanov/aruha/bubuku/fake-kafka-logs")
