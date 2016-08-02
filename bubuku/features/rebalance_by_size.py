@@ -44,7 +44,7 @@ class RebalanceBySize(Check):
         return False  # todo: not implemented yet
 
 
-class GenerateDataSizeStatistics():
+class GenerateDataSizeStatistics(Check):
     def __init__(self, zk: Exhibitor, broker: BrokerManager, cmd_helper: CmdHelper, kafka_log_dirs):
         super().__init__(check_interval_s=1800)
         self.zk = zk
