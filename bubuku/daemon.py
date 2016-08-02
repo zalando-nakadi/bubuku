@@ -14,6 +14,7 @@ from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
+from bubuku.utils import CmdHelper
 from bubuku.zookeeper import load_exhibitor, Exhibitor
 
 _LOG = logging.getLogger('bubuku.main')
@@ -29,7 +30,8 @@ def apply_features(features: str, controller: Controller, exhibitor: Exhibitor, 
         elif feature == 'rebalance_on_brokers_change':
             controller.add_check(RebalanceOnBrokerListChange(exhibitor, broker))
         elif feature == 'rebalance_by_size':
-            controller.add_check(GenerateDataSizeStatistics(exhibitor, broker, ""))
+            controller.add_check(GenerateDataSizeStatistics(exhibitor, broker, CmdHelper(),
+                                                            kafka_properties.get_property("log.dirs")))
             controller.add_check(RebalanceBySize(exhibitor, broker))
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
