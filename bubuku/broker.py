@@ -38,25 +38,13 @@ class BrokerManager(object):
 
     def has_leadership(self):
         """
-        Says if this broker is still a leader for partitions or in ISR list for some partitions
-        :return: True, if broker is a leader or have isr.
+        Says if this broker is still a leader for partitions
+        :return: True, if broker is a leader for some partitions.
         """
-        # Only wait when unclean leader election is disabled
-        if not self._is_clean_election():
-            return False
-        broker_id = str(self.id_manager.get_broker_id())
+        broker_id = self.id_manager.get_broker_id()
         if not broker_id:
             return False
-        for topic in self.exhibitor.get_children('/brokers/topics'):
-            for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
-                state = json.loads(
-                    self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(topic, partition))[0].decode(
-                        'utf-8'))
-                if str(state['leader']) == broker_id:
-                    _LOG.warn('Broker {} is still a leader for {} {} ({})'.format(broker_id, topic, partition,
-                                                                                  json.dumps(state)))
-                    return True
-        return False
+        return not self._is_leadership_transferred(dead_broker_ids=[broker_id])
 
     def _terminate_process(self):
         if self.process is not None:
@@ -84,7 +72,8 @@ class BrokerManager(object):
         :raise LeaderElectionInProgress: raised when broker can not be started because leader election is in progress
         """
         if not self.process:
-            self._verify_leaders_election_progress()
+            if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_children('/brokers/ids')):
+                raise LeaderElectionInProgress()
 
             broker_id = self.id_manager.get_broker_id()
             _LOG.info('Using broker_id {} for kafka'.format(broker_id))
@@ -108,25 +97,24 @@ class BrokerManager(object):
                     'Failed to wait for broker to start up, probably will kill, increasing timeout to {} seconds'.format(
                         self.wait_timeout))
 
-    def _verify_leaders_election_progress(self):
+    def _is_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
         if self._is_clean_election():
-            active_brokers = self.exhibitor.get_children('/brokers/ids')
-
             for topic in self.exhibitor.get_children('/brokers/topics'):
                 for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
                     state = json.loads(
                         self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(topic, partition))[0].decode(
                             'utf-8'))
-                    if str(state['leader']) in active_brokers:
-                        _LOG.warn('Leadership is not transferred for {} {} ({}, brokers: {})'.format(topic, partition,
-                                                                                                     json.dumps(state),
-                                                                                                     active_brokers))
-                        raise LeaderElectionInProgress()
-                    if any([str(x) in active_brokers for x in state['isr']]):
-                        _LOG.warn('Leadership is not transferred for {} {} ({}, brokers: {})'.format(topic, partition,
-                                                                                                     json.dumps(state),
-                                                                                                     active_brokers))
-                        raise LeaderElectionInProgress()
+                    leader = str(state['leader'])
+                    if active_broker_ids and leader not in active_broker_ids:
+                        _LOG.warn(
+                            'Leadership is not transferred for {} {} ({}, brokers: {})'.format(
+                                topic, partition, json.dumps(state), active_broker_ids))
+                        return False
+                    if dead_broker_ids and leader in dead_broker_ids:
+                        _LOG.warn('Leadership is not transferred for {} {}, {} (dead list: {})'.format(
+                            topic, partition, json.dumps(state), dead_broker_ids))
+                        return False
+        return True
 
     def _open_process(self):
         return subprocess.Popen(

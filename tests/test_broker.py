@@ -88,19 +88,15 @@ def __prepare_for_start_fail(broker_ids, leader, isr):
     return kafka_props, broker
 
 
-def test_broker_start_fail_leaders():
+def test_broker_start_success_isr():
     kafka_props, broker = __prepare_for_start_fail(['1', '2'], 1, [3, 4])
-    # suppose that broker is in leaders
-    try:
-        broker.start_kafka_process('')
-        assert False, 'broker 1 must be in leaders, it must be impossible to start it'
-    except LeaderElectionInProgress:
-        pass
+    # suppose that leader exists, but isr - not
+    broker.start_kafka_process('')
 
 
 def test_broker_start_fail_isr():
     kafka_props, broker = __prepare_for_start_fail(['1', '2'], 3, [4, 2])
-    # suppose that broker in isr
+    # suppose that leader is not present
     try:
         broker.start_kafka_process('')
         assert False, 'broker 1 must be in leaders, it must be impossible to start it'
@@ -108,10 +104,13 @@ def test_broker_start_fail_isr():
         pass
 
 
-def test_broker_start_success_clean():
+def test_broker_start_fail_leader():
     kafka_props, broker = __prepare_for_start_fail(['1', '2'], 3, [4, 5])
     # suppose that broker is free to start
-    broker.start_kafka_process('')
+    try:
+        broker.start_kafka_process('')
+    except LeaderElectionInProgress:
+        pass
 
 
 def test_broker_start_success_unclean_1():
