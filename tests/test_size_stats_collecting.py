@@ -12,10 +12,10 @@ def test_size_stats_collecting():
     stat_check.check()
 
     expected_json = {
-        "disk": {"free": 500, "used": 150},
+        "disk": {"free": 606, "used": 404},
         "topics": {
-            "another_topic": {"0": 12},
-            "my-topic": {"0": 1120, "2": 551}
+            "another_topic": {"0": 3},
+            "my-topic": {"0": 10, "2": 200}
         }
     }
     expected_data = json.dumps(expected_json, sort_keys=True, separators=(',', ':')).encode("utf-8")
@@ -27,12 +27,16 @@ def mock_cmd_helper() -> CmdHelper:
     class CmdHelperMock(CmdHelper):
         def cmd_run(self, cmd: str):
             if cmd.startswith("du"):
-                return "1120\t/kafka-logs/my-topic-0\n" \
-                       "551\t/kafka-logs/my-topic-2\n" \
-                       "12\t/kafka-logs/another_topic-0"
+                return "10\t/kafka-logs/my-topic-0\n" \
+                       "200\t/kafka-logs/my-topic-2\n" \
+                       "3\t/kafka-logs/another_topic-0\n" \
+                       "55\t/kafka-logs\n" \
+                       "77\t/kafka-logs/wrong_topic\n" \
+                       "blah"
             elif cmd.startswith("df"):
-                return "100 200\n" \
-                       "50 300"
+                return "101 202\n" \
+                       "303 404\n" \
+                       "500"
             else:
                 raise ValueError("Call not expected")
 
