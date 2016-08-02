@@ -29,7 +29,8 @@ class StartBrokerChange(Change):
             self.stopped = True
 
         if self.broker.has_leadership():
-            return True  # Wait for leadership transfer
+            _LOG.info('Broker still have leadership, waiting for transfer')
+            return True
         _LOG.info('Starting up again')
         try:
             self.broker.start_kafka_process(self.zk.exhibitor.zookeeper_hosts + self.zk.prefix)
@@ -37,6 +38,9 @@ class StartBrokerChange(Change):
             _LOG.warn('Failed to start kafka process', exc_info=ex)
             return True
         return False
+
+    def __str__(self):
+        return 'StartBrokerChange({})'.format(self.get_name())
 
 
 class CheckBrokerStopped(Check):
@@ -50,3 +54,6 @@ class CheckBrokerStopped(Check):
             return None
         _LOG.info('Oops! Broker is dead, triggering restart')
         return StartBrokerChange(self.broker, self.zk)
+
+    def __str__(self):
+        return 'CheckBrokerStopped'
