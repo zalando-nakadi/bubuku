@@ -29,10 +29,8 @@ class RebalanceBySizeChange(Change):
 
 
 class RebalanceBySize(Check):
-    check_interval_s = 600  # 10 min
-
     def __init__(self, zk: Exhibitor, broker: BrokerManager):
-        super().__init__()
+        super().__init__(check_interval_s=600)
         self.zk = zk
         self.broker = broker
 
@@ -47,10 +45,8 @@ class RebalanceBySize(Check):
 
 
 class GenerateDataSizeStatistics():
-    check_interval_s = 1800  # 30 min
-
     def __init__(self, zk: Exhibitor, broker: BrokerManager, cmd_helper: CmdHelper, kafka_log_dirs):
-        super().__init__()
+        super().__init__(check_interval_s=1800)
         self.zk = zk
         self.broker = broker
         self.cmd_helper = cmd_helper
@@ -115,6 +111,6 @@ class GenerateDataSizeStatistics():
         data = json.dumps(stats, sort_keys=True, separators=(',', ':')).encode("utf-8")
         path = "/bubuku/size_stats/{}".format(broker_id)
         try:
-            self.zk.create(path, data, makepath=True)
+            self.zk.create(path, data, ephemeral=True, makepath=True)
         except NodeExistsError:
             self.zk.set(path, data)
