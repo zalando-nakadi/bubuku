@@ -11,15 +11,19 @@ def test_size_stats_collecting():
     stat_check = GenerateDataSizeStatistics(zk, mock_broker(), mock_cmd_helper(), "/kafka-logs")
     stat_check.check()
 
-    expected_json = {"disk": {"free": 500, "used": 150},
-                     "topics": {"another_topic": {"0": 12}, "my-topic": {"0": 1120, "2": 551}}}
+    expected_json = {
+        "disk": {"free": 500, "used": 150},
+        "topics": {
+            "another_topic": {"0": 12},
+            "my-topic": {"0": 1120, "2": 551}
+        }
+    }
     expected_data = json.dumps(expected_json, sort_keys=True, separators=(',', ':')).encode("utf-8")
 
     zk.create.assert_called_with("/bubuku/size_stats/dummy_id", expected_data, makepath=True)
 
 
 def mock_cmd_helper() -> CmdHelper:
-
     class CmdHelperMock(CmdHelper):
         def cmd_run(self, cmd: str):
             if cmd.startswith("du"):
