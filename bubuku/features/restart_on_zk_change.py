@@ -13,7 +13,7 @@ _STAGE_START = 'start'
 
 class RestartBrokerOnZkChange(Change):
     def __init__(self, zk_hosts: str, zk: Exhibitor, broker: BrokerManager):
-        self.zk_hosts = zk_hosts
+        self.conn_str = zk_hosts
         self.zk = zk
         self.broker = broker
         self.stage = _STAGE_STOP
@@ -26,9 +26,9 @@ class RestartBrokerOnZkChange(Change):
 
     def run(self, current_actions):
         if self.stage == _STAGE_STOP:
-            current_hosts = self.zk.exhibitor.zookeeper_hosts
-            if current_hosts != self.zk_hosts:
-                _LOG.warning('ZK address changed again, from {} to {}'.format(self.zk_hosts, current_hosts))
+            current_conn_str = self.zk.get_conn_str()
+            if current_conn_str != self.conn_str:
+                _LOG.warning('ZK address changed again, from {} to {}'.format(self.conn_str, current_conn_str))
                 return False
             self.broker.stop_kafka_process()
             self.stage = _STAGE_CHECK_LEADERSHIP
@@ -39,14 +39,14 @@ class RestartBrokerOnZkChange(Change):
             return True
         elif self.stage == _STAGE_START:
             # Yep, use latest data
-            self.broker.start_kafka_process(self.zk.exhibitor.zookeeper_hosts + self.zk.prefix)
+            self.broker.start_kafka_process(self.zk.get_conn_str())
             return False
         else:
             _LOG.error('Stage {} is not supported'.format(self.stage))
         return False
 
     def __str__(self):
-        return 'RestartOnZkChange ({}), stage={}, new_hosts={}'.format(self.get_name(), self.stage, self.zk_hosts)
+        return 'RestartOnZkChange ({}), stage={}, new_conn_str={}'.format(self.get_name(), self.stage, self.conn_str)
 
 
 class CheckExhibitorAddressChanged(Check):
@@ -54,14 +54,14 @@ class CheckExhibitorAddressChanged(Check):
         super().__init__()
         self.zk = zk
         self.broker = broker
-        self.zk_address = None
+        self.conn_str = None
 
     def check(self) -> Change:
-        new_addresses = self.zk.exhibitor.zookeeper_hosts
-        if new_addresses != self.zk_address:
-            _LOG.info('ZK addresses changed from {} to {}, triggering restart'.format(self.zk_address, new_addresses))
-            self.zk_address = new_addresses
-            return RestartBrokerOnZkChange(new_addresses, self.zk, self.broker)
+        new_conn_str = self.zk.get_conn_str()
+        if new_conn_str != self.conn_str:
+            _LOG.info('ZK addresses changed from {} to {}, triggering restart'.format(self.conn_str, new_conn_str))
+            self.conn_str = new_conn_str
+            return RestartBrokerOnZkChange(new_conn_str, self.zk, self.broker)
 
     def __str__(self):
-        return 'CheckExhibitorAddressChanged, current={}'.format(self.zk_address)
+        return 'CheckExhibitorAddressChanged, current={}'.format(self.conn_str)

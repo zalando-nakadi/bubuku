@@ -33,7 +33,7 @@ class StartBrokerChange(Change):
             return True
         _LOG.info('Starting up again')
         try:
-            self.broker.start_kafka_process(self.zk.exhibitor.zookeeper_hosts + self.zk.prefix)
+            self.broker.start_kafka_process(self.zk.get_conn_str())
         except Exception as ex:
             _LOG.warn('Failed to start kafka process', exc_info=ex)
             return True
