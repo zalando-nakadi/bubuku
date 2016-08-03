@@ -29,6 +29,9 @@ class RestartBrokerOnZkChange(Change):
             if current_conn_str != self.conn_str:
                 _LOG.warning('ZK address changed again, from {} to {}'.format(self.conn_str, current_conn_str))
                 return False
+            if self.conn_str == self.broker.get_zk_connect_string():
+                _LOG.warning('Broker already have latest version of zk address: '.format(current_conn_str))
+                return False
             self.broker.stop_kafka_process()
             self.stage = _STAGE_START
             return True
