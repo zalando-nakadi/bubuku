@@ -8,7 +8,7 @@ from bubuku.utils import CmdHelper
 def test_size_stats_collecting():
     zk = MagicMock()
 
-    stat_check = GenerateDataSizeStatistics(zk, mock_broker(), mock_cmd_helper(), "/kafka-logs")
+    stat_check = GenerateDataSizeStatistics(zk, mock_broker(), mock_cmd_helper(), ["/kafka-logs"])
     stat_check.check()
 
     expected_json = {

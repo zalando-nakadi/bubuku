@@ -70,7 +70,7 @@ class GenerateDataSizeStatistics(Check):
 
     def __get_topics_stats(self):
         topics_stats = {}
-        for log_dir in self.kafka_log_dirs.split(","):
+        for log_dir in self.kafka_log_dirs:
             topic_dirs = self.cmd_helper.cmd_run("du -k -d 1 {}".format(log_dir)).split("\n")
             for topic_dir in topic_dirs:
                 dir_stats = self.__parse_dir_stats(topic_dir, log_dir)

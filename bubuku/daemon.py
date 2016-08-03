@@ -31,7 +31,7 @@ def apply_features(features: str, controller: Controller, exhibitor: Exhibitor, 
             controller.add_check(RebalanceOnBrokerListChange(exhibitor, broker))
         elif feature == 'rebalance_by_size':
             controller.add_check(GenerateDataSizeStatistics(exhibitor, broker, CmdHelper(),
-                                                            kafka_properties.get_property("log.dirs")))
+                                                            kafka_properties.get_property("log.dirs").split(",")))
             controller.add_check(RebalanceBySize(exhibitor, broker))
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
