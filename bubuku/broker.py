@@ -98,6 +98,8 @@ class BrokerManager(object):
                         self.wait_timeout))
 
     def _is_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
+        _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
+            active_broker_ids, dead_broker_ids))
         if self._is_clean_election():
             for topic in self.exhibitor.get_children('/brokers/topics'):
                 for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
