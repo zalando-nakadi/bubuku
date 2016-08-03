@@ -63,26 +63,31 @@ class GenerateDataSizeStatistics(Check):
         return None
 
     def __generate_stats(self):
-        topic_stats = self.__get_topics_stats()
+        topics_stats = self.__get_topics_stats()
         disk_stats = self.__get_disk_stats()
-        stats = {"disk": disk_stats, "topics": topic_stats}
+        stats = {"disk": disk_stats, "topics": topics_stats}
         self.__write_stats_to_zk(stats)
 
     def __get_topics_stats(self):
-        topic_stats = {}
+        topics_stats = {}
         for log_dir in self.kafka_log_dirs.split(","):
             topic_dirs = self.cmd_helper.cmd_run("du -k -d 1 {}".format(log_dir)).split("\n")
             for topic_dir in topic_dirs:
-                self.__parse_dir_stats(topic_dir, log_dir, topic_stats)
-        return topic_stats
+                dir_stats = self.__parse_dir_stats(topic_dir, log_dir)
+                if dir_stats:
+                    topic, partition, size_kb = dir_stats
+                    if topic not in topics_stats:
+                        topics_stats[topic] = {}
+                    topics_stats[topic][partition] = int(size_kb)
+        return topics_stats
 
     @staticmethod
-    def __parse_dir_stats(topic_dir, log_dir, topic_stats):
+    def __parse_dir_stats(topic_dir, log_dir):
         """
-        Parses the "du" tool single line output and writes result to topic_stats json
+        Parses topic-partition size stats from "du" tool single line output
         :param topic_dir: the string to be parsed; example: "45983\t/tmp/kafka-logs/my-kafka-topic-0"
         :param log_dir: the kafka log directory name itself
-        :param topic_stats: the json which will be populated
+        :return: tuple (topic, partition, size) or None if the topic_dir has incorrect format
         """
         dir_data = topic_dir.split("\t")
         if len(dir_data) == 2 and dir_data[1] != log_dir:
@@ -91,9 +96,8 @@ class GenerateDataSizeStatistics(Check):
             tp_parts = tp_name.rsplit("-", 1)
             if len(tp_parts) == 2:
                 topic, partition = tuple(tp_parts)
-                if topic not in topic_stats:
-                    topic_stats[topic] = {}
-                topic_stats[topic][partition] = int(size_kb)
+                return topic, partition, size_kb
+        return None
 
     def __get_disk_stats(self):
         disks = self.cmd_helper.cmd_run("df -k | tail -n +2 |  awk '{ print $3, $4 }'").split("\n")
