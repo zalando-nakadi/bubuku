@@ -81,14 +81,14 @@ class GenerateDataSizeStatistics():
         return topic_stats
 
     @staticmethod
-    def __parse_dir_stats(dir, log_dir, topic_stats):
+    def __parse_dir_stats(topic_dir, log_dir, topic_stats):
         """
         Parses the "du" tool single line output and writes result to topic_stats json
-        :param dir: the string to be parsed; example: "45983\t/tmp/kafka-logs/my-kafka-topic-0"
+        :param topic_dir: the string to be parsed; example: "45983\t/tmp/kafka-logs/my-kafka-topic-0"
         :param log_dir: the kafka log directory name itself
         :param topic_stats: the json which will be populated
         """
-        dir_data = dir.split("\t")
+        dir_data = topic_dir.split("\t")
         if len(dir_data) == 2 and dir_data[1] != log_dir:
             size_kb, dir_name = tuple(dir_data)
             tp_name = dir_name.split("/")[-1]
