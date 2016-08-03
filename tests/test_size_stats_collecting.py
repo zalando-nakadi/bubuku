@@ -19,8 +19,7 @@ def test_size_stats_collecting():
         }
     }
     expected_data = json.dumps(expected_json, sort_keys=True, separators=(',', ':')).encode("utf-8")
-
-    zk.create.assert_called_with("/bubuku/size_stats/dummy_id", expected_data, makepath=True)
+    zk.create.assert_called_with("/bubuku/size_stats/dummy_id", expected_data, ephemeral=True, makepath=True)
 
 
 def mock_cmd_helper() -> CmdHelper:
