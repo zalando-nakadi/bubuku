@@ -98,18 +98,24 @@ class BrokerManager(object):
                         self.wait_timeout))
 
     def _is_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
+        _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
+            active_broker_ids, dead_broker_ids))
         if self._is_clean_election():
             for topic in self.exhibitor.get_children('/brokers/topics'):
                 for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
-                    state = json.loads(
-                        self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(topic, partition))[0].decode(
-                            'utf-8'))
+                    state_str = self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(
+                        topic, partition))[0].decode('utf-8')
+                    state = json.loads(state_str)
                     leader = str(state['leader'])
                     if active_broker_ids and leader not in active_broker_ids:
-                        _LOG.warn(
-                            'Leadership is not transferred for {} {} ({}, brokers: {})'.format(
-                                topic, partition, json.dumps(state), active_broker_ids))
-                        return False
+                        if any(str(x) in active_broker_ids for x in state.get('isr', [])):
+                            _LOG.warn(
+                                'Leadership is not transferred for {} {} ({}, brokers: {})'.format(
+                                    topic, partition, json.dumps(state), active_broker_ids))
+                            return False
+                        else:
+                            _LOG.warn('Shit happens! No single isr available for {}, {}, state: {}, '
+                                      'skipping check for that'.format(topic, partition, json.dumps(state)))
                     if dead_broker_ids and leader in dead_broker_ids:
                         _LOG.warn('Leadership is not transferred for {} {}, {} (dead list: {})'.format(
                             topic, partition, json.dumps(state), dead_broker_ids))

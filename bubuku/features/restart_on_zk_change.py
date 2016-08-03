@@ -7,7 +7,6 @@ from bubuku.zookeeper import Exhibitor
 _LOG = logging.getLogger('bubuku.features.restart_on_zk')
 
 _STAGE_STOP = 'stop'
-_STAGE_CHECK_LEADERSHIP = 'check_leader'
 _STAGE_START = 'start'
 
 
@@ -31,15 +30,16 @@ class RestartBrokerOnZkChange(Change):
                 _LOG.warning('ZK address changed again, from {} to {}'.format(self.conn_str, current_conn_str))
                 return False
             self.broker.stop_kafka_process()
-            self.stage = _STAGE_CHECK_LEADERSHIP
-            return True
-        elif self.stage == _STAGE_CHECK_LEADERSHIP:
-            if not self.broker.has_leadership():
-                self.stage = _STAGE_START
+            self.stage = _STAGE_START
             return True
         elif self.stage == _STAGE_START:
             # Yep, use latest data
-            self.broker.start_kafka_process(self.zk.get_conn_str())
+            zk_conn_str = self.zk.get_conn_str()
+            try:
+                self.broker.start_kafka_process(zk_conn_str)
+            except Exception as e:
+                _LOG.error('Failed to start kafka process against {}'.format(zk_conn_str), exc_info=e)
+                return True
             return False
         else:
             _LOG.error('Stage {} is not supported'.format(self.stage))

@@ -28,9 +28,6 @@ class StartBrokerChange(Change):
             self.broker.stop_kafka_process()
             self.stopped = True
 
-        if self.broker.has_leadership():
-            _LOG.info('Broker still have leadership, waiting for transfer')
-            return True
         _LOG.info('Starting up again')
         try:
             self.broker.start_kafka_process(self.zk.get_conn_str())

@@ -105,12 +105,19 @@ def test_broker_start_fail_isr():
 
 
 def test_broker_start_fail_leader():
-    kafka_props, broker = __prepare_for_start_fail(['1', '2'], 3, [4, 5])
+    kafka_props, broker = __prepare_for_start_fail(['1', '2'], 3, [1, 5])
     # suppose that broker is free to start
     try:
         broker.start_kafka_process('')
+        assert False, 'Broker must not start in case where it''s possible to change leader'
     except LeaderElectionInProgress:
         pass
+
+
+def test_broker_start_success_no_leader_candidate():
+    kafka_props, broker = __prepare_for_start_fail(['1', '2'], 3, [4, 5])
+    # suppose that broker is free to start
+    broker.start_kafka_process('')
 
 
 def test_broker_start_success_unclean_1():
