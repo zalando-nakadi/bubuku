@@ -104,7 +104,7 @@ class GenerateDataSizeStatistics(Check):
                 used, free = tuple(parts)
                 total_used += int(used)
                 total_free += int(free)
-        return {"used": total_used, "free": total_free}
+        return {"used_kb": total_used, "free_kb": total_free}
 
     def __write_stats_to_zk(self, stats):
         broker_id = self.broker.id_manager.get_broker_id()

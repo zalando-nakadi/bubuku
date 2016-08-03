@@ -12,7 +12,7 @@ def test_size_stats_collecting():
     stat_check.check()
 
     expected_json = {
-        "disk": {"free": 606, "used": 404},
+        "disk": {"free_kb": 606, "used_kb": 404},
         "topics": {
             "another_topic": {"0": 3},
             "my-topic": {"0": 10, "2": 200}
