@@ -1,5 +1,6 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
+from bubuku.broker import LeaderElectionInProgress
 from bubuku.features.restart_on_zk_change import RestartBrokerOnZkChange
 
 
@@ -21,13 +22,9 @@ def test_restart_atomicity():
     assert change.run([])
     assert stopped and stopped[0]
 
-    broker.has_leadership = lambda: True
+    broker.start_kafka_process = Mock(side_effect=LeaderElectionInProgress())
     for i in range(1, 50):
         assert change.run([])
-
-    broker.has_leadership = lambda: False
-
-    assert change.run([])  # complete leadership transfer
 
     started = []
     broker.start_kafka_process = lambda x: started.append(x)

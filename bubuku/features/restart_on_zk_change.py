@@ -39,6 +39,7 @@ class RestartBrokerOnZkChange(Change):
                 self.broker.start_kafka_process(zk_conn_str)
             except Exception as e:
                 _LOG.error('Failed to start kafka process against {}'.format(zk_conn_str), exc_info=e)
+                return True
             return False
         else:
             _LOG.error('Stage {} is not supported'.format(self.stage))
