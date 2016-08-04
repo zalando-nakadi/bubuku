@@ -44,7 +44,7 @@ def test_is_broker_registered():
     assert not buku.is_broker_registered('333')
 
 
-def test_load_partition_assignment():
+def _test_load_partition_assignment(async: bool):
     real_ex = MagicMock()
 
     def _get_children(path):
@@ -61,10 +61,20 @@ def test_load_partition_assignment():
         else:
             raise NotImplementedError()
 
+    def _get_async(path):
+        def _get_iresult(block):
+            assert block
+            return _get(path)
+
+        mock = MagicMock()
+        mock.get = _get_iresult
+        return mock
+
     real_ex.get = _get
+    real_ex.get_async = _get_async
     real_ex.get_children = _get_children
 
-    buku_ex = BukuExhibitor(real_ex)
+    buku_ex = BukuExhibitor(real_ex, async)
 
     expected_result = [
         ('t01', 0, [1, 2, 3]),
@@ -78,7 +88,15 @@ def test_load_partition_assignment():
         assert e in result
 
 
-def test_load_partition_states():
+def test_load_partition_assignment_sync():
+    _test_load_partition_assignment(False)
+
+
+def test_load_partition_assignment_async():
+    _test_load_partition_assignment(True)
+
+
+def _test_load_partition_states(async: bool):
     real_ex = MagicMock()
 
     def _get_children(path):
@@ -91,10 +109,14 @@ def test_load_partition_states():
         else:
             raise NotImplementedError()
 
-    def _get(path):
+    def _get(path: str):
         matched = re.match('/brokers/topics/(.*)/partitions/(.*)/state', path)
         if not matched:
-            raise NotImplementedError('Not implemented for path {}'.format(path))
+            topic = path[len('/brokers/topics/'):]
+            if topic not in ['t01', 't02']:
+                raise NotImplementedError('Not implemented for path {}'.format(path))
+            cnt = 2 if topic == 't01' else 3
+            return json.dumps({'partitions': {x: None for x in range(0, cnt)}}).encode('utf-8'), object()
         topic = matched.group(1)
         partition = matched.group(2)
         if topic == 't01' and partition not in ('0', '1'):
@@ -106,10 +128,20 @@ def test_load_partition_states():
         idx = (100 if topic == 't01' else 200) + int(partition)
         return json.dumps({'fake_data': idx}).encode('utf-8'), object()
 
+    def _get_async(path):
+        def _get_iasync(block):
+            assert block
+            return _get(path)
+
+        mock = MagicMock()
+        mock.get = _get_iasync
+        return mock
+
     real_ex.get = _get
+    real_ex.get_async = _get_async
     real_ex.get_children = _get_children
 
-    buku_ex = BukuExhibitor(real_ex)
+    buku_ex = BukuExhibitor(real_ex, async=async)
 
     expected_result = [
         ('t01', 0, {'fake_data': 100}),
@@ -123,6 +155,14 @@ def test_load_partition_states():
     assert len(expected_result) == len(result)
     for e in expected_result:
         assert e in result
+
+
+def test_load_partition_states_sync():
+    _test_load_partition_states(False)
+
+
+def test_load_partition_states_async():
+    _test_load_partition_states(True)
 
 
 def test_reallocate_partition():

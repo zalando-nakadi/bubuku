@@ -1,11 +1,12 @@
 import json
 import logging
 import random
+import threading
 import time
 
 import requests
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError, NodeExistsError
+from kazoo.exceptions import NoNodeError, NodeExistsError, ConnectionLossException
 from requests.exceptions import RequestException
 
 _LOG = logging.getLogger('bubuku.exhibitor')
@@ -62,9 +63,28 @@ class ExhibitorEnsembleProvider:
         return self._zookeeper_hosts
 
 
+class WaitingCounter(object):
+    def __init__(self, limit=100):
+        self.limit = limit
+        self.counter = 0
+        self.cv = threading.Condition()
+
+    def increment(self):
+        with self.cv:
+            while self.counter >= self.limit:
+                self.cv.wait()
+            self.counter += 1
+
+    def decrement(self):
+        with self.cv:
+            self.counter -= 1
+            self.cv.notify()
+
+
 class _Exhibitor:
     def __init__(self, hosts, port, prefix):
         self.prefix = prefix
+        self.async_counter = WaitingCounter(limit=100)
         self.exhibitor = ExhibitorEnsembleProvider(hosts, port, poll_interval=30)
         self.client = KazooClient(hosts=self.exhibitor.zookeeper_hosts + self.prefix,
                                   command_retry={
@@ -90,6 +110,17 @@ class _Exhibitor:
     def get(self, *params):
         self._poll_exhibitor()
         return self.client.retry(self.client.get, *params)
+
+    def get_async(self, *params):
+        # Exhibitor is not polled here and it's totally fine!
+        self.async_counter.increment()
+        try:
+            i_async = self.client.get_async(*params)
+            i_async.rawlink(self.async_counter.decrement)
+            return i_async
+        except Exception as e:
+            self.async_counter.decrement()
+            raise e
 
     def set(self, *args, **kwargs):
         self._poll_exhibitor()
@@ -120,8 +151,9 @@ class _Exhibitor:
 
 
 class BukuExhibitor(object):
-    def __init__(self, exhibitor: _Exhibitor):
+    def __init__(self, exhibitor: _Exhibitor, async=True):
         self.exhibitor = exhibitor
+        self.async = async
         try:
             self.exhibitor.create('/bubuku/changes', makepath=True)
         except NodeExistsError:
@@ -146,10 +178,23 @@ class BukuExhibitor(object):
         Lists all the assignments of partitions to particular broker ids.
         :returns generator of tuples (topic_name:str, partition:int, replica_list:list(int)), for ex. "test", 0, [1,2,3]
         """
-        for topic in self.exhibitor.get_children('/brokers/topics'):
-            data = json.loads(self.exhibitor.get("/brokers/topics/" + topic)[0].decode('utf-8'))
-            for k, v in data['partitions'].items():
-                yield (topic, int(k), v)
+        if self.async:
+            results = [(topic, self.exhibitor.get_async('/brokers/topics/{}'.format(topic))) for topic in
+                       self.exhibitor.get_children('/brokers/topics')]
+            for topic, cb in results:
+                try:
+                    value, stat = cb.get(block=True)
+                except ConnectionLossException:
+                    value, stat = self.exhibitor.get('/brokers/topics/{}'.format(topic))
+                data = json.loads(value.decode('utf-8'))
+                for k, v in data['partitions'].items():
+                    yield (topic, int(k), v)
+
+        else:
+            for topic in self.exhibitor.get_children('/brokers/topics'):
+                data = json.loads(self.exhibitor.get('/brokers/topics/{}'.format(topic))[0].decode('utf-8'))
+                for k, v in data['partitions'].items():
+                    yield (topic, int(k), v)
 
     def load_partition_states(self) -> list:
         """
@@ -157,11 +202,23 @@ class BukuExhibitor(object):
         :return: generator of tuples
         (topic_name: str, partition: int, state: json from /brokers/topics/{}/partitions/{}/state)
         """
-        for topic in self.exhibitor.get_children('/brokers/topics'):
-            for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
-                state = json.loads(self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(
-                    topic, partition))[0].decode('utf-8'))
-                yield (topic, int(partition), state)
+        if self.async:
+            asyncs = []
+            for topic, partition, _ in self.load_partition_assignment():
+                asyncs.append((topic, partition, self.exhibitor.get_async(
+                    '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))))
+            for topic, partition, async in asyncs:
+                try:
+                    value, stat = async.get(block=True)
+                except ConnectionLossException:
+                    value, stat = self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(topic, partition))
+                yield (topic, int(partition), json.loads(value.decode('utf-8')))
+        else:
+            for topic in self.exhibitor.get_children('/brokers/topics'):
+                for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
+                    state = json.loads(self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(
+                        topic, partition))[0].decode('utf-8'))
+                    yield (topic, int(partition), state)
 
     def reallocate_partition(self, topic: str, partition: object, replicas: list) -> bool:
         """
