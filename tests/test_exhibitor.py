@@ -72,7 +72,7 @@ def test_load_partition_assignment():
         ('t02', 0, [4, 5, 6]),
         ('t02', 1, [5, 1, 2]),
     ]
-    result = buku_ex.load_partition_assignment()
+    result = [r for r in buku_ex.load_partition_assignment()]
     assert len(expected_result) == len(result)
     for e in expected_result:
         assert e in result
@@ -119,7 +119,7 @@ def test_load_partition_states():
         ('t02', 2, {'fake_data': 202}),
     ]
 
-    result = buku_ex.load_partition_states()
+    result = [r for r in buku_ex.load_partition_states()]
     assert len(expected_result) == len(result)
     for e in expected_result:
         assert e in result

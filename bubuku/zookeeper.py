@@ -144,28 +144,24 @@ class BukuExhibitor(object):
     def load_partition_assignment(self) -> list:
         """
         Lists all the assignments of partitions to particular broker ids.
-        :returns list of tuples (topic_name:str, partition:int, replica_list:list(int)), for ex. "test", 0, [1,2,3]
+        :returns generator of tuples (topic_name:str, partition:int, replica_list:list(int)), for ex. "test", 0, [1,2,3]
         """
-        result = []
         for topic in self.exhibitor.get_children('/brokers/topics'):
             data = json.loads(self.exhibitor.get("/brokers/topics/" + topic)[0].decode('utf-8'))
             for k, v in data['partitions'].items():
-                result.append((topic, int(k), v))
-        return result
+                yield (topic, int(k), v)
 
     def load_partition_states(self) -> list:
         """
         Lists all the current partition states (leaders and isr list)
-        :return: list of tuples
+        :return: generator of tuples
         (topic_name: str, partition: int, state: json from /brokers/topics/{}/partitions/{}/state)
         """
-        result = []
         for topic in self.exhibitor.get_children('/brokers/topics'):
             for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
                 state = json.loads(self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(
                     topic, partition))[0].decode('utf-8'))
-                result.append((topic, int(partition), state))
-        return result
+                yield (topic, int(partition), state)
 
     def reallocate_partition(self, topic: str, partition: object, replicas: list) -> bool:
         """
