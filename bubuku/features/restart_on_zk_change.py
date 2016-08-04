@@ -2,7 +2,7 @@ import logging
 
 from bubuku.broker import BrokerManager
 from bubuku.controller import Change, Check
-from bubuku.zookeeper import Exhibitor
+from bubuku.zookeeper import BukuProxy
 
 _LOG = logging.getLogger('bubuku.features.restart_on_zk')
 
@@ -11,7 +11,7 @@ _STAGE_START = 'start'
 
 
 class RestartBrokerOnZkChange(Change):
-    def __init__(self, zk_hosts: str, zk: Exhibitor, broker: BrokerManager):
+    def __init__(self, zk_hosts: str, zk: BukuProxy, broker: BrokerManager):
         self.conn_str = zk_hosts
         self.zk = zk
         self.broker = broker
@@ -53,7 +53,7 @@ class RestartBrokerOnZkChange(Change):
 
 
 class CheckExhibitorAddressChanged(Check):
-    def __init__(self, zk: Exhibitor, broker: BrokerManager):
+    def __init__(self, zk: BukuProxy, broker: BrokerManager):
         super().__init__()
         self.zk = zk
         self.broker = broker

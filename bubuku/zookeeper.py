@@ -30,17 +30,17 @@ class ExhibitorEnsembleProvider:
         if self._next_poll and self._next_poll > time.time():
             return False
 
-        json = self._query_exhibitors(self._exhibitors)
-        if not json:
-            json = self._query_exhibitors(self._master_exhibitors)
+        json_ = self._query_exhibitors(self._exhibitors)
+        if not json_:
+            json_ = self._query_exhibitors(self._master_exhibitors)
 
-        if isinstance(json, dict) and 'servers' in json and 'port' in json:
+        if isinstance(json_, dict) and 'servers' in json_ and 'port' in json_:
             self._next_poll = time.time() + self._poll_interval
-            zookeeper_hosts = ','.join([h + ':' + str(json['port']) for h in sorted(json['servers'])])
+            zookeeper_hosts = ','.join([h + ':' + str(json_['port']) for h in sorted(json_['servers'])])
             if self._zookeeper_hosts != zookeeper_hosts:
                 _LOG.info('ZooKeeper connection string has changed: %s => %s', self._zookeeper_hosts, zookeeper_hosts)
                 self._zookeeper_hosts = zookeeper_hosts
-                self._exhibitors = json['servers']
+                self._exhibitors = json_['servers']
                 return True
         return False
 
@@ -142,6 +142,20 @@ class BukuProxy(object):
                 result.append((topic, int(k), v))
         return result
 
+    def load_partition_states(self) -> list:
+        """
+        Lists all the current partition states (leaders and isr list)
+        :return: list of tuples
+        (topic_name: str, partition: int, state: json from /brokers/topics/{}/partitions/{}/state)
+        """
+        result = []
+        for topic in self.exhibitor.get_children('/brokers/topics'):
+            for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
+                state = json.loads(self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(
+                    topic, partition))[0].decode('utf-8'))
+                result.append((topic, int(partition), state))
+        return result
+
     def reallocate_partition(self, topic: str, partition: object, replicas: list) -> bool:
         """
         Reallocates partition to replica list
@@ -168,6 +182,13 @@ class BukuProxy(object):
         except NodeExistsError:
             _LOG.info("Waiting for free reallocation slot, still in progress...")
         return False
+
+    def get_conn_str(self):
+        """
+        Calculates connection string in format usable by kafka
+        :return: connection string in form host:port[,host:port[...]]/path
+        """
+        return self.exhibitor.get_conn_str()
 
     def is_rebalancing(self):
         try:

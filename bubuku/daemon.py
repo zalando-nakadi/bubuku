@@ -15,17 +15,16 @@ from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
-from bubuku.zookeeper import load_exhibitor, Exhibitor, BukuProxy
+from bubuku.zookeeper import load_exhibitor, BukuProxy
 
 _LOG = logging.getLogger('bubuku.main')
 
 
-def apply_features(features: str, controller: Controller, exhibitor: Exhibitor, broker: BrokerManager,
+def apply_features(features: str, controller: Controller, buku_proxy: BukuProxy, broker: BrokerManager,
                    kafka_properties: KafkaProperties, amazon: Amazon) -> list:
-    buku_proxy = BukuProxy(exhibitor)
     for feature in set(features.split(',')):
         if feature == 'restart_on_exhibitor':
-            controller.add_check(CheckExhibitorAddressChanged(exhibitor, broker))
+            controller.add_check(CheckExhibitorAddressChanged(buku_proxy, broker))
         elif feature == 'rebalance_on_start':
             controller.add_check(RebalanceOnStartCheck(buku_proxy, broker))
         elif feature == 'rebalance_on_brokers_change':
@@ -54,19 +53,20 @@ def main():
 
     _LOG.info("Loading exhibitor configuration")
     exhibitor = load_exhibitor(amazon.get_addresses_by_lb_name(config.zk_stack_name), config.zk_prefix)
+    buku_proxy = BukuProxy(exhibitor)
 
     _LOG.info("Loading broker_id policy")
     broker_id_manager = get_broker_id_policy(config.id_policy, exhibitor, kafka_properties, amazon)
 
     _LOG.info("Building broker manager")
-    broker = BrokerManager(config.kafka_dir, exhibitor, broker_id_manager, kafka_properties)
+    broker = BrokerManager(config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)
 
     _LOG.info("Creating controller")
     controller = Controller(broker, exhibitor, amazon)
 
     controller.add_check(CheckBrokerStopped(broker, exhibitor))
 
-    apply_features(config.features, controller, exhibitor, broker, kafka_properties, amazon)
+    apply_features(config.features, controller, buku_proxy, broker, kafka_properties, amazon)
 
     _LOG.info('Starting health server')
     health.start_server(config.health_port)
