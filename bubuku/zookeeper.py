@@ -139,7 +139,7 @@ class BukuExhibitor(object):
         Gets list of available broker ids
         :return: Sorted list of strings - active broker ids.
         """
-        return sorted(self.exhibitor.get('/brokers/ids'))
+        return sorted(self.exhibitor.get_children('/brokers/ids'))
 
     def load_partition_assignment(self) -> list:
         """
