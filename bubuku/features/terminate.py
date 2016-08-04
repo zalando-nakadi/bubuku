@@ -14,6 +14,9 @@ class StopBrokerChange(Change):
     def get_name(self):
         return 'stop'
 
+    def __str__(self):
+        return 'StopBrokerChange ({})'.format(self.get_name())
+
     def can_run(self, current_actions):
         return all([action not in current_actions for action in ['start', 'restart', 'stop']])
 
