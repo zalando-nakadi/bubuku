@@ -3,7 +3,7 @@ import logging
 
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
-from bubuku.zookeeper import BukuProxy
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rebalance')
 
@@ -44,7 +44,7 @@ def pop_with_length(arrays, length):
 
 
 class RebalanceChange(Change):
-    def __init__(self, zk: BukuProxy, broker_list):
+    def __init__(self, zk: BukuExhibitor, broker_list):
         self.zk = zk
         self.broker_ids = broker_list
         self.stale_data = {}  # partition count to topic data
@@ -153,7 +153,7 @@ class RebalanceChange(Change):
 
 
 class RebalanceOnStartCheck(Check):
-    def __init__(self, zk: BukuProxy, broker: BrokerManager):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
         super().__init__()
         self.zk = zk
         self.broker = broker
@@ -173,7 +173,7 @@ class RebalanceOnStartCheck(Check):
 
 
 class RebalanceOnBrokerListChange(Check):
-    def __init__(self, zk: BukuProxy, broker: BrokerManager):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
         super().__init__()
         self.zk = zk
         self.broker = broker

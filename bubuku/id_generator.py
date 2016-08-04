@@ -7,7 +7,7 @@ from time import sleep, time
 
 from bubuku.amazon import Amazon
 from bubuku.config import KafkaProperties
-from bubuku.zookeeper import BukuProxy
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.id_generator')
 
@@ -47,7 +47,7 @@ def _create_rfc1918_address_hash(ip: str) -> (str, str):
 
 
 class BrokerIDByIp(BrokerIdGenerator):
-    def __init__(self, zk: BukuProxy, ip: str, kafka_props: KafkaProperties):
+    def __init__(self, zk: BukuExhibitor, ip: str, kafka_props: KafkaProperties):
         self.zk = zk
         self.broker_id, max_id = _create_rfc1918_address_hash(ip)
         kafka_props.set_property('reserved.broker.max.id', max_id)
@@ -63,7 +63,7 @@ class BrokerIDByIp(BrokerIdGenerator):
 
 
 class BrokerIdAutoAssign(BrokerIdGenerator):
-    def __init__(self, zk: BukuProxy, kafka_properties: KafkaProperties):
+    def __init__(self, zk: BukuExhibitor, kafka_properties: KafkaProperties):
         super().__init__()
         self.zk = zk
         self.kafka_properties = kafka_properties
@@ -85,7 +85,7 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
         return False
 
 
-def get_broker_id_policy(policy: str, zk: BukuProxy, kafka_props: KafkaProperties, amazon: Amazon) -> BrokerIdGenerator:
+def get_broker_id_policy(policy: str, zk: BukuExhibitor, kafka_props: KafkaProperties, amazon: Amazon) -> BrokerIdGenerator:
     if policy == 'ip':
         return BrokerIDByIp(zk, amazon.get_own_ip(), kafka_props)
     elif policy == 'auto':

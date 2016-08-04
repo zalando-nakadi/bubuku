@@ -15,12 +15,13 @@ from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
-from bubuku.zookeeper import load_exhibitor, BukuProxy
+from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, load_exhibitor_proxy
 
 _LOG = logging.getLogger('bubuku.main')
 
 
-def apply_features(features: str, controller: Controller, buku_proxy: BukuProxy, broker: BrokerManager,
+def apply_features(features: str, controller: Controller, buku_proxy: BukuExhibitor, broker: BrokerManager,
                    kafka_properties: KafkaProperties, amazon: Amazon) -> list:
     for feature in set(features.split(',')):
         if feature == 'restart_on_exhibitor':
@@ -52,8 +53,7 @@ def main():
     amazon = Amazon()
 
     _LOG.info("Loading exhibitor configuration")
-    exhibitor = load_exhibitor(amazon.get_addresses_by_lb_name(config.zk_stack_name), config.zk_prefix)
-    buku_proxy = BukuProxy(exhibitor)
+    buku_proxy = load_exhibitor_proxy(amazon.get_addresses_by_lb_name(config.zk_stack_name), config.zk_prefix)
 
     _LOG.info("Loading broker_id policy")
     broker_id_manager = get_broker_id_policy(config.id_policy, buku_proxy, kafka_properties, amazon)

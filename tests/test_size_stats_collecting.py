@@ -1,4 +1,3 @@
-import json
 from unittest.mock import MagicMock
 
 from bubuku.features.rebalance_by_size import GenerateDataSizeStatistics
@@ -18,8 +17,7 @@ def test_size_stats_collecting():
             "my-topic": {"0": 10, "2": 200}
         }
     }
-    expected_data = json.dumps(expected_json, sort_keys=True, separators=(',', ':')).encode("utf-8")
-    zk.create.assert_called_with("/bubuku/size_stats/dummy_id", expected_data, ephemeral=True, makepath=True)
+    zk.update_disk_stats.assert_called_with('dummy_id', expected_json)
 
 
 def mock_cmd_helper() -> CmdHelper:

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 from kazoo.exceptions import NoNodeError
 
 from bubuku.features.rebalance import RebalanceChange, RebalanceOnBrokerListChange, combine_broker_ids
-from bubuku.zookeeper import BukuProxy
+from bubuku.zookeeper import BukuExhibitor
 
 
 def test_rebalance_can_run():
@@ -25,7 +25,7 @@ def test_rebalance_get_name():
     assert o.get_name() == 'rebalance'
 
 
-def __create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuProxy):
+def __create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuExhibitor):
     buku_proxy = MagicMock()
     buku_proxy.get_broker_ids.return_value = broker_ids if broker_ids else sorted(list(
         set(functools.reduce(lambda x, y: x + y, topic_data.values(), []))))

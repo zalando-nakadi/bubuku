@@ -2,13 +2,13 @@ import logging
 
 from bubuku.broker import BrokerManager
 from bubuku.controller import Change, Check
-from bubuku.zookeeper import BukuProxy
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.restart_if_dead')
 
 
 class StartBrokerChange(Change):
-    def __init__(self, broker: BrokerManager, zk: BukuProxy):
+    def __init__(self, broker: BrokerManager, zk: BukuExhibitor):
         self.broker = broker
         self.zk = zk
         self.stopped = False
@@ -41,7 +41,7 @@ class StartBrokerChange(Change):
 
 
 class CheckBrokerStopped(Check):
-    def __init__(self, broker: BrokerManager, zk: BukuProxy):
+    def __init__(self, broker: BrokerManager, zk: BukuExhibitor):
         super().__init__()
         self.broker = broker
         self.zk = zk

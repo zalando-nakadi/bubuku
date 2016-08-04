@@ -3,7 +3,7 @@ from time import sleep, time
 
 from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
-from bubuku.zookeeper import BukuProxy
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.controller')
 
@@ -45,7 +45,7 @@ def _exclude_self(ip, name, running_actions):
 
 
 class Controller(object):
-    def __init__(self, broker_manager: BrokerManager, zk: BukuProxy, amazon: Amazon):
+    def __init__(self, broker_manager: BrokerManager, zk: BukuExhibitor, amazon: Amazon):
         self.broker_manager = broker_manager
         self.zk = zk
         self.amazon = amazon

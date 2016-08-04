@@ -4,7 +4,7 @@ import subprocess
 
 from bubuku.config import KafkaProperties
 from bubuku.id_generator import BrokerIdGenerator
-from bubuku.zookeeper import BukuProxy
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.broker')
 
@@ -14,7 +14,7 @@ class LeaderElectionInProgress(Exception):
 
 
 class BrokerManager(object):
-    def __init__(self, kafka_dir: str, exhibitor: BukuProxy, id_manager: BrokerIdGenerator,
+    def __init__(self, kafka_dir: str, exhibitor: BukuExhibitor, id_manager: BrokerIdGenerator,
                  kafka_properties: KafkaProperties):
         self.kafka_dir = kafka_dir
         self.id_manager = id_manager

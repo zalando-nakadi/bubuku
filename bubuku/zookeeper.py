@@ -62,7 +62,7 @@ class ExhibitorEnsembleProvider:
         return self._zookeeper_hosts
 
 
-class Exhibitor:
+class _Exhibitor:
     def __init__(self, hosts, port, prefix):
         self.prefix = prefix
         self.exhibitor = ExhibitorEnsembleProvider(hosts, port, poll_interval=30)
@@ -119,8 +119,8 @@ class Exhibitor:
                 _LOG.error('Failed to obtain lock for exhibitor, retrying', exc_info=e)
 
 
-class BukuProxy(object):
-    def __init__(self, exhibitor: Exhibitor):
+class BukuExhibitor(object):
+    def __init__(self, exhibitor: _Exhibitor):
         self.exhibitor = exhibitor
         try:
             self.exhibitor.create('/bubuku/changes', makepath=True)
@@ -194,6 +194,14 @@ class BukuProxy(object):
             _LOG.info("Waiting for free reallocation slot, still in progress...")
         return False
 
+    def update_disk_stats(self, broker_id: str, data: dict):
+        data_bytes = json.dumps(data, sort_keys=True).encode('utf-8')
+        path = '/bubuku/size_stats/{}'.format(broker_id)
+        try:
+            self.exhibitor.create(path, data_bytes, ephemeral=True, makepath=True)
+        except NodeExistsError:
+            self.exhibitor.set(path, data_bytes)
+
     def get_conn_str(self):
         """
         Calculates connection string in format usable by kafka
@@ -227,5 +235,5 @@ class BukuProxy(object):
         self.exhibitor.delete('/bubuku/changes/{}'.format(name), recursive=True)
 
 
-def load_exhibitor(initial_hosts: list, zookeeper_prefix):
-    return Exhibitor(initial_hosts, 8181, zookeeper_prefix)
+def load_exhibitor_proxy(initial_hosts: list, zookeeper_prefix) -> BukuExhibitor:
+    return BukuExhibitor(_Exhibitor(initial_hosts, 8181, zookeeper_prefix))
