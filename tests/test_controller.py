@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock
 
-from kazoo.exceptions import NoNodeError, NodeExistsError
-
 from bubuku.controller import Controller, Check, Change
 
 
@@ -36,41 +34,10 @@ def test_multiple_changes_are_executed_one_by_one():
     current_changes = {}
     ip = 'fake'
     zk = MagicMock()
+    zk.get_running_changes.return_value = current_changes
+    zk.register_change = lambda x, y: current_changes.update({x: y})
+    zk.unregister_change = lambda x: current_changes.pop(x)
 
-    def _get_children(path):
-        if path == '/bubuku/changes':
-            return current_changes.keys()
-        else:
-            raise NotImplementedError()
-
-    def _get(path: str):
-        if path.startswith('/bubuku/changes/'):
-            return current_changes.get(path[len('/bubuku/changes/'):]), 'xxx'
-        raise NoNodeError()
-
-    def _create(path: str, data: bytes, ephemeral=False):
-        if path.startswith('/bubuku/changes/'):
-            name = path[len('/bubuku/changes/'):]
-            if name in current_changes:
-                raise NodeExistsError()
-            assert ephemeral
-            current_changes[name] = data
-        else:
-            raise NotImplementedError()
-
-    def _delete(path, **kwargs):
-        if path.startswith('/bubuku/changes/'):
-            name = path[len('/bubuku/changes/'):]
-            if name not in current_changes:
-                raise NoNodeError()
-            del current_changes[name]
-        else:
-            raise NotImplementedError()
-
-    zk.get_children = _get_children
-    zk.get = _get
-    zk.create = _create
-    zk.delete = _delete
     controller = Controller(MagicMock(), zk, MagicMock())
     controller.add_check(FakeCheck())
 

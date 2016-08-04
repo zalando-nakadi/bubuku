@@ -1,11 +1,9 @@
 import logging
 from time import sleep, time
 
-from kazoo.exceptions import NodeExistsError
-
 from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
-from bubuku.zookeeper import Exhibitor
+from bubuku.zookeeper import BukuProxy
 
 _LOG = logging.getLogger('bubuku.controller')
 
@@ -47,7 +45,7 @@ def _exclude_self(ip, name, running_actions):
 
 
 class Controller(object):
-    def __init__(self, broker_manager: BrokerManager, zk: Exhibitor, amazon: Amazon):
+    def __init__(self, broker_manager: BrokerManager, zk: BukuProxy, amazon: Amazon):
         self.broker_manager = broker_manager
         self.zk = zk
         self.amazon = amazon
@@ -61,13 +59,10 @@ class Controller(object):
 
     def _register_running_changes(self, ip: str) -> dict:
         _LOG.debug('Taking lock for processing')
-        with self.zk.take_lock('/bubuku/global_lock', ip):
+        with self.zk.lock(ip):
             _LOG.debug('Lock is taken')
             # Get list of current running changes
-            running_changes = {
-                change: self.zk.get('/bubuku/changes/{}'.format(change))[0].decode('utf-8')
-                for change in self.zk.get_children('/bubuku/changes')
-                }
+            running_changes = self.zk.get_running_changes()
             if running_changes:
                 _LOG.info("Running changes: {}".format(running_changes))
             # Register changes to run
@@ -76,8 +71,7 @@ class Controller(object):
                 first_change = change_list[0]
                 if first_change.can_run(_exclude_self(ip, name, running_changes)):
                     if name not in running_changes:
-                        _LOG.info('Registering change in zk: {}'.format(name))
-                        self.zk.create('/bubuku/changes/{}'.format(name), ip.encode('utf-8'), ephemeral=True)
+                        self.zk.register_change(name, ip)
                         running_changes[name] = ip
                 else:
                     _LOG.info('Change {} is waiting for others: {}'.format(name, running_changes))
@@ -107,18 +101,13 @@ class Controller(object):
                 del self.changes[change_name][0]
                 if not self.changes[change_name]:
                     del self.changes[change_name]
-            with self.zk.take_lock('/bubuku/global_lock'):
+            with self.zk.lock():
                 for name in changes_to_remove:
-                    _LOG.info('Removing action {} from locks'.format(name))
-                    self.zk.delete('/bubuku/changes/{}'.format(name), recursive=True)
+                    self.zk.unregister_change(name)
 
     def loop(self):
         ip = self.amazon.get_own_ip()
 
-        try:
-            self.zk.create('/bubuku/changes', makepath=True)
-        except NodeExistsError:
-            pass
         while self.running or self.changes:
             self.make_step(ip)
 

@@ -122,6 +122,10 @@ class Exhibitor:
 class BukuProxy(object):
     def __init__(self, exhibitor: Exhibitor):
         self.exhibitor = exhibitor
+        try:
+            self.exhibitor.create('/bubuku/changes', makepath=True)
+        except NodeExistsError:
+            pass
 
     def get_broker_ids(self) -> list:
         """
@@ -197,6 +201,23 @@ class BukuProxy(object):
             return True
         except NoNodeError:
             return False
+
+    def lock(self, lock_data=None):
+        return self.exhibitor.take_lock('/bubuku/global_lock', lock_data)
+
+    def get_running_changes(self) -> dict:
+        return {
+            change: self.exhibitor.get('/bubuku/changes/{}'.format(change))[0].decode('utf-8')
+            for change in self.exhibitor.get_children('/bubuku/changes')
+            }
+
+    def register_change(self, name, ip):
+        _LOG.info('Registering change in zk: {}'.format(name))
+        self.exhibitor.create('/bubuku/changes/{}'.format(name), ip.encode('utf-8'), ephemeral=True)
+
+    def unregister_change(self, name):
+        _LOG.info('Removing change {} from locks'.format(name))
+        self.exhibitor.delete('/bubuku/changes/{}'.format(name), recursive=True)
 
 
 def load_exhibitor(initial_hosts: list, zookeeper_prefix):

@@ -62,7 +62,7 @@ def main():
     broker = BrokerManager(config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)
 
     _LOG.info("Creating controller")
-    controller = Controller(broker, exhibitor, amazon)
+    controller = Controller(broker, buku_proxy, amazon)
 
     controller.add_check(CheckBrokerStopped(broker, exhibitor))
 
