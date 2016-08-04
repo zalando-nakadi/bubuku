@@ -15,20 +15,21 @@ from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
-from bubuku.zookeeper import load_exhibitor, Exhibitor
+from bubuku.zookeeper import load_exhibitor, Exhibitor, BukuProxy
 
 _LOG = logging.getLogger('bubuku.main')
 
 
 def apply_features(features: str, controller: Controller, exhibitor: Exhibitor, broker: BrokerManager,
                    kafka_properties: KafkaProperties, amazon: Amazon) -> list:
+    buku_proxy = BukuProxy(exhibitor)
     for feature in set(features.split(',')):
         if feature == 'restart_on_exhibitor':
             controller.add_check(CheckExhibitorAddressChanged(exhibitor, broker))
         elif feature == 'rebalance_on_start':
-            controller.add_check(RebalanceOnStartCheck(exhibitor, broker))
+            controller.add_check(RebalanceOnStartCheck(buku_proxy, broker))
         elif feature == 'rebalance_on_brokers_change':
-            controller.add_check(RebalanceOnBrokerListChange(exhibitor, broker))
+            controller.add_check(RebalanceOnBrokerListChange(buku_proxy, broker))
         elif feature == 'rebalance_by_size':
             controller.add_check(GenerateDataSizeStatistics(exhibitor, broker, CmdHelper(),
                                                             kafka_properties.get_property("log.dirs").split(",")))

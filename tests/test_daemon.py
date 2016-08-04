@@ -41,7 +41,7 @@ def test_rebalance_on_start():
     assert len(controller.checks) == 1
     check = controller.checks[0]
     assert type(check) == RebalanceOnStartCheck
-    assert check.zk == exhibitor
+    assert check.zk.exhibitor == exhibitor
     assert check.broker == broker
     assert not check.executed
 
@@ -57,7 +57,7 @@ def test_rebalance_on_broker_list_change():
     assert len(controller.checks) == 1
     check = controller.checks[0]
     assert type(check) == RebalanceOnBrokerListChange
-    assert check.zk == exhibitor
+    assert check.zk.exhibitor == exhibitor
     assert check.broker == broker
 
 

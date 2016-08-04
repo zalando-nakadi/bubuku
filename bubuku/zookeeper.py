@@ -1,10 +1,11 @@
+import json
 import logging
 import random
 import time
 
 import requests
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError
+from kazoo.exceptions import NoNodeError, NodeExistsError
 from requests.exceptions import RequestException
 
 _LOG = logging.getLogger('bubuku.exhibitor')
@@ -116,6 +117,65 @@ class Exhibitor:
                 return self.client.Lock(*args, **kwargs)
             except Exception as e:
                 _LOG.error('Failed to obtain lock for exhibitor, retrying', exc_info=e)
+
+
+class BukuProxy(object):
+    def __init__(self, exhibitor: Exhibitor):
+        self.exhibitor = exhibitor
+
+    def get_broker_ids(self) -> list:
+        """
+        Gets list of available broker ids
+        :return: Sorted list of strings - active broker ids.
+        """
+        return sorted(self.exhibitor.get('/brokers/ids'))
+
+    def load_partition_assignment(self) -> list:
+        """
+        Lists all the assignments of partitions to particular broker ids.
+        :returns list of tuples (topic_name:str, partition:int, replica_list:list(int)), for ex. "test", 0, [1,2,3]
+        """
+        result = []
+        for topic in self.exhibitor.get_children('/brokers/topics'):
+            data = json.loads(self.exhibitor.get("/brokers/topics/" + topic)[0].decode('utf-8'))
+            for k, v in data['partitions'].items():
+                result.append((topic, int(k), v))
+        return result
+
+    def reallocate_partition(self, topic: str, partition: object, replicas: list) -> bool:
+        """
+        Reallocates partition to replica list
+        :param topic: topic to move
+        :param partition: partition to move (can be str or int)
+        :param replicas: list of replicas to move to
+        :return: If reallocation was successful (node for reallocation was created)
+        """
+        j = {
+            "version": "1",
+            "partitions": [
+                {
+                    "topic": topic,
+                    "partition": int(partition),
+                    "replicas": [int(p) for p in replicas],
+                }
+            ]
+        }
+        try:
+            data = json.dumps(j)
+            self.exhibitor.create("/admin/reassign_partitions", data.encode('utf-8'))
+            _LOG.info("Reallocating {}".format(data))
+            return True
+        except NodeExistsError:
+            _LOG.info("Waiting for free reallocation slot, still in progress...")
+        return False
+
+    def is_rebalancing(self):
+        try:
+            rebalance_data = self.exhibitor.get('/admin/reassign_partitions')[0].decode('utf-8')
+            _LOG.info('Old rebalance is still in progress: {}, waiting'.format(rebalance_data))
+            return True
+        except NoNodeError:
+            return False
 
 
 def load_exhibitor(initial_hosts: list, zookeeper_prefix):

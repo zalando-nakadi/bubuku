@@ -1,11 +1,10 @@
 import functools
-import json
 from unittest.mock import MagicMock
 
 from kazoo.exceptions import NoNodeError
 
 from bubuku.features.rebalance import RebalanceChange, RebalanceOnBrokerListChange, combine_broker_ids
-from bubuku.zookeeper import Exhibitor
+from bubuku.zookeeper import BukuProxy
 
 
 def test_rebalance_can_run():
@@ -26,37 +25,23 @@ def test_rebalance_get_name():
     assert o.get_name() == 'rebalance'
 
 
-def __create_zk_for_topics(topic_data, broker_ids=None) -> (list, Exhibitor):
-    def _get_children(path: str):
-        if path == '/brokers/ids':
-            if broker_ids:
-                return broker_ids
-            return list(set(functools.reduce(lambda x, y: x + y, topic_data.values(), [])))
-        if path == '/brokers/topics':
-            return list(set([k[0] for k in topic_data.keys()]))
-        raise NotImplementedError('get_children {} is not supported'.format(path))
+def __create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuProxy):
+    buku_proxy = MagicMock()
+    buku_proxy.get_broker_ids.return_value = broker_ids if broker_ids else sorted(list(
+        set(functools.reduce(lambda x, y: x + y, topic_data.values(), []))))
 
-    def _get(path):
-        if path.startswith('/brokers/topics/'):
-            topic = path[len('/brokers/topics/'):]
-            return json.dumps({'partitions': {k[1]: br for k, br in topic_data.items() if k[0] == topic}}).encode(
-                'utf-8'), object()
-        elif path == '/admin/reassign_partitions':
-            raise NoNodeError()
-        raise NotImplementedError('get {} is not supported'.format(path))
+    def _load_assignment():
+        return [(k[0], int(k[1]), [int(p) for p in v]) for k, v in topic_data.items()]
 
-    def _create(path, value: bytes):
-        if path == '/admin/reassign_partitions':
-            for item in json.loads(value.decode('utf-8'))['partitions']:
-                topic_data[(item['topic'], str(item['partition']))] = [str(x) for x in item['replicas']]
-            return
-        raise NotImplementedError('set {}, {} is not supported'.format(path, value))
+    buku_proxy.load_partition_assignment = _load_assignment
+    buku_proxy.is_rebalancing.return_value = False
 
-    a = MagicMock()
-    a.get_children = _get_children
-    a.get = _get
-    a.create = _create
-    return sorted(list(set(functools.reduce(lambda x, y: x + y, topic_data.values(), [])))), a
+    def _reassign(topic, partition, replicas):
+        topic_data[(topic, str(partition))] = [str(x) for x in replicas]
+        return True
+
+    buku_proxy.reallocate_partition = _reassign
+    return sorted(list(set(functools.reduce(lambda x, y: x + y, topic_data.values(), [])))), buku_proxy
 
 
 def test_rebalance_on_empty1():
@@ -160,13 +145,13 @@ def test_rebalance_invoked_on_broker_list_change():
     zk.get = MagicMock(side_effect=NoNodeError)
 
     check = RebalanceOnBrokerListChange(zk, MagicMock())
-    zk.get_children = lambda x: ['1', '2', '3']
+    zk.get_broker_ids.return_value = ['1', '2', '3']
 
     assert check.check() is not None
     assert check.check() is None
-    zk.get_children = lambda x: ['2', '1', '3']
+    zk.get_broker_ids.return_value = ['1', '2', '3']
     assert check.check() is None
-    zk.get_children = lambda x: ['2', '1', '4']
+    zk.get_broker_ids.return_value = ['1', '2', '4']
     assert check.check() is not None
     assert check.check() is None
 
