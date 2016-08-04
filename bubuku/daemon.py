@@ -64,7 +64,7 @@ def main():
     _LOG.info("Creating controller")
     controller = Controller(broker, buku_proxy, amazon)
 
-    controller.add_check(CheckBrokerStopped(broker, exhibitor))
+    controller.add_check(CheckBrokerStopped(broker, buku_proxy))
 
     apply_features(config.features, controller, buku_proxy, broker, kafka_properties, amazon)
 
