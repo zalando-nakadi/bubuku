@@ -5,32 +5,20 @@ import os
 import re
 from time import sleep, time
 
-from kazoo.client import NoNodeError
-
 from bubuku.amazon import Amazon
 from bubuku.config import KafkaProperties
-from bubuku.zookeeper import Exhibitor
+from bubuku.zookeeper import BukuProxy
 
 _LOG = logging.getLogger('bubuku.id_generator')
 
 
 class BrokerIdGenerator(object):
-    def __init__(self, zk: Exhibitor):
-        self.zk = zk
-
     def get_broker_id(self) -> str:
         raise NotImplementedError('Not implemented')
 
     def wait_for_broker_id_absence(self):
         while self.is_registered():
             sleep(1)
-
-    def _is_registered_in_zk(self, id_):
-        try:
-            _, stat = self.zk.get('/brokers/ids/{}'.format(id_))
-            return stat is not None
-        except NoNodeError:
-            return False
 
     def wait_for_broker_id_presence(self, timeout) -> bool:
         start = time()
@@ -59,8 +47,8 @@ def _create_rfc1918_address_hash(ip: str) -> (str, str):
 
 
 class BrokerIDByIp(BrokerIdGenerator):
-    def __init__(self, zk: Exhibitor, ip: str, kafka_props: KafkaProperties):
-        super().__init__(zk)
+    def __init__(self, zk: BukuProxy, ip: str, kafka_props: KafkaProperties):
+        self.zk = zk
         self.broker_id, max_id = _create_rfc1918_address_hash(ip)
         kafka_props.set_property('reserved.broker.max.id', max_id)
         _LOG.info('Built broker id {} from ip: {}'.format(self.broker_id, ip))
@@ -71,12 +59,13 @@ class BrokerIDByIp(BrokerIdGenerator):
         return self.broker_id
 
     def is_registered(self):
-        return self._is_registered_in_zk(self.broker_id)
+        return self.zk.is_broker_registered(self.broker_id)
 
 
 class BrokerIdAutoAssign(BrokerIdGenerator):
-    def __init__(self, zk: Exhibitor, kafka_properties: KafkaProperties):
-        super().__init__(zk)
+    def __init__(self, zk: BukuProxy, kafka_properties: KafkaProperties):
+        super().__init__()
+        self.zk = zk
         self.kafka_properties = kafka_properties
         self.broker_id = None
 
@@ -92,11 +81,11 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
             for line in lines:
                 match = re.search('broker\.id=(\d+)', line)
                 if match:
-                    return self._is_registered_in_zk(match.group(1))
+                    return self.zk.is_broker_registered(match.group(1))
         return False
 
 
-def get_broker_id_policy(policy: str, zk: Exhibitor, kafka_props: KafkaProperties, amazon: Amazon) -> BrokerIdGenerator:
+def get_broker_id_policy(policy: str, zk: BukuProxy, kafka_props: KafkaProperties, amazon: Amazon) -> BrokerIdGenerator:
     if policy == 'ip':
         return BrokerIDByIp(zk, amazon.get_own_ip(), kafka_props)
     elif policy == 'auto':

@@ -56,7 +56,7 @@ def main():
     buku_proxy = BukuProxy(exhibitor)
 
     _LOG.info("Loading broker_id policy")
-    broker_id_manager = get_broker_id_policy(config.id_policy, exhibitor, kafka_properties, amazon)
+    broker_id_manager = get_broker_id_policy(config.id_policy, buku_proxy, kafka_properties, amazon)
 
     _LOG.info("Building broker manager")
     broker = BrokerManager(config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)

@@ -127,6 +127,13 @@ class BukuProxy(object):
         except NodeExistsError:
             pass
 
+    def is_broker_registered(self, broker_id):
+        try:
+            _, stat = self.exhibitor.get('/brokers/ids/{}'.format(broker_id))
+            return stat is not None
+        except NoNodeError:
+            return False
+
     def get_broker_ids(self) -> list:
         """
         Gets list of available broker ids
