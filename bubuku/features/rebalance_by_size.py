@@ -26,19 +26,97 @@ class RebalanceBySizeChange(Change):
 
 
 class RebalanceBySize(Check):
-    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, free_space_diff_threshold_kb: int):
         super().__init__(check_interval_s=600)
         self.zk = zk
         self.broker = broker
+        self.free_space_diff_threshold_kb = free_space_diff_threshold_kb
 
     def check(self):
-        if self.broker.is_running_and_registered() and self.__is_data_imbalanced():
+        if self.broker.is_running_and_registered() and self.is_data_imbalanced():
             _LOG.info("Starting rebalance by size")
             return RebalanceBySizeChange(self.zk)
         return None
 
-    def __is_data_imbalanced(self) -> bool:
-        return False  # todo: not implemented yet
+    def is_data_imbalanced(self, disk_stats=None, partition_assignment=None) -> bool:
+        # broker_ids = self.zk.get_broker_ids()
+        # disk_stats = self.zk.get_disk_stats()
+
+
+        if len(disk_stats.keys()) == 0:
+            return None
+
+        # find the most "slim" and the most "fat" brokers
+        free_size_getter = lambda t: t[1]["disk"]["free_kb"]
+        slim_broker_id = min((item for item in disk_stats.items()), key=free_size_getter)[0]
+        fat_broker_id = max((item for item in disk_stats.items()), key=free_size_getter)[0]
+        fat_broker_free_kb = disk_stats[fat_broker_id]["disk"]["free_kb"]
+        slim_broker_free_kb = disk_stats[slim_broker_id]["disk"]["free_kb"]
+
+        # is the gap is big enough to swap partitions?
+        gap = fat_broker_free_kb - slim_broker_free_kb
+        if gap < self.free_space_diff_threshold_kb:
+            return None
+
+        # merge topics size stats to a single dict
+        topics_stats = {}
+        for broker_id, broker_stats in disk_stats.items():
+            topics_stats.update(broker_stats["topics"])
+        print(topics_stats)
+
+        #
+
+        involved_broker_ids = [slim_broker_id, fat_broker_id]
+        swap_pertition_candidates = {}
+        # partition_assignment = self.zk.load_partition_assignment()
+        for topic, partition, replicas in partition_assignment:
+            if topic not in topics_stats or partition not in topics_stats[topic]:
+                continue  # we skip this partition as there is not data size stats for it
+
+            if all(involved_broker in replicas for involved_broker in involved_broker_ids):
+                continue  # we skip this partition as it exists on both involved brokers
+
+            for broker_id in involved_broker_ids:
+                if broker_id in replicas:
+                    if broker_id not in swap_pertition_candidates:
+                        swap_pertition_candidates[broker_id] = []
+                    swap_pertition_candidates[broker_id].append((topic, partition, topics_stats[topic][partition]))
+        print(swap_pertition_candidates)
+
+
+
+
+by_size = RebalanceBySize(None, None, 1)
+data = {
+    "broker1": {
+        "disk": {"free_kb": 404, "used_kb": 323232},
+        "topics": {
+            "t1": {"p1": 3434, "p2": 43221},
+        }
+    },
+    "broker2": {
+        "disk": {"free_kb": 4054, "used_kb": 5345346},
+        "topics": {
+            "t2": {"p1": 1176, "p2": 98458}
+        }
+    },
+    "broker3": {
+        "disk": {"free_kb": 4344, "used_kb": 5434543},
+        "topics": {
+            "t3": {"p1": 54366, "p2": 43}
+        }
+    }
+}
+
+assignment = [
+    ("t1", "p1", ["broker1", "broker3"]),
+    ("t1", "p2", ["broker1", "broker2"]),
+    ("t2", "p1", ["broker2", "broker3"]),
+    ("t2", "p2", ["broker1", "broker2"]),
+    ("t3", "p1", ["broker1", "broker2"]),
+    ("t3", "p2", ["broker2", "broker3"]),
+]
+by_size.is_data_imbalanced(disk_stats=data, partition_assignment=assignment)
 
 
 class GenerateDataSizeStatistics(Check):

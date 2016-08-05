@@ -255,6 +255,14 @@ class BukuExhibitor(object):
         except NodeExistsError:
             self.exhibitor.set(path, data_bytes)
 
+    def get_disk_stats(self):
+        stats = {}
+        for broker_id in self.exhibitor.get_children("/bubuku/size_stats"):
+            broker_stats_data = self.exhibitor.get('/bubuku/size_stats/{}'.format(broker_id))
+            broker_stats = json.loads(broker_stats_data.decode("utf-8"))
+            stats[broker_id] = broker_stats
+        return stats
+
     def get_conn_str(self):
         """
         Calculates connection string in format usable by kafka

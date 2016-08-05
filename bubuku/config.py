@@ -5,7 +5,7 @@ from collections import namedtuple
 _LOG = logging.getLogger('bubuku.properties')
 
 Config = namedtuple('Config', ('kafka_dir', 'kafka_settings_template', 'zk_stack_name',
-                               'zk_prefix', 'id_policy', 'features', 'health_port'))
+                               'zk_prefix', 'id_policy', 'features', 'health_port', 'free_space_diff_threshold_kb'))
 
 
 class KafkaProperties(object):
@@ -59,6 +59,7 @@ def load_config() -> Config:
         id_policy=os.getenv('BROKER_ID_POLICY', 'ip').lower(),
         features=os.getenv('BUKU_FEATURES', '').lower(),
         health_port=int(os.getenv('HEALTH_PORT', '8888')),
+        free_space_diff_threshold_kb=int(os.getenv('FREE_SPACE_DIFF_THRESHOLD_KB', '50000000'))  # 50 GB
     )
 
 
