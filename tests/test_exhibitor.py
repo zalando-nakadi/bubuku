@@ -8,7 +8,7 @@ from bubuku.zookeeper import BukuExhibitor
 
 
 def test_get_broker_ids():
-    real_ex = MagicMock()
+    exhibitor_mock = MagicMock()
 
     def _get_children(path):
         if path == '/brokers/ids':
@@ -16,9 +16,9 @@ def test_get_broker_ids():
         else:
             raise NotImplementedError()
 
-    real_ex.get_children = _get_children
+    exhibitor_mock.get_children = _get_children
 
-    buku = BukuExhibitor(real_ex)
+    buku = BukuExhibitor(exhibitor_mock)
 
     assert ['1', '2', '3'] == buku.get_broker_ids()  # ensure that return list is sorted
 
@@ -32,9 +32,9 @@ def test_is_broker_registered():
         else:
             raise NoNodeError()
 
-    real_ex = MagicMock()
-    real_ex.get = _get
-    buku = BukuExhibitor(real_ex)
+    exhibitor_mock = MagicMock()
+    exhibitor_mock.get = _get
+    buku = BukuExhibitor(exhibitor_mock)
 
     assert buku.is_broker_registered('123')
     assert buku.is_broker_registered(123)
@@ -45,7 +45,7 @@ def test_is_broker_registered():
 
 
 def _test_load_partition_assignment(async: bool):
-    real_ex = MagicMock()
+    exhibitor_mock = MagicMock()
 
     def _get_children(path):
         if path == '/brokers/topics':
@@ -70,11 +70,11 @@ def _test_load_partition_assignment(async: bool):
         mock.get = _get_iresult
         return mock
 
-    real_ex.get = _get
-    real_ex.get_async = _get_async
-    real_ex.get_children = _get_children
+    exhibitor_mock.get = _get
+    exhibitor_mock.get_async = _get_async
+    exhibitor_mock.get_children = _get_children
 
-    buku_ex = BukuExhibitor(real_ex, async)
+    buku_ex = BukuExhibitor(exhibitor_mock, async)
 
     expected_result = [
         ('t01', 0, [1, 2, 3]),
@@ -97,7 +97,7 @@ def test_load_partition_assignment_async():
 
 
 def _test_load_partition_states(async: bool):
-    real_ex = MagicMock()
+    exhibitor_mock = MagicMock()
 
     def _get_children(path):
         if path == '/brokers/topics':
@@ -137,11 +137,11 @@ def _test_load_partition_states(async: bool):
         mock.get = _get_iasync
         return mock
 
-    real_ex.get = _get
-    real_ex.get_async = _get_async
-    real_ex.get_children = _get_children
+    exhibitor_mock.get = _get
+    exhibitor_mock.get_async = _get_async
+    exhibitor_mock.get_children = _get_children
 
-    buku_ex = BukuExhibitor(real_ex, async=async)
+    buku_ex = BukuExhibitor(exhibitor_mock, async=async)
 
     expected_result = [
         ('t01', 0, {'fake_data': 100}),
@@ -185,10 +185,10 @@ def test_reallocate_partition():
         else:
             raise NotImplementedError('Not implemented for path {}'.format(path))
 
-    zk = MagicMock()
-    zk.create = _create
+    exhibitor_mock = MagicMock()
+    exhibitor_mock.create = _create
 
-    buku = BukuExhibitor(zk)
+    buku = BukuExhibitor(exhibitor_mock)
 
     assert buku.reallocate_partition('t01', 0, ['1', '2', '3'])
     assert buku.reallocate_partition('t01', 0, ['1', '2', 3])

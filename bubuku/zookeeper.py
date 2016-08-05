@@ -248,7 +248,7 @@ class BukuExhibitor(object):
         return False
 
     def update_disk_stats(self, broker_id: str, data: dict):
-        data_bytes = json.dumps(data, sort_keys=True).encode('utf-8')
+        data_bytes = json.dumps(data, separators=(',', ':')).encode('utf-8')
         path = '/bubuku/size_stats/{}'.format(broker_id)
         try:
             self.exhibitor.create(path, data_bytes, ephemeral=True, makepath=True)
