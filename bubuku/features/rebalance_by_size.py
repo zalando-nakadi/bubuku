@@ -1,18 +1,15 @@
-import json
 import logging
-
-from kazoo.exceptions import NodeExistsError
 
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
 from bubuku.utils import CmdHelper
-from bubuku.zookeeper import Exhibitor
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rebalance_by_size')
 
 
 class RebalanceBySizeChange(Change):
-    def __init__(self, zk: Exhibitor):
+    def __init__(self, zk: BukuExhibitor):
         self.zk = zk
 
     def get_name(self):
@@ -29,7 +26,7 @@ class RebalanceBySizeChange(Change):
 
 
 class RebalanceBySize(Check):
-    def __init__(self, zk: Exhibitor, broker: BrokerManager):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
         super().__init__(check_interval_s=600)
         self.zk = zk
         self.broker = broker
@@ -45,7 +42,7 @@ class RebalanceBySize(Check):
 
 
 class GenerateDataSizeStatistics(Check):
-    def __init__(self, zk: Exhibitor, broker: BrokerManager, cmd_helper: CmdHelper, kafka_log_dirs):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, cmd_helper: CmdHelper, kafka_log_dirs):
         super().__init__(check_interval_s=1800)
         self.zk = zk
         self.broker = broker
@@ -66,7 +63,7 @@ class GenerateDataSizeStatistics(Check):
         topics_stats = self.__get_topics_stats()
         disk_stats = self.__get_disk_stats()
         stats = {"disk": disk_stats, "topics": topics_stats}
-        self.__write_stats_to_zk(stats)
+        self.zk.update_disk_stats(self.broker.id_manager.get_broker_id(), stats)
 
     def __get_topics_stats(self):
         topics_stats = {}
@@ -109,12 +106,3 @@ class GenerateDataSizeStatistics(Check):
                 total_used += int(used)
                 total_free += int(free)
         return {"used_kb": total_used, "free_kb": total_free}
-
-    def __write_stats_to_zk(self, stats):
-        broker_id = self.broker.id_manager.get_broker_id()
-        data = json.dumps(stats, sort_keys=True, separators=(',', ':')).encode("utf-8")
-        path = "/bubuku/size_stats/{}".format(broker_id)
-        try:
-            self.zk.create(path, data, ephemeral=True, makepath=True)
-        except NodeExistsError:
-            self.zk.set(path, data)

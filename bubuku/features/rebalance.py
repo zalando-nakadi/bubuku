@@ -1,11 +1,9 @@
 import json
 import logging
 
-from kazoo.exceptions import NodeExistsError, NoNodeError
-
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
-from bubuku.zookeeper import Exhibitor
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rebalance')
 
@@ -46,7 +44,7 @@ def pop_with_length(arrays, length):
 
 
 class RebalanceChange(Change):
-    def __init__(self, zk: Exhibitor, broker_list):
+    def __init__(self, zk: BukuExhibitor, broker_list):
         self.zk = zk
         self.broker_ids = broker_list
         self.stale_data = {}  # partition count to topic data
@@ -62,14 +60,6 @@ class RebalanceChange(Change):
 
     def can_run(self, current_actions):
         return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'stop']])
-
-    def load_current_data(self):
-        result = []
-        for topic in self.zk.get_children('/brokers/topics'):
-            data = json.loads(self.zk.get("/brokers/topics/" + topic)[0].decode('utf-8'))
-            for k, v in data['partitions'].items():
-                result.append({"topic": topic, "partition": int(k), "replicas": v})
-        return result
 
     def take_next(self) -> dict:
         if self.stale_data:
@@ -98,14 +88,10 @@ class RebalanceChange(Change):
             _LOG.warning("Rebalance stopped, because other blocking events running: {}".format(current_actions))
             return False
 
-        try:
-            rebalance_data = self.zk.get('/admin/reassign_partitions')[0].decode('utf-8')
-            _LOG.info('Old rebalance is still in progress: {}, waiting'.format(rebalance_data))
+        if self.zk.is_rebalancing():
             return True
-        except NoNodeError:
-            pass
 
-        new_broker_ids = sorted(self.zk.get_children('/brokers/ids'))
+        new_broker_ids = self.zk.get_broker_ids()
 
         if new_broker_ids != self.broker_ids:
             _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(self.broker_ids,
@@ -117,17 +103,19 @@ class RebalanceChange(Change):
         # Load existing data from zookeeper and try to split it for different purposes
         if self.shuffled_broker_ids is None:
             self.shuffled_broker_ids = {}
-            for d in self.load_current_data():
-                replication_factor = len(d['replicas'])
+            for topic, partition, replicas in self.zk.load_partition_assignment():
+                replication_factor = len(replicas)
                 if replication_factor > len(self.broker_ids):
                     _LOG.warning(
-                        "Will not rebalance partition {} because only {} brokers available".format(d, self.broker_ids))
+                        "Will not rebalance partition {}:{} because only {} brokers available".format(
+                            topic, partition, self.broker_ids))
                     continue
                 if replication_factor not in self.shuffled_broker_ids:
                     self.shuffled_broker_ids[replication_factor] = {
                         k: [] for k in combine_broker_ids(self.broker_ids, replication_factor)
                         }
-                name = _optimise_broker_ids([str(i) for i in d['replicas']])
+                name = _optimise_broker_ids([str(i) for i in replicas])
+                d = {"topic": topic, "partition": partition, "replicas": replicas}
                 if name not in self.shuffled_broker_ids[replication_factor]:
                     if name not in self.stale_data:
                         self.stale_data[name] = []
@@ -149,17 +137,7 @@ class RebalanceChange(Change):
                 min_length = min([len(v) for v in self.shuffled_broker_ids[replication_factor].values()])
                 for k, v in self.shuffled_broker_ids[replication_factor].items():
                     if len(v) == min_length:
-                        j = {
-                            "version": "1",
-                            "partitions": [
-                                {
-                                    "topic": to_move['topic'],
-                                    "partition": to_move['partition'],
-                                    "replicas": [int(v) for v in k.split(',')],
-                                }
-                            ]
-                        }
-                        if self.reallocate(j):
+                        if self.zk.reallocate_partition(to_move['topic'], to_move['partition'], k.split(',')):
                             _LOG.info("Current allocation: \n{}".format(self.dump_allocations()))
                             removal_func()
                             v.append(to_move)
@@ -169,23 +147,13 @@ class RebalanceChange(Change):
         _LOG.info("Current allocation: \n{}".format(self.dump_allocations()))
         return False
 
-    def reallocate(self, j: dict):
-        try:
-            data = json.dumps(j)
-            self.zk.create("/admin/reassign_partitions", data.encode('utf-8'))
-            _LOG.info("Reallocating {}".format(data))
-            return True
-        except NodeExistsError:
-            _LOG.info("Waiting for free reallocation slot, still in progress...")
-            return False
-
     def dump_allocations(self):
         return '\n'.join(
             ['\n'.join(['{}:{}'.format(x, len(y)) for x, y in v.items()]) for v in self.shuffled_broker_ids.values()])
 
 
 class RebalanceOnStartCheck(Check):
-    def __init__(self, zk, broker: BrokerManager):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
         super().__init__()
         self.zk = zk
         self.broker = broker
@@ -198,14 +166,14 @@ class RebalanceOnStartCheck(Check):
             return None
         _LOG.info("Rebalance on start, triggering rebalance")
         self.executed = True
-        return RebalanceChange(self.zk, sorted(self.zk.get_children('/brokers/ids')))
+        return RebalanceChange(self.zk, self.zk.get_broker_ids())
 
     def __str__(self):
         return 'RebalanceOnStartCheck (executed={})'.format(self.executed)
 
 
 class RebalanceOnBrokerListChange(Check):
-    def __init__(self, zk, broker: BrokerManager):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
         super().__init__()
         self.zk = zk
         self.broker = broker
@@ -214,7 +182,7 @@ class RebalanceOnBrokerListChange(Check):
     def check(self):
         if not self.broker.is_running_and_registered():
             return None
-        new_list = sorted(self.zk.get_children('/brokers/ids'))
+        new_list = self.zk.get_broker_ids()
         if not new_list == self.old_broker_list:
             _LOG.info('Broker list changed from {} to {}, triggering rebalance'.format(self.old_broker_list, new_list))
             self.old_broker_list = new_list

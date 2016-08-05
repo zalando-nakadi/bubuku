@@ -4,7 +4,7 @@ import subprocess
 
 from bubuku.config import KafkaProperties
 from bubuku.id_generator import BrokerIdGenerator
-from bubuku.zookeeper import Exhibitor
+from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.broker')
 
@@ -14,7 +14,7 @@ class LeaderElectionInProgress(Exception):
 
 
 class BrokerManager(object):
-    def __init__(self, kafka_dir: str, exhibitor: Exhibitor, id_manager: BrokerIdGenerator,
+    def __init__(self, kafka_dir: str, exhibitor: BukuExhibitor, id_manager: BrokerIdGenerator,
                  kafka_properties: KafkaProperties):
         self.kafka_dir = kafka_dir
         self.id_manager = id_manager
@@ -72,7 +72,7 @@ class BrokerManager(object):
         :raise LeaderElectionInProgress: raised when broker can not be started because leader election is in progress
         """
         if not self.process:
-            if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_children('/brokers/ids')):
+            if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_broker_ids()):
                 raise LeaderElectionInProgress()
 
             broker_id = self.id_manager.get_broker_id()
@@ -101,25 +101,22 @@ class BrokerManager(object):
         _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
             active_broker_ids, dead_broker_ids))
         if self._is_clean_election():
-            for topic in self.exhibitor.get_children('/brokers/topics'):
-                for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
-                    state_str = self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(
-                        topic, partition))[0].decode('utf-8')
-                    state = json.loads(state_str)
-                    leader = str(state['leader'])
-                    if active_broker_ids and leader not in active_broker_ids:
-                        if any(str(x) in active_broker_ids for x in state.get('isr', [])):
-                            _LOG.warn(
-                                'Leadership is not transferred for {} {} ({}, brokers: {})'.format(
-                                    topic, partition, json.dumps(state), active_broker_ids))
-                            return False
-                        else:
-                            _LOG.warn('Shit happens! No single isr available for {}, {}, state: {}, '
-                                      'skipping check for that'.format(topic, partition, json.dumps(state)))
-                    if dead_broker_ids and leader in dead_broker_ids:
-                        _LOG.warn('Leadership is not transferred for {} {}, {} (dead list: {})'.format(
-                            topic, partition, json.dumps(state), dead_broker_ids))
+            for topic, partition, state in self.exhibitor.load_partition_states():
+                leader = str(state['leader'])
+                if active_broker_ids and leader not in active_broker_ids:
+                    if any(str(x) in active_broker_ids for x in state.get('isr', [])):
+                        _LOG.warn(
+                            'Leadership is not transferred for {} {} ({}, brokers: {})'.format(
+                                topic, partition, json.dumps(state), active_broker_ids))
                         return False
+                    else:
+                        _LOG.warn('Shit happens! No single isr available for {}, {}, state: {}, '
+                                  'skipping check for that'.format(topic, partition, json.dumps(state)))
+                if dead_broker_ids and leader in dead_broker_ids:
+                    _LOG.warn('Leadership is not transferred for {} {}, {} (dead list: {})'.format(
+                        topic, partition, json.dumps(state), dead_broker_ids))
+                    return False
+
         return True
 
     def _open_process(self):
