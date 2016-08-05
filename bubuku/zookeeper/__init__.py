@@ -169,14 +169,15 @@ class BukuExhibitor(object):
         """
         return sorted(self.exhibitor.get_children('/brokers/ids'))
 
-    def load_partition_assignment(self) -> list:
+    def load_partition_assignment(self, topics=None) -> list:
         """
         Lists all the assignments of partitions to particular broker ids.
+        :param topics Optional list of topics to get data for
         :returns generator of tuples (topic_name:str, partition:int, replica_list:list(int)), for ex. "test", 0, [1,2,3]
         """
+        topics_ = self.exhibitor.get_children('/brokers/topics') if topics is None else topics
         if self.async:
-            results = [(topic, self.exhibitor.get_async('/brokers/topics/{}'.format(topic))) for topic in
-                       self.exhibitor.get_children('/brokers/topics')]
+            results = [(topic, self.exhibitor.get_async('/brokers/topics/{}'.format(topic))) for topic in topics_]
             for topic, cb in results:
                 try:
                     value, stat = cb.get(block=True)
@@ -185,14 +186,15 @@ class BukuExhibitor(object):
                 data = json.loads(value.decode('utf-8'))
                 for k, v in data['partitions'].items():
                     yield (topic, int(k), v)
+            pass
 
         else:
-            for topic in self.exhibitor.get_children('/brokers/topics'):
+            for topic in topics_:
                 data = json.loads(self.exhibitor.get('/brokers/topics/{}'.format(topic))[0].decode('utf-8'))
                 for k, v in data['partitions'].items():
                     yield (topic, int(k), v)
 
-    def load_partition_states(self) -> list:
+    def load_partition_states(self, topics=None) -> list:
         """
         Lists all the current partition states (leaders and isr list)
         :return: generator of tuples
@@ -200,7 +202,7 @@ class BukuExhibitor(object):
         """
         if self.async:
             asyncs = []
-            for topic, partition, _ in self.load_partition_assignment():
+            for topic, partition, _ in self.load_partition_assignment(topics):
                 asyncs.append((topic, partition, self.exhibitor.get_async(
                     '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))))
             for topic, partition, async in asyncs:
@@ -210,7 +212,8 @@ class BukuExhibitor(object):
                     value, stat = self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(topic, partition))
                 yield (topic, int(partition), json.loads(value.decode('utf-8')))
         else:
-            for topic in self.exhibitor.get_children('/brokers/topics'):
+            topics_ = self.exhibitor.get_children('/brokers/topics') if topics is None else topics
+            for topic in topics_:
                 for partition in self.exhibitor.get_children('/brokers/topics/{}/partitions'.format(topic)):
                     state = json.loads(self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(
                         topic, partition))[0].decode('utf-8'))
