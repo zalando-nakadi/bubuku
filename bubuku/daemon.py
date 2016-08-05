@@ -15,7 +15,6 @@ from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
-from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor
 from bubuku.zookeeper import BukuExhibitor, load_exhibitor_proxy
 
 _LOG = logging.getLogger('bubuku.main')
