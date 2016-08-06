@@ -221,6 +221,9 @@ class BukuExhibitor(object):
                     yield (topic, int(partition), state)
 
     def reallocate_partition(self, topic: str, partition: object, replicas: list) -> bool:
+        return self.reallocate_partitions([(topic, partition, replicas)])
+
+    def reallocate_partitions(self, partitions_data: list) -> bool:
         """
         Reallocates partition to replica list
         :param topic: topic to move
@@ -234,9 +237,8 @@ class BukuExhibitor(object):
                 {
                     "topic": topic,
                     "partition": int(partition),
-                    "replicas": [int(p) for p in replicas],
-                }
-            ]
+                    "replicas": [int(p) for p in replicas]
+                } for (topic, partition, replicas) in partitions_data]
         }
         try:
             data = json.dumps(j)
