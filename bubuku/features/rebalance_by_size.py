@@ -13,89 +13,74 @@ TpData = namedtuple('TpData', ('topic', 'partition', 'size', 'replicas'))
 
 
 class SwapPartitionsChange(Change):
-    def __init__(self, zk: BukuExhibitor):
+    def __init__(self, zk: BukuExhibitor, fat_broker_id: str, slim_broker_id: str, gap: int, size_stats: dict):
         self.zk = zk
+        self.fat_broker_id = fat_broker_id
+        self.slim_broker_id = slim_broker_id
+        self.gap = gap
+        self.size_stats = size_stats
         self.to_move = None
 
     def get_name(self):
-        return 'rebalance_by_size'
+        return 'swap_partitions'
 
     def can_run(self, current_actions):
-        raise NotImplementedError('Not implemented')  # todo: not implemented yet
+        return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'swap_partitions', 'stop']])
 
     def run(self, current_actions):
-        raise NotImplementedError('Not implemented')  # todo: not implemented yet
-
-
-class RebalanceBySize(Check):
-    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, free_space_diff_threshold_kb: int):
-        super().__init__(check_interval_s=900)
-        self.zk = zk
-        self.broker = broker
-        self.free_space_diff_threshold_kb = free_space_diff_threshold_kb
-
-    def check(self):
-        if self.broker.is_running_and_registered() and self.is_data_imbalanced():
-            _LOG.info("Starting rebalance by size")
-            return RebalanceBySizeChange(self.zk)
-        return None
-
-    def is_data_imbalanced(self, disk_stats=None, partition_assignment=None) -> bool:
-        # broker_ids = self.zk.get_broker_ids()
-        # disk_stats = self.zk.get_disk_stats()
-
-        if len(disk_stats.keys()) == 0:
-            return None
-
-        # find the most "slim" and the most "fat" brokers
-        def free_size_getter(t): return t[1]["disk"]["free_kb"]
-        slim_broker_id = min((item for item in disk_stats.items()), key=free_size_getter)[0]
-        fat_broker_id = max((item for item in disk_stats.items()), key=free_size_getter)[0]
-        fat_broker_free_kb = disk_stats[fat_broker_id]["disk"]["free_kb"]
-        slim_broker_free_kb = disk_stats[slim_broker_id]["disk"]["free_kb"]
-
-        # is the gap is big enough to swap partitions?
-        gap = fat_broker_free_kb - slim_broker_free_kb
-        if gap < self.free_space_diff_threshold_kb:
-            return None
+        if self.to_move:
+            return not self.__perform_swap(self.to_move)
 
         # merge topics size stats to a single dict
         topics_stats = {}
-        for broker_id, broker_stats in disk_stats.items():
+        for broker_id, broker_stats in self.size_stats.items():
             topics_stats.update(broker_stats["topics"])
 
         # find partitions that are candidates to be swapped between "fat" and "slim" brokers
-        involved_broker_ids = [slim_broker_id, fat_broker_id]
-        swap_partition_candidates = {}
+        swap_partition_candidates = self.__find_all_swap_candidates(self.fat_broker_id, self.slim_broker_id,
+                                                                    topics_stats)
+
+        # smallest partition from slim broker is the one we move to fat broker
+        slim_broker_smallest_partition = min(swap_partition_candidates[self.slim_broker_id], key=attrgetter("size"))
+
+        # find the best fitting fat broker partition to move to slim broker
+        # (should be as much as possible closing the gap between brokers)
+        fat_broker_swap_candidates = swap_partition_candidates[self.fat_broker_id]
+        matching_swap_partition = self.__find_best_swap_candidate(fat_broker_swap_candidates, self.gap,
+                                                                  slim_broker_smallest_partition.size)
+
+        self.to_move = self.__create_swap_partitions_json(slim_broker_smallest_partition, self.slim_broker_id,
+                                                          matching_swap_partition, self.fat_broker_id)
+        return not self.__perform_swap(self.to_move)
+
+    def __perform_swap(self, swap_json):
+        print(swap_json)
+        return True #self.zk.reallocate_partitions(swap_json)
+
+    def __find_all_swap_candidates(self, fat_broker_id: str, slim_broker_id: str, topics_stats: dict) -> dict:
+        partition_assignment = [
+            ("t1", "p1", ["broker1", "broker3"]),
+            ("t1", "p2", ["broker1", "broker2"]),
+            ("t2", "p1", ["broker2", "broker3"]),
+            ("t2", "p2", ["broker1", "broker2"]),
+            ("t3", "p1", ["broker1", "broker2"]),
+            ("t3", "p2", ["broker2", "broker3"]),
+        ]
         # partition_assignment = self.zk.load_partition_assignment()
+        swap_partition_candidates = {}
         for topic, partition, replicas in partition_assignment:
             if topic not in topics_stats or partition not in topics_stats[topic]:
                 continue  # we skip this partition as there is not data size stats for it
-
-            if all(involved_broker in replicas for involved_broker in involved_broker_ids):
+            if fat_broker_id in replicas and slim_broker_id in replicas:
                 continue  # we skip this partition as it exists on both involved brokers
-
-            for broker_id in involved_broker_ids:
+            for broker_id in [slim_broker_id, fat_broker_id]:
                 if broker_id in replicas:
                     if broker_id not in swap_partition_candidates:
                         swap_partition_candidates[broker_id] = []
                     swap_partition_candidates[broker_id].append(
                         TpData(topic, partition, topics_stats[topic][partition], replicas))
 
-        # smallest partition from slim broker is the one we move to fat broker
-        slim_broker_smallest_partition = min(swap_partition_candidates[slim_broker_id], key=attrgetter("size"))
-
-        # find the best fitting fat broker partition to move to slim broker
-        # (should be as much as possible closing the gap between brokers)
-        fat_broker_swap_candidates = swap_partition_candidates[fat_broker_id]
-        matching_swap_partition = self.__find_best_swap_candidate(fat_broker_swap_candidates, gap,
-                                                                  slim_broker_smallest_partition.size)
-
-        self.to_move = self.__create_swap_partitions_json(slim_broker_smallest_partition, slim_broker_id,
-                                                          matching_swap_partition, fat_broker_id)
-
-        print(self.to_move)
-        # self.zk.reallocate_partitions(to_move)
+        return swap_partition_candidates
 
     @staticmethod
     def __find_best_swap_candidate(candidates: list, brokers_gap: int, partition_to_swap_size: int) -> TpData:
@@ -116,8 +101,40 @@ class RebalanceBySize(Check):
             (tp2.topic, tp2.partition, [broker1 if r == broker2 else r for r in tp2.replicas])
         ]
 
+class RebalanceBySize(Check):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, free_space_diff_threshold_kb: int):
+        super().__init__(check_interval_s=900)
+        self.zk = zk
+        self.broker = broker
+        self.free_space_diff_threshold_kb = free_space_diff_threshold_kb
 
-by_size = RebalanceBySize(None, None, 5000)
+    def check(self):
+        if self.broker.is_running_and_registered():
+            return self.create_swap_partition_change()
+        return None
+
+    def create_swap_partition_change(self, size_stats=None) -> SwapPartitionsChange:
+        # disk_stats = self.zk.get_disk_stats()
+
+        if len(size_stats.keys()) == 0:
+            return None
+
+        # find the most "slim" and the most "fat" brokers
+        def free_size_getter(tup):
+            return tup[1]["disk"]["free_kb"]
+
+        slim_broker_id = min((item for item in size_stats.items()), key=free_size_getter)[0]
+        fat_broker_id = max((item for item in size_stats.items()), key=free_size_getter)[0]
+        fat_broker_free_kb = size_stats[fat_broker_id]["disk"]["free_kb"]
+        slim_broker_free_kb = size_stats[slim_broker_id]["disk"]["free_kb"]
+
+        # is the gap is big enough to swap partitions?
+        gap = fat_broker_free_kb - slim_broker_free_kb
+        if gap < self.free_space_diff_threshold_kb:
+            return None
+
+        return SwapPartitionsChange(self.zk, fat_broker_id, slim_broker_id, gap, size_stats)
+
 data = {
     "broker1": {
         "disk": {"free_kb": 20000, "used_kb": 20000},
@@ -139,15 +156,9 @@ data = {
     }
 }
 
-assignment = [
-    ("t1", "p1", ["broker1", "broker3"]),
-    ("t1", "p2", ["broker1", "broker2"]),
-    ("t2", "p1", ["broker2", "broker3"]),
-    ("t2", "p2", ["broker1", "broker2"]),
-    ("t3", "p1", ["broker1", "broker2"]),
-    ("t3", "p2", ["broker2", "broker3"]),
-]
-by_size.is_data_imbalanced(disk_stats=data, partition_assignment=assignment)
+by_size = RebalanceBySize(None, None, 5000)
+change = by_size.create_swap_partition_change(size_stats=data)
+change.run(None)
 
 
 class GenerateDataSizeStatistics(Check):

@@ -59,7 +59,7 @@ class RebalanceChange(Change):
         return 'rebalance'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'stop']])
+        return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'swap_partitions' 'stop']])
 
     def take_next(self) -> dict:
         if self.stale_data:
