@@ -1,8 +1,10 @@
+import logging
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check
-from bubuku.features.swap_partitions import _LOG
 from bubuku.utils import CmdHelper
 from bubuku.zookeeper import BukuExhibitor
+
+_LOG = logging.getLogger('bubuku.features.data_size_stats')
 
 
 class GenerateDataSizeStatistics(Check):
@@ -32,6 +34,7 @@ class GenerateDataSizeStatistics(Check):
     def __get_topics_stats(self):
         topics_stats = {}
         for log_dir in self.kafka_log_dirs:
+            _LOG.info("Processing log dir: {}".format(log_dir))
             topic_dirs = self.cmd_helper.cmd_run("du -k -d 1 {}".format(log_dir)).split("\n")
             for topic_dir in topic_dirs:
                 dir_stats = self.__parse_dir_stats(topic_dir, log_dir)
