@@ -17,6 +17,7 @@ from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
 from bubuku.zookeeper import BukuExhibitor, load_exhibitor_proxy
+from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
 
 _LOG = logging.getLogger('bubuku.main')
 
@@ -52,8 +53,10 @@ def main():
 
     amazon = Amazon()
 
+    address_provider = AWSExhibitorAddressProvider(amazon, config.zk_stack_name)
+
     _LOG.info("Loading exhibitor configuration")
-    buku_proxy = load_exhibitor_proxy(amazon.get_addresses_by_lb_name(config.zk_stack_name), config.zk_prefix)
+    buku_proxy = load_exhibitor_proxy(address_provider, config.zk_prefix)
 
     _LOG.info("Loading broker_id policy")
     broker_id_manager = get_broker_id_policy(config.id_policy, buku_proxy, kafka_properties, amazon)

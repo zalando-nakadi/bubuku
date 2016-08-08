@@ -33,7 +33,11 @@ def __create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuExhibitor)
     def _load_assignment():
         return [(k[0], int(k[1]), [int(p) for p in v]) for k, v in topic_data.items()]
 
+    def _load_states(topics=None):
+        return [(k[0], int(k[1]), {'isr': [int(p) for p in v]}) for k, v in topic_data.items()]
+
     buku_proxy.load_partition_assignment = _load_assignment
+    buku_proxy.load_partition_states = _load_states
     buku_proxy.is_rebalancing.return_value = False
 
     def _reassign(topic, partition, replicas):
