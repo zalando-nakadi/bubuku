@@ -1,10 +1,13 @@
 import json
+import math
 import re
+import time
+import unittest
 from unittest.mock import MagicMock
 
 from kazoo.exceptions import NoNodeError, NodeExistsError
 
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, SlowlyUpdatedCache
 
 
 def test_get_broker_ids():
@@ -197,3 +200,91 @@ def test_reallocate_partition():
     assert buku.reallocate_partition('t01', 0, [1, 2, 3])
     # Node exists
     assert not buku.reallocate_partition('t01', 0, [1, 2, 3])
+
+
+class SlowlyUpdatedCacheTest(unittest.TestCase):
+    def test_initial_update_fast(self):
+        result = [None]
+
+        def _update(value_):
+            result[0] = value_
+
+        cache = SlowlyUpdatedCache(lambda: (['test'], 1), _update, 0, 0)
+
+        cache.touch()
+        assert result[0] == (['test'], 1)
+
+    def test_initial_update_slow(self):
+        result = [None]
+        call_count = [0]
+
+        def _load():
+            call_count[0] += 1
+            if call_count[0] == 100:
+                return ['test'], 1
+            return None
+
+        def _update(value_):
+            result[0] = value_
+
+        cache = SlowlyUpdatedCache(_load, _update, 0, 0)
+
+        cache.touch()
+        assert call_count[0] == 100
+        assert result[0] == (['test'], 1)
+
+    def test_delays_illegal(self):
+        result = [None]
+        load_calls = []
+        update_calls = []
+
+        def _load():
+            load_calls.append(time.time())
+            return ['test'], 0 if len(load_calls) > 1 else 1
+
+        def _update(value_):
+            update_calls.append(time.time())
+            result[0] = value_
+
+        # refresh every 1 second, delay 0.5 second
+        cache = SlowlyUpdatedCache(_load, _update, 0.5, 0.25)
+
+        while len(update_calls) != 2:
+            time.sleep(0.1)
+            cache.touch()
+            print(cache)
+
+        assert math.fabs(update_calls[0] - load_calls[0]) <= 0.15  # 0.1 + 0.1/2
+        # Verify that load calls were made one by another
+        assert math.fabs(load_calls[1] - load_calls[0] - .5) <= 0.15
+        # Verity that update call was made in correct interval
+
+        assert load_calls[1] + 0.25 <= update_calls[1] <= load_calls[1] + 0.25 + 0.15
+
+    def test_delays_legal(self):
+        result = [None]
+        main_call = []
+        load_calls = []
+        update_calls = []
+
+        def _load():
+            load_calls.append(time.time())
+            if len(load_calls) == 5:
+                main_call.append(time.time())
+            return ['test'], 0 if len(load_calls) >= 5 else len(load_calls)
+
+        def _update(value_):
+            update_calls.append(time.time())
+            result[0] = value_
+
+        # refresh every 1 second, delay 5 second - in case where situation is constantly changing - wait for
+        # last stable update
+        cache = SlowlyUpdatedCache(_load, _update, 0.5, 3)
+
+        while len(update_calls) != 2:
+            time.sleep(0.1)
+            cache.touch()
+            print(cache)
+
+        assert len(main_call) == 1
+        assert main_call[0] + 3 - .15 < update_calls[1] < main_call[0] + 3 + .15

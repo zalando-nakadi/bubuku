@@ -1,66 +1,12 @@
 import json
 import logging
-import random
 import threading
 import time
 
-import requests
 from kazoo.client import KazooClient
-from kazoo.exceptions import NoNodeError, NodeExistsError, ConnectionLossException
-from requests.exceptions import RequestException
+from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
 
 _LOG = logging.getLogger('bubuku.exhibitor')
-
-
-class ExhibitorEnsembleProvider:
-    TIMEOUT = 3.1
-
-    def __init__(self, hosts, port, uri_path='/exhibitor/v1/cluster/list', poll_interval=300):
-        self._exhibitor_port = port
-        self._uri_path = uri_path
-        self._poll_interval = poll_interval
-        self._exhibitors = hosts
-        self._master_exhibitors = hosts
-        self._zookeeper_hosts = ''
-        self._next_poll = None
-        while not self.poll():
-            _LOG.info('waiting on exhibitor')
-            time.sleep(5)
-
-    def poll(self):
-        if self._next_poll and self._next_poll > time.time():
-            return False
-
-        json_ = self._query_exhibitors(self._exhibitors)
-        if not json_:
-            json_ = self._query_exhibitors(self._master_exhibitors)
-
-        if isinstance(json_, dict) and 'servers' in json_ and 'port' in json_:
-            self._next_poll = time.time() + self._poll_interval
-            zookeeper_hosts = ','.join([h + ':' + str(json_['port']) for h in sorted(json_['servers'])])
-            if self._zookeeper_hosts != zookeeper_hosts:
-                _LOG.info('ZooKeeper connection string has changed: %s => %s', self._zookeeper_hosts, zookeeper_hosts)
-                self._zookeeper_hosts = zookeeper_hosts
-                self._exhibitors = json_['servers']
-                return True
-        return False
-
-    def _query_exhibitors(self, exhibitors):
-        if exhibitors == [None]:
-            return {'servers': ['localhost'], 'port': 2181}
-        random.shuffle(exhibitors)
-        for host in exhibitors:
-            uri = 'http://{}:{}{}'.format(host, self._exhibitor_port, self._uri_path)
-            try:
-                response = requests.get(uri, timeout=self.TIMEOUT)
-                return response.json()
-            except RequestException:
-                pass
-        return None
-
-    @property
-    def zookeeper_hosts(self):
-        return self._zookeeper_hosts
 
 
 class WaitingCounter(object):
@@ -81,34 +27,84 @@ class WaitingCounter(object):
             self.cv.notify()
 
 
-class _Exhibitor:
-    def __init__(self, hosts, port, prefix):
-        self.prefix = prefix
+class SlowlyUpdatedCache(object):
+    def __init__(self, load_func, update_func, refresh_timeout, delay):
+        self.load_func = load_func
+        self.update_func = update_func
+        self.refresh_timeout = refresh_timeout
+        self.delay = delay
+        self.value = None
+        self.last_check = None
+        self.next_apply = None
+        self.force = True
+
+    def __str__(self):
+        return 'SlowCache(refresh={}, delay={}, last_check={}, next_apply={})'.format(
+            self.refresh_timeout, self.delay, self.last_check, self.next_apply)
+
+    def touch(self):
+        now = time.time()
+        if self.last_check is None or (now - self.last_check) > self.refresh_timeout:
+            value = None
+            if self.force:
+                while value is None:
+                    value = self.load_func()
+                self.force = False
+            else:
+                value = self.load_func()
+            if value is not None and value != self.value:
+                self.value = value
+                self.next_apply = (now + self.delay) if self.last_check is not None else now
+                self.last_check = now
+        if self.next_apply is not None and self.next_apply - now <= 0:
+            self.update_func(self.value)
+            self.next_apply = None
+
+
+class AddressListProvider(object):
+    def get_latest_address(self) -> (list, int):
+        """
+        Loads current address list from service. Can return None if value can't be refreshed at the moment
+        :return: tuple of hosts, port for zookeeper
+        """
+        raise NotImplementedError
+
+
+class _ZookeeperProxy(object):
+    def __init__(self, address_provider: AddressListProvider, prefix: str):
+        self.address_provider = address_provider
         self.async_counter = WaitingCounter(limit=100)
-        self.exhibitor = ExhibitorEnsembleProvider(hosts, port, poll_interval=30)
-        self.client = KazooClient(hosts=self.exhibitor.zookeeper_hosts + self.prefix,
-                                  command_retry={
-                                      'deadline': 10,
-                                      'max_delay': 1,
-                                      'max_tries': -1},
-                                  connection_retry={'max_delay': 1, 'max_tries': -1})
-        self.client.add_listener(self.session_listener)
+        self.conn_str = None
+        self.client = None
+        self.prefix = prefix
+        self.hosts_cache = SlowlyUpdatedCache(
+            self.address_provider.get_latest_address,
+            self._update_hosts,
+            30,  # Refresh every 30 seconds
+            3 * 60)  # Update only after 180 seconds of stability
+
+    def _update_hosts(self, value):
+        hosts, port = value
+        self.conn_str = ','.join(['{}:{}'.format(h, port) for h in hosts]) + self.prefix
+
+        if self.client is None:
+            self.client = KazooClient(hosts=self.conn_str,
+                                      command_retry={'deadline': 10, 'max_delay': 1, 'max_tries': -1},
+                                      connection_retry={'max_delay': 1, 'max_tries': -1})
+            self.client.add_listener(self.session_listener)
+        else:
+            self.client.stop()
+            self.client.set_hosts(self.conn_str)
         self.client.start()
 
     def session_listener(self, state):
         pass
 
     def get_conn_str(self):
-        return self.exhibitor.zookeeper_hosts + self.prefix
-
-    def _poll_exhibitor(self):
-        if self.exhibitor.poll():
-            self.client.stop()
-            self.client.set_hosts(self.get_conn_str())
-            self.client.start()
+        return self.conn_str
 
     def get(self, *params):
-        self._poll_exhibitor()
+        self.hosts_cache.touch()
         return self.client.retry(self.client.get, *params)
 
     def get_async(self, *params):
@@ -123,19 +119,19 @@ class _Exhibitor:
             raise e
 
     def set(self, *args, **kwargs):
-        self._poll_exhibitor()
+        self.hosts_cache.touch()
         return self.client.retry(self.client.set, *args, **kwargs)
 
     def create(self, *args, **kwargs):
-        self._poll_exhibitor()
+        self.hosts_cache.touch()
         return self.client.retry(self.client.create, *args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        self._poll_exhibitor()
+        self.hosts_cache.touch()
         return self.client.retry(self.client.delete, *args, **kwargs)
 
     def get_children(self, *params):
-        self._poll_exhibitor()
+        self.hosts_cache.touch()
         try:
             return self.client.retry(self.client.get_children, *params)
         except NoNodeError:
@@ -144,14 +140,14 @@ class _Exhibitor:
     def take_lock(self, *args, **kwargs):
         while True:
             try:
-                self._poll_exhibitor()
+                self.hosts_cache.touch()
                 return self.client.Lock(*args, **kwargs)
             except Exception as e:
                 _LOG.error('Failed to obtain lock for exhibitor, retrying', exc_info=e)
 
 
 class BukuExhibitor(object):
-    def __init__(self, exhibitor: _Exhibitor, async=True):
+    def __init__(self, exhibitor: _ZookeeperProxy, async=True):
         self.exhibitor = exhibitor
         self.async = async
         try:
@@ -288,5 +284,6 @@ class BukuExhibitor(object):
         self.exhibitor.delete('/bubuku/changes/{}'.format(name), recursive=True)
 
 
-def load_exhibitor_proxy(initial_hosts: list, zookeeper_prefix) -> BukuExhibitor:
-    return BukuExhibitor(_Exhibitor(initial_hosts, 8181, zookeeper_prefix))
+def load_exhibitor_proxy(address_provider: AddressListProvider, prefix: str) -> BukuExhibitor:
+    proxy = _ZookeeperProxy(address_provider, prefix)
+    return BukuExhibitor(proxy)
