@@ -14,7 +14,6 @@ class AWSExhibitorAddressProvider(AddressListProvider):
     def __init__(self, amazon: Amazon, zk_stack_name: str):
         self.master_exhibitors = amazon.get_addresses_by_lb_name(zk_stack_name)
         self.exhibitors = list(self.master_exhibitors)
-        self.port = 2181
 
     def get_latest_address(self) -> (list, int):
         json_ = self._query_exhibitors(self.exhibitors)

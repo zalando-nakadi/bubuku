@@ -38,9 +38,13 @@ class SlowlyUpdatedCache(object):
         self.next_apply = None
         self.force = True
 
+    def __str__(self):
+        return 'SlowCache(refresh={}, delay={}, last_check={}, next_apply={})'.format(
+            self.refresh_timeout, self.delay, self.last_check, self.next_apply)
+
     def touch(self):
         now = time.time()
-        if self.last_check is None or (now - self.last_check) > self.delay:
+        if self.last_check is None or (now - self.last_check) > self.refresh_timeout:
             value = None
             if self.force:
                 while value is None:
@@ -48,12 +52,13 @@ class SlowlyUpdatedCache(object):
                 self.force = False
             else:
                 value = self.load_func()
-            if value is not None:
+            if value is not None and value != self.value:
                 self.value = value
                 self.next_apply = (now + self.delay) if self.last_check is not None else now
-                self.last_check = self.last_check
+                self.last_check = now
         if self.next_apply is not None and self.next_apply - now <= 0:
             self.update_func(self.value)
+            self.next_apply = None
 
 
 class AddressListProvider(object):
@@ -75,8 +80,8 @@ class _ZookeeperProxy(object):
         self.hosts_cache = SlowlyUpdatedCache(
             self.address_provider.get_latest_address,
             self._update_hosts,
-            30,
-            3 * 60)
+            30,  # Refresh every 30 seconds
+            3 * 60)  # Update only after 180 seconds of stability
 
     def _update_hosts(self, value):
         hosts, port = value
@@ -279,6 +284,6 @@ class BukuExhibitor(object):
         self.exhibitor.delete('/bubuku/changes/{}'.format(name), recursive=True)
 
 
-def load_exhibitor_proxy(address_provider: AddressListProvider, prefix:str) -> BukuExhibitor:
+def load_exhibitor_proxy(address_provider: AddressListProvider, prefix: str) -> BukuExhibitor:
     proxy = _ZookeeperProxy(address_provider, prefix)
     return BukuExhibitor(proxy)
