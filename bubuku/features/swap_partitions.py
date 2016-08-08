@@ -3,15 +3,16 @@ import logging
 from operator import attrgetter
 
 from bubuku.broker import BrokerManager
-from bubuku.controller import Check, Change
+from bubuku.controller import Check
+from bubuku.features.rebalance import BaseRebalanceChange
 from bubuku.zookeeper import BukuExhibitor
 
-_LOG = logging.getLogger('bubuku.features.rebalance_by_size')
+_LOG = logging.getLogger('bubuku.features.swap_partitions')
 
 TpData = namedtuple('TpData', ('topic', 'partition', 'size', 'replicas'))
 
 
-class SwapPartitionsChange(Change):
+class SwapPartitionsChange(BaseRebalanceChange):
     def __init__(self, zk: BukuExhibitor, fat_broker_id: str, slim_broker_id: str, gap: int, size_stats: dict):
         self.zk = zk
         self.fat_broker_id = fat_broker_id
@@ -20,13 +21,11 @@ class SwapPartitionsChange(Change):
         self.size_stats = size_stats
         self.to_move = None
 
-    def get_name(self):
-        return 'swap_partitions'
-
-    def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'swap_partitions', 'stop']])
-
     def run(self, current_actions):
+        if self.should_be_cancelled(current_actions):
+            _LOG.info("Cancelling swap partitions change as there are conflicting actions: {}".format(current_actions))
+            return False
+
         # if there is already a swap which was postponed - just execute it
         if self.to_move:
             return not self.__perform_swap(self.to_move)
@@ -45,6 +44,9 @@ class SwapPartitionsChange(Change):
 
         # smallest partition from slim broker is the one we move to fat broker
         slim_broker_smallest_partition = min(swap_partition_candidates[self.slim_broker_id], key=attrgetter("size"))
+        if not slim_broker_smallest_partition:
+            _LOG.info("No partitions on slim broker(id: {}) found to swap".format(self.slim_broker_id))
+        _LOG.info("Slim broker(id: {}) partition to swap: {}".format(self.slim_broker_id, slim_broker_smallest_partition))
 
         # find the best fitting fat broker partition to move to slim broker
         # (should be as much as possible closing the gap between brokers)
@@ -54,14 +56,21 @@ class SwapPartitionsChange(Change):
 
         # if there is no possible swap that will decrease the gap - just do nothing
         if not matching_swap_partition:
+            _LOG.info("No candidate from fat broker(id:{}) found to swap".format(self.fat_broker_id))
             return False
 
-        # write rebalance-json to ZK, Kafka will read it and perform the partitions swap
+        # write rebalance-json to ZK; Kafka will read it and perform the partitions swap
         self.to_move = self.__create_swap_partitions_json(slim_broker_smallest_partition, self.slim_broker_id,
                                                           matching_swap_partition, self.fat_broker_id)
-        return not self.__perform_swap(self.to_move)
+        scheduled_rebalance = self.__perform_swap(self.to_move)
+        if not scheduled_rebalance:
+            _LOG.info("Swap partitions was postponed as there was a rebalance node in ZK")
+        else:
+            _LOG.info("Swap partitions rebalance was successfully scheduled in ZK")
+        return not scheduled_rebalance
 
     def __perform_swap(self, swap_json):
+        _LOG.info("Trying to swap partitions: {}".format(swap_json))
         return self.zk.reallocate_partitions(swap_json)
 
     def __find_all_swap_candidates(self, fat_broker_id: str, slim_broker_id: str, topics_stats: dict) -> dict:
@@ -111,12 +120,14 @@ class CheckBrokersDiskImbalance(Check):
 
     def check(self):
         if self.broker.is_running_and_registered():
+            _LOG.info("Starting broker disk imbalance check")
             return self.create_swap_partition_change()
         return None
 
     def create_swap_partition_change(self) -> SwapPartitionsChange:
         size_stats = self.zk.get_disk_stats()
-        if len(size_stats.keys()) == 0:
+        if not size_stats or len(size_stats.keys()) == 0:
+            _LOG.info("No size stats available, imbalance check cancelled")
             return None
 
         # find the most "slim" and the most "fat" brokers
@@ -131,6 +142,12 @@ class CheckBrokersDiskImbalance(Check):
         # is the gap is big enough to swap partitions?
         gap = slim_broker_free_kb - fat_broker_free_kb
         if gap < self.diff_threshold_kb:
+            _LOG.info("Gap between brokers: (id: {}, free_kb: {}) and (id: {}, free_kb: {}) is not enough to "
+                      "trigger partitions swap; gap is {} KB".format(slim_broker_id, slim_broker_free_kb, fat_broker_id,
+                                                                     fat_broker_free_kb, gap))
             return None
         else:
+            _LOG.info("Creating swap partitions change to swap partitions of brokers: (id: {}, free_kb: {}) and "
+                      "(id: {}, free_kb: {}); gap is {} KB".format(slim_broker_id, slim_broker_free_kb, fat_broker_id,
+                                                                   fat_broker_free_kb, gap))
             return SwapPartitionsChange(self.zk, fat_broker_id, slim_broker_id, gap, size_stats)

@@ -43,7 +43,19 @@ def pop_with_length(arrays, length):
     return None, None
 
 
-class RebalanceChange(Change):
+class BaseRebalanceChange(Change):
+    def get_name(self) -> str:
+        return 'rebalance'
+
+    def can_run(self, current_actions):
+        return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'stop']])
+
+    @staticmethod
+    def should_be_cancelled(current_actions):
+        return any([a in current_actions for a in ['restart', 'start', 'stop']])
+
+
+class RebalanceChange(BaseRebalanceChange):
     def __init__(self, zk: BukuExhibitor, broker_list):
         self.zk = zk
         self.broker_ids = broker_list
@@ -54,12 +66,6 @@ class RebalanceChange(Change):
         return 'Rebalance({}), stale_count: {}'.format(
             self.get_name(),
             sum([len(v) for v in self.stale_data.values()]))
-
-    def get_name(self) -> str:
-        return 'rebalance'
-
-    def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'swap_partitions', 'stop']])
 
     def take_next(self) -> dict:
         if self.stale_data:
@@ -84,7 +90,7 @@ class RebalanceChange(Change):
 
     def run(self, current_actions):
         # Stop rebalance if someone is restarting
-        if any([a in current_actions for a in ['restart', 'start', 'stop']]):
+        if self.should_be_cancelled(current_actions):
             _LOG.warning("Rebalance stopped, because other blocking events running: {}".format(current_actions))
             return False
 

@@ -10,7 +10,7 @@ from bubuku.zookeeper import BukuExhibitor
 def test_rebalance_can_run():
     o = RebalanceChange(object(), [])
 
-    blocked_actions = ['restart', 'start', 'stop', 'rebalance', 'swap_partitions']
+    blocked_actions = ['restart', 'start', 'stop', 'rebalance']
 
     # Check that can run in exact cases
     for a in blocked_actions:
