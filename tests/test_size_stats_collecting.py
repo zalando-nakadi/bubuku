@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from bubuku.features.rebalance_by_size import GenerateDataSizeStatistics
+from bubuku.features.data_size_stats import GenerateDataSizeStatistics
 from bubuku.utils import CmdHelper
 
 

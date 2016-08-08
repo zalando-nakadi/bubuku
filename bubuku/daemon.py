@@ -9,9 +9,10 @@ from bubuku.broker import BrokerManager
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.controller import Controller
 from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
-from bubuku.features.rebalance_by_size import RebalanceBySize, GenerateDataSizeStatistics
+from bubuku.features.data_size_stats import GenerateDataSizeStatistics
 from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
+from bubuku.features.swap_partitions import CheckBrokersDiskImbalance
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
@@ -32,7 +33,7 @@ def apply_features(config: Config, controller: Controller, buku_proxy: BukuExhib
         elif feature == 'rebalance_by_size':
             controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, CmdHelper(),
                                                             kafka_properties.get_property("log.dirs").split(",")))
-            controller.add_check(RebalanceBySize(buku_proxy, broker, config.free_space_diff_threshold_kb))
+            controller.add_check(CheckBrokersDiskImbalance(buku_proxy, broker, config.free_space_diff_threshold_kb))
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':

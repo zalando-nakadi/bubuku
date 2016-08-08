@@ -4,7 +4,6 @@ from operator import attrgetter
 
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
-from bubuku.utils import CmdHelper
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rebalance_by_size')
@@ -28,6 +27,7 @@ class SwapPartitionsChange(Change):
         return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'swap_partitions', 'stop']])
 
     def run(self, current_actions):
+        # if there is already a swap which was postponed - just execute it
         if self.to_move:
             return not self.__perform_swap(self.to_move)
 
@@ -51,9 +51,12 @@ class SwapPartitionsChange(Change):
         fat_broker_swap_candidates = swap_partition_candidates[self.fat_broker_id]
         matching_swap_partition = self.__find_best_swap_candidate(fat_broker_swap_candidates, self.gap,
                                                                   slim_broker_smallest_partition.size)
+
+        # if there is no possible swap that will decrease the gap - just do nothing
         if not matching_swap_partition:
             return False
 
+        # write rebalance-json to ZK, Kafka will read it and perform the partitions swap
         self.to_move = self.__create_swap_partitions_json(slim_broker_smallest_partition, self.slim_broker_id,
                                                           matching_swap_partition, self.fat_broker_id)
         return not self.__perform_swap(self.to_move)
@@ -67,15 +70,16 @@ class SwapPartitionsChange(Change):
         for topic, partition, replicas in partition_assignment:
             if topic not in topics_stats or partition not in topics_stats[topic]:
                 continue  # we skip this partition as there is not data size stats for it
+
             if fat_broker_id in replicas and slim_broker_id in replicas:
                 continue  # we skip this partition as it exists on both involved brokers
+
             for broker_id in [slim_broker_id, fat_broker_id]:
                 if broker_id in replicas:
                     if broker_id not in swap_partition_candidates:
                         swap_partition_candidates[broker_id] = []
                     swap_partition_candidates[broker_id].append(
                         TpData(topic, partition, topics_stats[topic][partition], replicas))
-
         return swap_partition_candidates
 
     @staticmethod
@@ -84,8 +88,8 @@ class SwapPartitionsChange(Change):
         matching_swap_partition = None
         smallest_new_gap = brokers_gap
         for tp in candidates:
-            new_gap = brokers_gap - 2 * abs(tp.size - partition_to_swap_size)
-            if abs(new_gap) < smallest_new_gap:
+            new_gap = abs(brokers_gap - 2 * abs(tp.size - partition_to_swap_size))
+            if new_gap < smallest_new_gap:
                 smallest_new_gap = new_gap
                 matching_swap_partition = tp
         return matching_swap_partition
@@ -98,7 +102,7 @@ class SwapPartitionsChange(Change):
         ]
 
 
-class RebalanceBySize(Check):
+class CheckBrokersDiskImbalance(Check):
     def __init__(self, zk: BukuExhibitor, broker: BrokerManager, free_space_diff_threshold_kb: int):
         super().__init__(check_interval_s=900)
         self.zk = zk
@@ -112,7 +116,6 @@ class RebalanceBySize(Check):
 
     def create_swap_partition_change(self) -> SwapPartitionsChange:
         size_stats = self.zk.get_disk_stats()
-
         if len(size_stats.keys()) == 0:
             return None
 
@@ -129,72 +132,5 @@ class RebalanceBySize(Check):
         gap = slim_broker_free_kb - fat_broker_free_kb
         if gap < self.free_space_diff_threshold_kb:
             return None
-
-        return SwapPartitionsChange(self.zk, fat_broker_id, slim_broker_id, gap, size_stats)
-
-
-class GenerateDataSizeStatistics(Check):
-    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, cmd_helper: CmdHelper, kafka_log_dirs):
-        super().__init__(check_interval_s=600)
-        self.zk = zk
-        self.broker = broker
-        self.cmd_helper = cmd_helper
-        self.kafka_log_dirs = kafka_log_dirs
-
-    def check(self):
-        if self.broker.is_running_and_registered():
-            _LOG.info("Generating data size statistics")
-            try:
-                self.__generate_stats()
-                _LOG.info("Data size statistics successfully written to zk")
-            except Exception:
-                _LOG.warn("Error occurred when collecting size statistics", exc_info=True)
-        return None
-
-    def __generate_stats(self):
-        topics_stats = self.__get_topics_stats()
-        disk_stats = self.__get_disk_stats()
-        stats = {"disk": disk_stats, "topics": topics_stats}
-        self.zk.update_disk_stats(self.broker.id_manager.get_broker_id(), stats)
-
-    def __get_topics_stats(self):
-        topics_stats = {}
-        for log_dir in self.kafka_log_dirs:
-            topic_dirs = self.cmd_helper.cmd_run("du -k -d 1 {}".format(log_dir)).split("\n")
-            for topic_dir in topic_dirs:
-                dir_stats = self.__parse_dir_stats(topic_dir, log_dir)
-                if dir_stats:
-                    topic, partition, size_kb = dir_stats
-                    if topic not in topics_stats:
-                        topics_stats[topic] = {}
-                    topics_stats[topic][partition] = int(size_kb)
-        return topics_stats
-
-    @staticmethod
-    def __parse_dir_stats(topic_dir, log_dir):
-        """
-        Parses topic-partition size stats from "du" tool single line output
-        :param topic_dir: the string to be parsed; example: "45983\t/tmp/kafka-logs/my-kafka-topic-0"
-        :param log_dir: the kafka log directory name itself
-        :return: tuple (topic, partition, size) or None if the topic_dir has incorrect format
-        """
-        dir_data = topic_dir.split("\t")
-        if len(dir_data) == 2 and dir_data[1] != log_dir:
-            size_kb, dir_name = tuple(dir_data)
-            tp_name = dir_name.split("/")[-1]
-            tp_parts = tp_name.rsplit("-", 1)
-            if len(tp_parts) == 2:
-                topic, partition = tuple(tp_parts)
-                return topic, partition, size_kb
-        return None
-
-    def __get_disk_stats(self):
-        disks = self.cmd_helper.cmd_run("df -k | tail -n +2 |  awk '{ print $3, $4 }'").split("\n")
-        total_used = total_free = 0
-        for disk in disks:
-            parts = disk.split(" ")
-            if len(parts) == 2:
-                used, free = tuple(parts)
-                total_used += int(used)
-                total_free += int(free)
-        return {"used_kb": total_used, "free_kb": total_free}
+        else:
+            return SwapPartitionsChange(self.zk, fat_broker_id, slim_broker_id, gap, size_stats)
