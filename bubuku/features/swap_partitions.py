@@ -113,12 +113,18 @@ class SwapPartitionsChange(BaseRebalanceChange):
                 matching_swap_partition = tp
         return matching_swap_partition
 
-    @staticmethod
-    def __create_swap_partitions_json(tp1: TpData, broker1: str, tp2: TpData, broker2: str) -> list:
+    def __create_swap_partitions_json(self, tp1: TpData, br1: str, tp2: TpData, br2: str) -> list:
         return [
-            (tp1.topic, tp1.partition, [broker2 if r == broker1 else r for r in tp1.replicas]),
-            (tp2.topic, tp2.partition, [broker1 if r == broker2 else r for r in tp2.replicas])
+            (tp1.topic, tp1.partition, self.__replace_broker(tp1.replicas, br1, br2, tp2.replicas[0] == br2)),
+            (tp2.topic, tp2.partition, self.__replace_broker(tp2.replicas, br2, br1, tp1.replicas[0] == br1))
         ]
+
+    def __replace_broker(self, replicas: list, broker_to_replace: str, replacement: str, was_leader: bool) -> list:
+        rps = [x for x in replicas if x != broker_to_replace]
+        if was_leader:
+            return [replacement] + rps
+        else:
+            return rps + [replacement]
 
     def __str__(self):
         return 'SwapPartitions(fat_broker_id: {}, slim_broker_id: {}, gap: {})'.format(

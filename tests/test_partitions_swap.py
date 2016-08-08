@@ -25,7 +25,7 @@ class TestPartitionsSwap(unittest.TestCase):
     test_assignment = [
         ("t1", "p1", ["broker3", "broker1"]),
         ("t1", "p2", ["broker1", "broker2"]),
-        ("t2", "p1", ["broker2", "broker1"]),
+        ("t2", "p1", ["broker1", "broker2"]),
         ("t2", "p2", ["broker2", "broker3"]),
         ("t3", "p1", ["broker3", "broker1"]),
         ("t3", "p2", ["broker2", "broker3"]),
@@ -63,7 +63,7 @@ class TestPartitionsSwap(unittest.TestCase):
 
         assert not result
         zk.reallocate_partitions.assert_called_with(
-            [('t2', 'p2', ['broker2', 'broker1']), ('t2', 'p1', ['broker2', 'broker3'])])
+            [('t2', 'p2', ['broker1', 'broker2']), ('t2', 'p1', ['broker2', 'broker3'])])
 
     def test_swap_partitions_change_not_performed(self):
         zk = MagicMock()
@@ -88,7 +88,7 @@ class TestPartitionsSwap(unittest.TestCase):
         # if the write to ZK wasn't possible for some reason, the change should
         # return True and repeat write to ZK during next trigger by controller
         assert result
-        assert swap_change.to_move == [('t2', 'p2', ['broker2', 'broker1']), ('t2', 'p1', ['broker2', 'broker3'])]
+        assert swap_change.to_move == [('t2', 'p2', ['broker1', 'broker2']), ('t2', 'p1', ['broker2', 'broker3'])]
 
     def test_swap_partitions_change_performed_existing(self):
         zk = MagicMock()
