@@ -6,7 +6,7 @@ from bubuku.zookeeper import BukuExhibitor
 
 
 class GenerateDataSizeStatistics(Check):
-    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, cmd_helper: CmdHelper, kafka_log_dirs):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, cmd_helper: CmdHelper, kafka_log_dirs: list):
         super().__init__(check_interval_s=600)
         self.zk = zk
         self.broker = broker

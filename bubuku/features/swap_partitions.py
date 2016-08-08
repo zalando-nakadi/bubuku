@@ -103,11 +103,11 @@ class SwapPartitionsChange(Change):
 
 
 class CheckBrokersDiskImbalance(Check):
-    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, free_space_diff_threshold_kb: int):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, diff_threshold_kb: int):
         super().__init__(check_interval_s=900)
         self.zk = zk
         self.broker = broker
-        self.free_space_diff_threshold_kb = free_space_diff_threshold_kb
+        self.diff_threshold_kb = diff_threshold_kb
 
     def check(self):
         if self.broker.is_running_and_registered():
@@ -130,7 +130,7 @@ class CheckBrokersDiskImbalance(Check):
 
         # is the gap is big enough to swap partitions?
         gap = slim_broker_free_kb - fat_broker_free_kb
-        if gap < self.free_space_diff_threshold_kb:
+        if gap < self.diff_threshold_kb:
             return None
         else:
             return SwapPartitionsChange(self.zk, fat_broker_id, slim_broker_id, gap, size_stats)

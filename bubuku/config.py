@@ -5,7 +5,7 @@ from collections import namedtuple
 _LOG = logging.getLogger('bubuku.properties')
 
 Config = namedtuple('Config', ('kafka_dir', 'kafka_settings_template', 'zk_stack_name',
-                               'zk_prefix', 'id_policy', 'features', 'health_port', 'free_space_diff_threshold_kb'))
+                               'zk_prefix', 'id_policy', 'features', 'health_port'))
 
 
 class KafkaProperties(object):
@@ -51,15 +51,19 @@ class KafkaProperties(object):
 
 def load_config() -> Config:
     zk_prefix = os.getenv('ZOOKEEPER_PREFIX', '/')
+
+    features = {key: {} for key in os.getenv('BUKU_FEATURES', '').lower().split(',')}
+    if "balance_data_size" in features:
+        features["balance_data_size"]["diff_threshold_mb"] = int(os.getenv('FREE_SPACE_DIFF_THRESHOLD_MB', '50000'))
+
     return Config(
         kafka_dir=os.getenv('KAFKA_DIR'),
         kafka_settings_template=os.getenv('KAFKA_SETTINGS'),
         zk_stack_name=os.getenv('ZOOKEEPER_STACK_NAME'),
         zk_prefix=zk_prefix if zk_prefix.startswith('/') or not zk_prefix else '/{}'.format(zk_prefix),
         id_policy=os.getenv('BROKER_ID_POLICY', 'ip').lower(),
-        features=os.getenv('BUKU_FEATURES', '').lower(),
-        health_port=int(os.getenv('HEALTH_PORT', '8888')),
-        free_space_diff_threshold_kb=int(os.getenv('FREE_SPACE_DIFF_THRESHOLD_KB', '50000000'))  # 50 GB
+        features=features,
+        health_port=int(os.getenv('HEALTH_PORT', '8888'))
     )
 
 
