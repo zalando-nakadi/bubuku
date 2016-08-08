@@ -35,7 +35,7 @@ class Amazon(object):
         doc = self._get_document()
         return doc['privateIp'] if doc else '127.0.0.1'
 
-    def get_addresses_by_lb_name(self, lb_name):
+    def get_addresses_by_lb_name(self, lb_name) -> list:
         region = self.get_aws_region()
 
         private_ips = []
