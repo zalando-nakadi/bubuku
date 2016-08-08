@@ -112,11 +112,14 @@ class _ZookeeperProxy(object):
         self.async_counter.increment()
         try:
             i_async = self.client.get_async(*params)
-            i_async.rawlink(self.async_counter.decrement)
+            i_async.rawlink(self._decrement)
             return i_async
         except Exception as e:
-            self.async_counter.decrement()
+            self._decrement()
             raise e
+
+    def _decrement(self, *args, **kwargs):
+        self.async_counter.decrement()
 
     def set(self, *args, **kwargs):
         self.hosts_cache.touch()
