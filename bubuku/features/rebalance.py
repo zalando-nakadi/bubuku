@@ -117,6 +117,12 @@ class RebalanceChange(Change):
                 name = _optimise_broker_ids([str(i) for i in replicas])
                 d = {"topic": topic, "partition": partition, "replicas": replicas}
                 if name not in self.shuffled_broker_ids[replication_factor]:
+                    partition_replicas = {_part: state['isr'] for _, _part, state in
+                                          self.zk.load_partition_states(topics=[topic])}
+                    if all(str(b) not in self.broker_ids for b in partition_replicas[partition]):
+                        _LOG.warn('Can not rebalance {}, {}, all isr ({}) are not active({}), skipping'.format(
+                            topic, partition, partition_replicas[partition]['isr'], self.broker_ids))
+                        continue
                     if name not in self.stale_data:
                         self.stale_data[name] = []
                     self.stale_data[name].append(d)
