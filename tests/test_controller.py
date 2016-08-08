@@ -1,6 +1,15 @@
 from unittest.mock import MagicMock
 
-from bubuku.controller import Controller, Check, Change
+from bubuku.controller import Controller, Check, Change, _exclude_self
+
+
+def test_exculde_self():
+
+    assert sorted(['test1', 'test2']) == sorted(_exclude_self('127.0.0.1', 'xxx', {
+        'test1': '127.0.0.1',
+        'test2': '127.0.0.2',
+        'xxx': '127.0.0.1',
+    }))
 
 
 def test_multiple_changes_are_executed_one_by_one():

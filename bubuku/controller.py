@@ -41,7 +41,7 @@ class Check(object):
 
 
 def _exclude_self(ip, name, running_actions):
-    return [k for k, v in running_actions.items() if k != name and v != ip]
+    return [k for k, v in running_actions.items() if k != name or v != ip]
 
 
 class Controller(object):
