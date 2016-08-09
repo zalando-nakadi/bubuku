@@ -37,6 +37,10 @@ class SwapPartitionsChange(BaseRebalanceChange):
         if self.to_move:
             return not self.__perform_swap(self.to_move)
 
+        # if there's a rebalance currently running - postpone current change
+        if self.zk.is_rebalancing():
+            return True
+
         # merge topics size stats to a single dict
         topics_stats = {}
         for _, broker_stats in self.size_stats.items():
