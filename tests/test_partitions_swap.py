@@ -5,33 +5,33 @@ from bubuku.features.swap_partitions import CheckBrokersDiskImbalance, SwapParti
 
 class TestPartitionsSwap(unittest.TestCase):
     test_size_stats = {
-        "broker1": {"disk": {"free_kb": 20000, "used_kb": 20000}, "topics": {
-            "t1": {"p1": 3434, "p2": 200},
-            "t2": {"p1": 1000},
-            "t3": {"p1": 300}
+        "111": {"disk": {"free_kb": 20000, "used_kb": 20000}, "topics": {
+            "t1": {"1": 3434, "2": 200},
+            "t2": {"1": 1000},
+            "t3": {"1": 300}
         }},
-        "broker2": {"disk": {"free_kb": 25000, "used_kb": 15000}, "topics": {
-            "t1": {"p2": 200},
-            "t2": {"p1": 1000, "p2": 100},
-            "t3": {"p2": 2000}
+        "222": {"disk": {"free_kb": 25000, "used_kb": 15000}, "topics": {
+            "t1": {"2": 200},
+            "t2": {"1": 1000, "2": 100},
+            "t3": {"2": 2000}
         }},
-        "broker3": {"disk": {"free_kb": 30000, "used_kb": 10000}, "topics": {
-            "t1": {"p1": 3434},
-            "t2": {"p2": 100},
-            "t3": {"p1": 300, "p2": 2000}
+        "333": {"disk": {"free_kb": 30000, "used_kb": 10000}, "topics": {
+            "t1": {"1": 3434},
+            "t2": {"2": 100},
+            "t3": {"1": 300, "2": 2000}
         }}
     }
 
     test_assignment = [
-        ("t1", "p1", ["broker3", "broker1"]),
-        ("t1", "p2", ["broker1", "broker2"]),
-        ("t2", "p1", ["broker1", "broker2"]),
-        ("t2", "p2", ["broker2", "broker3"]),
-        ("t3", "p1", ["broker3", "broker1"]),
-        ("t3", "p2", ["broker2", "broker3"]),
+        ("t1", 1, [333, 111]),
+        ("t1", 2, [111, 222]),
+        ("t2", 1, [111, 222]),
+        ("t2", 2, [222, 333]),
+        ("t3", 1, [333, 111]),
+        ("t3", 2, [222, 333]),
     ]
 
-    def test_check_requires_swap_partitionschange(self):
+    def test_check_requires_swap_partitions_change(self):
         zk = MagicMock()
         zk.get_disk_stats.return_value = self.test_size_stats
 
@@ -39,8 +39,8 @@ class TestPartitionsSwap(unittest.TestCase):
         change = check_imbalance.check()
 
         assert change
-        assert change.fat_broker_id == "broker1"
-        assert change.slim_broker_id == "broker3"
+        assert change.fat_broker_id == 111
+        assert change.slim_broker_id == 333
         assert change.gap == 10000
         assert change.size_stats == self.test_size_stats
 
@@ -58,18 +58,17 @@ class TestPartitionsSwap(unittest.TestCase):
         zk = MagicMock()
         zk.load_partition_assignment.return_value = self.test_assignment
 
-        swap_change = SwapPartitionsChange(zk, "broker1", "broker3", 10000, self.test_size_stats)
+        swap_change = SwapPartitionsChange(zk, 111, 333, 10000, self.test_size_stats)
         result = swap_change.run([])
 
         assert not result
-        zk.reallocate_partitions.assert_called_with(
-            [('t2', 'p2', ['broker1', 'broker2']), ('t2', 'p1', ['broker2', 'broker3'])])
+        zk.reallocate_partitions.assert_called_with([('t2', 2, [111, 222]), ('t2', 1, [222, 333])])
 
     def test_swap_partitions_change_not_performed(self):
         zk = MagicMock()
         zk.load_partition_assignment.return_value = self.test_assignment
 
-        swap_change = SwapPartitionsChange(zk, "broker1", "broker3", 80, self.test_size_stats)
+        swap_change = SwapPartitionsChange(zk, 111, 333, 80, self.test_size_stats)
         result = swap_change.run([])
 
         # change should not trigger partitions swap as there is no possible
@@ -82,13 +81,13 @@ class TestPartitionsSwap(unittest.TestCase):
         zk.load_partition_assignment.return_value = self.test_assignment
         zk.reallocate_partitions.return_value = False
 
-        swap_change = SwapPartitionsChange(zk, "broker1", "broker3", 10000, self.test_size_stats)
+        swap_change = SwapPartitionsChange(zk, 111, 333, 10000, self.test_size_stats)
         result = swap_change.run([])
 
         # if the write to ZK wasn't possible for some reason, the change should
         # return True and repeat write to ZK during next trigger by controller
         assert result
-        assert swap_change.to_move == [('t2', 'p2', ['broker1', 'broker2']), ('t2', 'p1', ['broker2', 'broker3'])]
+        assert swap_change.to_move == [('t2', 2, [111, 222]), ('t2', 1, [222, 333])]
 
     def test_swap_partitions_change_performed_existing(self):
         zk = MagicMock()

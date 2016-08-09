@@ -13,7 +13,7 @@ TpData = namedtuple('TpData', ('topic', 'partition', 'size', 'replicas'))
 
 
 class SwapPartitionsChange(BaseRebalanceChange):
-    def __init__(self, zk: BukuExhibitor, fat_broker_id: str, slim_broker_id: str, gap: int, size_stats: dict):
+    def __init__(self, zk: BukuExhibitor, fat_broker_id: int, slim_broker_id: int, gap: int, size_stats: dict):
         self.zk = zk
         self.fat_broker_id = fat_broker_id
         self.slim_broker_id = slim_broker_id
@@ -39,7 +39,7 @@ class SwapPartitionsChange(BaseRebalanceChange):
 
         # merge topics size stats to a single dict
         topics_stats = {}
-        for broker_id, broker_stats in self.size_stats.items():
+        for _, broker_stats in self.size_stats.items():
             for topic in broker_stats["topics"].keys():
                 if topic not in topics_stats:
                     topics_stats[topic] = {}
@@ -83,11 +83,11 @@ class SwapPartitionsChange(BaseRebalanceChange):
         _LOG.info("Writing rebalance-json to ZK for partitions swap: {}".format(swap_json))
         return self.zk.reallocate_partitions(swap_json)
 
-    def __find_all_swap_candidates(self, fat_broker_id: str, slim_broker_id: str, topics_stats: dict) -> dict:
+    def __find_all_swap_candidates(self, fat_broker_id: int, slim_broker_id: int, topics_stats: dict) -> dict:
         partition_assignment = self.zk.load_partition_assignment()
         swap_partition_candidates = {}
         for topic, partition, replicas in partition_assignment:
-            if topic not in topics_stats or partition not in topics_stats[topic]:
+            if topic not in topics_stats or str(partition) not in topics_stats[topic]:
                 continue  # we skip this partition as there is not data size stats for it
 
             if fat_broker_id in replicas and slim_broker_id in replicas:
@@ -98,7 +98,7 @@ class SwapPartitionsChange(BaseRebalanceChange):
                     if broker_id not in swap_partition_candidates:
                         swap_partition_candidates[broker_id] = []
                     swap_partition_candidates[broker_id].append(
-                        TpData(topic, partition, topics_stats[topic][partition], replicas))
+                        TpData(topic, partition, topics_stats[topic][str(partition)], replicas))
         return swap_partition_candidates
 
     @staticmethod
@@ -113,13 +113,13 @@ class SwapPartitionsChange(BaseRebalanceChange):
                 matching_swap_partition = tp
         return matching_swap_partition
 
-    def __create_swap_partitions_json(self, tp1: TpData, br1: str, tp2: TpData, br2: str) -> list:
+    def __create_swap_partitions_json(self, tp1: TpData, br1: int, tp2: TpData, br2: int) -> list:
         return [
             (tp1.topic, tp1.partition, self.__replace_broker(tp1.replicas, br1, br2, tp2.replicas[0] == br2)),
             (tp2.topic, tp2.partition, self.__replace_broker(tp2.replicas, br2, br1, tp1.replicas[0] == br1))
         ]
 
-    def __replace_broker(self, replicas: list, broker_to_replace: str, replacement: str, was_leader: bool) -> list:
+    def __replace_broker(self, replicas: list, broker_to_replace: int, replacement: int, was_leader: bool) -> list:
         rps = [x for x in replicas if x != broker_to_replace]
         if was_leader:
             return [replacement] + rps
@@ -173,4 +173,4 @@ class CheckBrokersDiskImbalance(Check):
             _LOG.info("Creating swap partitions change to swap partitions of brokers (id: {}, free_kb: {}) and "
                       "(id: {}, free_kb: {}); gap is {} KB".format(slim_broker_id, slim_broker_free_kb, fat_broker_id,
                                                                    fat_broker_free_kb, gap))
-            return SwapPartitionsChange(self.zk, fat_broker_id, slim_broker_id, gap, size_stats)
+            return SwapPartitionsChange(self.zk, int(fat_broker_id), int(slim_broker_id), gap, size_stats)
