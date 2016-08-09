@@ -43,7 +43,7 @@ def _create_rfc1918_address_hash(ip: str) -> (str, str):
         address[0] = 3
     else:
         return None
-    return str(functools.reduce(lambda o, v: o * 256 + v, address, 0)), str(256 * 256 * 256 * 3 + 1)
+    return str(functools.reduce(lambda o, v: o * 256 + v, address, 0)), str(256 * 256 * 256 * 4 + 1)
 
 
 class BrokerIDByIp(BrokerIdGenerator):
