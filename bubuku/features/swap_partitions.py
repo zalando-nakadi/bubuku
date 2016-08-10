@@ -74,8 +74,8 @@ class SwapPartitionsChange(BaseRebalanceChange):
         _LOG.info("Fat broker(id: {}) partition to swap: {}".format(self.fat_broker_id, matching_swap_partition))
 
         # write rebalance-json to ZK; Kafka will read it and perform the partitions swap
-        self.to_move = self.__create_swap_partitions_json(slim_broker_smallest_partition, self.slim_broker_id,
-                                                          matching_swap_partition, self.fat_broker_id)
+        self.to_move = self.__create_rebalance_list(slim_broker_smallest_partition, self.slim_broker_id,
+                                                    matching_swap_partition, self.fat_broker_id)
         scheduled_rebalance = self.__perform_swap(self.to_move)
         if scheduled_rebalance:
             _LOG.info("Swap partitions rebalance node was successfully created in ZK")
@@ -83,9 +83,9 @@ class SwapPartitionsChange(BaseRebalanceChange):
             _LOG.info("Swap partitions is postponed as there was a rebalance node in ZK")
         return not scheduled_rebalance
 
-    def __perform_swap(self, swap_json):
-        _LOG.info("Writing rebalance-json to ZK for partitions swap: {}".format(swap_json))
-        return self.zk.reallocate_partitions(swap_json)
+    def __perform_swap(self, rebalance_list):
+        _LOG.info("Writing rebalance-json to ZK for partitions swap: {}".format(rebalance_list))
+        return self.zk.reallocate_partitions(rebalance_list)
 
     def __find_all_swap_candidates(self, fat_broker_id: int, slim_broker_id: int, topics_stats: dict) -> dict:
         partition_assignment = self.zk.load_partition_assignment()
@@ -117,7 +117,7 @@ class SwapPartitionsChange(BaseRebalanceChange):
                 matching_swap_partition = tp
         return matching_swap_partition
 
-    def __create_swap_partitions_json(self, tp1: TpData, br1: int, tp2: TpData, br2: int) -> list:
+    def __create_rebalance_list(self, tp1: TpData, br1: int, tp2: TpData, br2: int) -> list:
         return [
             (tp1.topic, tp1.partition, self.__replace_broker(tp1.replicas, br1, br2, tp2.replicas[0] == br2)),
             (tp2.topic, tp2.partition, self.__replace_broker(tp2.replicas, br2, br1, tp1.replicas[0] == br1))
