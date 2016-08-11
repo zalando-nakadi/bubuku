@@ -262,11 +262,7 @@ class BukuExhibitor(object):
         Calculates connection string in format usable by kafka
         :return: connection string in form host:port[,host:port[...]]/path
         """
-        conn_str = self.exhibitor.get_conn_str()
-        if not conn_str:
-            raise Exception('No connection to exhibitors')
-
-        return conn_str
+        return self.exhibitor.get_conn_str()
 
     def is_rebalancing(self):
         try:

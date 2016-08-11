@@ -3,3 +3,4 @@
 *.pyc
 .eggs/
 bubuku.egg-info/
+.cache/

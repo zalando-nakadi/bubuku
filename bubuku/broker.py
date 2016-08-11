@@ -71,6 +71,9 @@ class BrokerManager(object):
         :param zookeeper_address: Address to use for kafka
         :raise LeaderElectionInProgress: raised when broker can not be started because leader election is in progress
         """
+        if not zookeeper_address:
+            raise Exception('No connection to zookeeper')
+
         if not self.process:
             if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_broker_ids()):
                 raise LeaderElectionInProgress()
