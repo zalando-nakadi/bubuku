@@ -18,7 +18,7 @@ class AWSExhibitorAddressProvider(AddressListProvider):
 
     def get_latest_address(self) -> (list, int):
         json_ = self._query_exhibitors(self.exhibitors)
-        if json_ is None:
+        if not json_:
             self.exhibitors = self.get_exhibitor_addresses()
             json_ = self._query_exhibitors(self.master_exhibitors)
         if isinstance(json_, dict) and 'servers' in json_ and 'port' in json_:
