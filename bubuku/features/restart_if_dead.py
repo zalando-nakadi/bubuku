@@ -8,10 +8,11 @@ _LOG = logging.getLogger('bubuku.features.restart_if_dead')
 
 
 class StartBrokerChange(Change):
-    def __init__(self, broker: BrokerManager, zk: BukuExhibitor):
+    def __init__(self, broker: BrokerManager, zk: BukuExhibitor, processed_callback):
         self.broker = broker
         self.zk = zk
         self.stopped = False
+        self.processed_callback = processed_callback
 
     def get_name(self) -> str:
         return 'start'
@@ -36,6 +37,10 @@ class StartBrokerChange(Change):
             return True
         return False
 
+    def on_remove(self):
+        if self.processed_callback:
+            self.processed_callback()
+
     def __str__(self):
         return 'StartBrokerChange({})'.format(self.get_name())
 
@@ -45,12 +50,19 @@ class CheckBrokerStopped(Check):
         super().__init__()
         self.broker = broker
         self.zk = zk
+        self.need_check = True
 
     def check(self) -> Change:
+        if not self.need_check:
+            return None
         if self.broker.is_running_and_registered():
             return None
         _LOG.info('Oops! Broker is dead, triggering restart')
-        return StartBrokerChange(self.broker, self.zk)
+        self.need_check = False
+        return StartBrokerChange(self.broker, self.zk, self.on_check_removed)
+
+    def on_check_removed(self):
+        self.need_check = True
 
     def __str__(self):
         return 'CheckBrokerStopped'
