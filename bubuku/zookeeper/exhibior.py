@@ -14,12 +14,12 @@ class AWSExhibitorAddressProvider(AddressListProvider):
     def __init__(self, amazon: Amazon, zk_stack_name: str):
         self.amazon = amazon
         self.zk_stack_name = zk_stack_name
-        self.exhibitors = self.get_exhibitor_addresses()
+        self.exhibitors = self.query_from_amazon()
 
     def get_latest_address(self) -> (list, int):
         json_ = self._query_exhibitors(self.exhibitors)
         if not json_:
-            self.exhibitors = self.get_exhibitor_addresses()
+            self.exhibitors = self.query_from_amazon()
             json_ = self._query_exhibitors(self.exhibitors)
         if isinstance(json_, dict) and 'servers' in json_ and 'port' in json_:
             self.exhibitors = json_['servers']
@@ -37,5 +37,5 @@ class AWSExhibitorAddressProvider(AddressListProvider):
                 _LOG.warn('Failed to query zookeeper list information from {}'.format(url), exc_info=e)
         return None
 
-    def get_exhibitor_addresses(self):
+    def query_from_amazon(self):
         return self.amazon.get_addresses_by_lb_name(self.zk_stack_name)

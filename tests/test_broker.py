@@ -107,4 +107,3 @@ def test_broker_start_fail_no_zk_conn():
     except Exception as e:
         error_msg = str(e)
         assert error_msg != 'No connection to zookeeper'
-        pass
