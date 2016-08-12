@@ -6,8 +6,9 @@ import logging
 from bubuku import health
 from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
-from bubuku.config import load_config, KafkaProperties, Config
+from bubuku.config import load_config, KafkaProperties
 from bubuku.controller import Controller
+from bubuku.features.data_size_stats import GenerateDataSizeStatistics
 from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
 from bubuku.features.restart_if_dead import CheckBrokerStopped

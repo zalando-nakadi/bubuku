@@ -57,6 +57,7 @@ Bubuku can be configured using environment properties:
  - `BROKER_ID_POLICY` - Policy for generating broker id. Possible values are `ip` and `auto`
  - `BUKU_FEATURES` - List of optional bubuku features, see [features](#features) section
  - `HEALTH_PORT` - Port for health checks
+ - `FREE_SPACE_DIFF_THRESHOLD_MB` - Threshold for starting `balance_data_size` feature, if it's enabled
  
 # Features #
 
@@ -85,6 +86,8 @@ Pluggable features are defined in configuration and are disabled by default. Lis
  - `use_ip_address` - Use ip address when registering kafka instance. By default kafka registers itself in 
  zookeeper using hostname. Sometimes (for example on migration between AWS regions) it makes sense to use ip 
  address instead of hostname.
+ - `balance_data_size` - Swap partitions one by one by one if imbalance in size on brokers is bigger than 
+ `FREE_SPACE_DIFF_THRESHOLD_MB` megabytes.
  
 # How to contribute
 
