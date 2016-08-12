@@ -85,17 +85,17 @@ class _ZookeeperProxy(object):
 
     def _update_hosts(self, value):
         hosts, port = value
-        self.conn_str = ','.join(['{}:{}'.format(h, port) for h in hosts]) + self.prefix
-
-        if self.client is None:
-            self.client = KazooClient(hosts=self.conn_str,
-                                      command_retry={'deadline': 10, 'max_delay': 1, 'max_tries': -1},
-                                      connection_retry={'max_delay': 1, 'max_tries': -1})
-            self.client.add_listener(self.session_listener)
-        else:
-            self.client.stop()
-            self.client.set_hosts(self.conn_str)
-        self.client.start()
+        if hosts:
+            self.conn_str = ','.join(['{}:{}'.format(h, port) for h in hosts]) + self.prefix
+            if self.client is None:
+                self.client = KazooClient(hosts=self.conn_str,
+                                          command_retry={'deadline': 10, 'max_delay': 1, 'max_tries': -1},
+                                          connection_retry={'max_delay': 1, 'max_tries': -1})
+                self.client.add_listener(self.session_listener)
+            else:
+                self.client.stop()
+                self.client.set_hosts(self.conn_str)
+            self.client.start()
 
     def session_listener(self, state):
         pass

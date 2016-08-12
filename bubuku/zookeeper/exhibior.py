@@ -12,13 +12,15 @@ _LOG = logging.getLogger('bubuku.zookeeper.exhibitor')
 
 class AWSExhibitorAddressProvider(AddressListProvider):
     def __init__(self, amazon: Amazon, zk_stack_name: str):
-        self.master_exhibitors = amazon.get_addresses_by_lb_name(zk_stack_name)
-        self.exhibitors = list(self.master_exhibitors)
+        self.amazon = amazon
+        self.zk_stack_name = zk_stack_name
+        self.exhibitors = self.query_from_amazon()
 
     def get_latest_address(self) -> (list, int):
         json_ = self._query_exhibitors(self.exhibitors)
         if not json_:
-            json_ = self._query_exhibitors(self.master_exhibitors)
+            self.exhibitors = self.query_from_amazon()
+            json_ = self._query_exhibitors(self.exhibitors)
         if isinstance(json_, dict) and 'servers' in json_ and 'port' in json_:
             self.exhibitors = json_['servers']
             return json_['servers'], int(json_['port'])
@@ -34,3 +36,6 @@ class AWSExhibitorAddressProvider(AddressListProvider):
             except RequestException as e:
                 _LOG.warn('Failed to query zookeeper list information from {}'.format(url), exc_info=e)
         return None
+
+    def query_from_amazon(self):
+        return self.amazon.get_addresses_by_lb_name(self.zk_stack_name)
