@@ -47,7 +47,10 @@ CLASSIFIERS = [
     'Programming Language :: Python :: Implementation :: CPython',
 ]
 
-CONSOLE_SCRIPTS = ['bubuku = bubuku.daemon:main']
+CONSOLE_SCRIPTS = [
+    'bubuku = bubuku.daemon:main',
+    'bubuku-cli = bubuku.cli:cli'
+]
 
 
 class PyTest(test):

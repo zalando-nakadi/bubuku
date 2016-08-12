@@ -20,11 +20,29 @@ pip3 install bubuku
 ```
 
 # Running
+Start supervisor:
 ```
 KAFKA_DIR=/opt/kafka KAFKA_SETTINGS=/opt/kafka/config/server.properties ZOOKEEPER_STACK_NAME=my_zookeeper \
 ZOOKEEPER_PREFIX=/test BROKER_ID_POLICY=ip BUKU_FEATURES=restart_on_exhibitor,graceful_terminate \
 HEALTH_PORT=8888 bubuku 
 ```
+Run commands on cluster:
+```
+export KAFKA_DIR=/opt/kafka
+export KAFKA_SETTINGS=/opt/kafka/config/server.properties 
+export ZOOKEEPER_STACK_NAME=my_zookeeper 
+export ZOOKEEPER_PREFIX=/test 
+export BROKER_ID_POLICY=ip
+
+# Restart kafka on current node
+bubuku-cli restart
+# Restart kafka on some other node (broker id must be known)
+bubuku-cli restart --broker=12324
+
+# Invoke partitions rebalance
+bubuku-cli rebalance
+```
+It is important to have all properties provided, because command processing is made over zookeeper stack. 
 
 # Configuration
 

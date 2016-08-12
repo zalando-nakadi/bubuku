@@ -2,6 +2,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
@@ -153,10 +154,11 @@ class BukuExhibitor(object):
     def __init__(self, exhibitor: _ZookeeperProxy, async=True):
         self.exhibitor = exhibitor
         self.async = async
-        try:
-            self.exhibitor.create('/bubuku/changes', makepath=True)
-        except NodeExistsError:
-            pass
+        for node in ('changes', 'actions/global'):
+            try:
+                self.exhibitor.create('/bubuku/{}'.format(node), makepath=True)
+            except NodeExistsError:
+                pass
 
     def is_broker_registered(self, broker_id):
         try:
@@ -284,6 +286,29 @@ class BukuExhibitor(object):
             return True
         except NoNodeError:
             return False
+
+    def register_action(self, data: dict, broker_id: str = 'global'):
+        registered = False
+        while not registered:
+            name = '/bubuku/actions/{}/{}'.format(broker_id, uuid.uuid4())
+            try:
+                self.exhibitor.create(name, json.dumps(data), makepath=True)
+                _LOG.info('Action {} registered with name {}'.format(data, name))
+                registered = True
+            except NodeExistsError:
+                pass
+
+    def take_action(self, broker_id):
+        for base_path in ('/bubuku/actions/{}'.format(broker_id), '/bubuku/actions/global'):
+            for action in self.exhibitor.get_children(base_path):
+                name = '{}/{}'.format(base_path, action)
+                try:
+                    return json.loads(self.exhibitor.get(name)[0].decode('utf-8'))
+                except Exception as e:
+                    _LOG.error('Failed to take action {}, but anyway will remove it'.format(name), exc_info=e)
+                finally:
+                    self.exhibitor.delete(name)
+        return None
 
     def lock(self, lock_data=None):
         return self.exhibitor.take_lock('/bubuku/global_lock', lock_data)
