@@ -265,7 +265,7 @@ class BukuExhibitor(object):
         try:
             stats = {}
             for broker_id in self.exhibitor.get_children("/bubuku/size_stats"):
-                broker_stats_data = self.exhibitor.get('/bubuku/size_stats/{}'.format(broker_id))
+                broker_stats_data, zk_stat = self.exhibitor.get('/bubuku/size_stats/{}'.format(broker_id))
                 broker_stats = json.loads(broker_stats_data.decode("utf-8"))
                 stats[broker_id] = broker_stats
             return stats
