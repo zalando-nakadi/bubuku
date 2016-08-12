@@ -84,8 +84,11 @@ class _ZookeeperProxy(object):
             3 * 60)  # Update only after 180 seconds of stability
 
     def _update_hosts(self, value):
-        hosts, port = value
-        self.conn_str = ','.join(['{}:{}'.format(h, port) for h in hosts]) + self.prefix
+        if not value:
+            self.conn_str = None
+        else:
+            hosts, port = value
+            self.conn_str = ','.join(['{}:{}'.format(h, port) for h in hosts]) + self.prefix
 
         if self.client is None:
             self.client = KazooClient(hosts=self.conn_str,
