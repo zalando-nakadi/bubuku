@@ -10,11 +10,11 @@ _STAGE_STOP = 'stop'
 _STAGE_START = 'start'
 
 
-class RestartBrokerOnZkChange(Change):
-    def __init__(self, zk_hosts: str, zk: BukuExhibitor, broker: BrokerManager):
-        self.conn_str = zk_hosts
+class RestartBrokerChange(Change):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager, break_condition):
         self.zk = zk
         self.broker = broker
+        self.break_condition = break_condition
         self.stage = _STAGE_STOP
 
     def get_name(self):
@@ -25,12 +25,7 @@ class RestartBrokerOnZkChange(Change):
 
     def run(self, current_actions):
         if self.stage == _STAGE_STOP:
-            current_conn_str = self.zk.get_conn_str()
-            if current_conn_str != self.conn_str:
-                _LOG.warning('ZK address changed again, from {} to {}'.format(self.conn_str, current_conn_str))
-                return False
-            if self.conn_str == self.broker.get_zk_connect_string():
-                _LOG.warning('Broker already have latest version of zk address: '.format(current_conn_str))
+            if self.break_condition and self.break_condition():
                 return False
             self.broker.stop_kafka_process()
             self.stage = _STAGE_START
@@ -49,7 +44,7 @@ class RestartBrokerOnZkChange(Change):
         return False
 
     def __str__(self):
-        return 'RestartOnZkChange ({}), stage={}, new_conn_str={}'.format(self.get_name(), self.stage, self.conn_str)
+        return 'RestartOnZkChange ({}), stage={}'.format(self.get_name(), self.stage)
 
 
 class CheckExhibitorAddressChanged(Check):
@@ -62,9 +57,19 @@ class CheckExhibitorAddressChanged(Check):
     def check(self) -> Change:
         new_conn_str = self.zk.get_conn_str()
         if new_conn_str != self.conn_str:
+            def _cancel_if():
+                current_conn_str = self.zk.get_conn_str()
+                if current_conn_str != new_conn_str:
+                    _LOG.warning('ZK address changed again, from {} to {}'.format(new_conn_str, current_conn_str))
+                    return True
+                if current_conn_str == self.broker.get_zk_connect_string():
+                    _LOG.warning('Broker already have latest version of zk address: '.format(current_conn_str))
+                    return True
+                return False
+
             _LOG.info('ZK addresses changed from {} to {}, triggering restart'.format(self.conn_str, new_conn_str))
             self.conn_str = new_conn_str
-            return RestartBrokerOnZkChange(new_conn_str, self.zk, self.broker)
+            return RestartBrokerChange(self.zk, self.broker, _cancel_if)
 
     def __str__(self):
         return 'CheckExhibitorAddressChanged, current={}'.format(self.conn_str)

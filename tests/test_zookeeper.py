@@ -172,7 +172,7 @@ def test_reallocate_partition():
     call_idx = [0]
 
     def _create(path, value=None, **kwargs):
-        if path == '/bubuku/changes':
+        if path in ('/bubuku/changes', '/bubuku/actions/global'):
             pass
         elif path == '/admin/reassign_partitions':
             if call_idx[0] >= 5:

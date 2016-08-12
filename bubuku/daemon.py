@@ -9,7 +9,7 @@ from bubuku.broker import BrokerManager
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.controller import Controller
 from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
-from bubuku.features.data_size_stats import GenerateDataSizeStatistics
+from bubuku.features.remote_exec import RemoteCommandExecutorCheck
 from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.swap_partitions import CheckBrokersDiskImbalance
@@ -68,7 +68,7 @@ def main():
     controller = Controller(broker, buku_proxy, amazon)
 
     controller.add_check(CheckBrokerStopped(broker, buku_proxy))
-
+    controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker))
     apply_features(config.features, controller, buku_proxy, broker, kafka_properties, amazon)
 
     _LOG.info('Starting health server')
