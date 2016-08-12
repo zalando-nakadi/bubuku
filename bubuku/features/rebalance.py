@@ -51,7 +51,7 @@ class BaseRebalanceChange(Change):
         return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'stop']])
 
     @staticmethod
-    def should_be_cancelled(current_actions):
+    def should_be_paused(current_actions):
         return any([a in current_actions for a in ['restart', 'start', 'stop']])
 
 
@@ -90,9 +90,9 @@ class RebalanceChange(BaseRebalanceChange):
 
     def run(self, current_actions):
         # Stop rebalance if someone is restarting
-        if self.should_be_cancelled(current_actions):
-            _LOG.warning("Rebalance stopped, because other blocking events running: {}".format(current_actions))
-            return False
+        if self.should_be_paused(current_actions):
+            _LOG.warning("Rebalance paused, because other blocking events running: {}".format(current_actions))
+            return True
 
         if self.zk.is_rebalancing():
             return True

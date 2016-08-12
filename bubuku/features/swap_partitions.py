@@ -22,9 +22,9 @@ class SwapPartitionsChange(BaseRebalanceChange):
         self.to_move = None
 
     def run(self, current_actions):
-        if self.should_be_cancelled(current_actions):
-            _LOG.info("Cancelling swap partitions change as there are conflicting actions: {}".format(current_actions))
-            return False
+        if self.should_be_paused(current_actions):
+            _LOG.info("Pausing swap partitions change as there are conflicting actions: {}".format(current_actions))
+            return True
         try:
             _LOG.info("Running swap partitions change: {}".format(self))
             return self.__run_internal(current_actions)

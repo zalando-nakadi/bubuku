@@ -21,6 +21,9 @@ class Change(object):
     def can_run_at_exit(self) -> bool:
         return False
 
+    def on_remove(self):
+        pass
+
 
 class Check(object):
     def __init__(self, check_interval_s=5):
@@ -98,9 +101,11 @@ class Controller(object):
     def _release_changes_lock(self, changes_to_remove):
         if changes_to_remove:
             for change_name in changes_to_remove:
+                removed_change = self.changes[change_name][0]
                 del self.changes[change_name][0]
                 if not self.changes[change_name]:
                     del self.changes[change_name]
+                removed_change.on_remove()
             with self.zk.lock():
                 for name in changes_to_remove:
                     self.zk.unregister_change(name)
