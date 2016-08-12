@@ -20,7 +20,7 @@ class AWSExhibitorAddressProvider(AddressListProvider):
         json_ = self._query_exhibitors(self.exhibitors)
         if not json_:
             self.exhibitors = self.get_exhibitor_addresses()
-            json_ = self._query_exhibitors(self.master_exhibitors)
+            json_ = self._query_exhibitors(self.exhibitors)
         if isinstance(json_, dict) and 'servers' in json_ and 'port' in json_:
             self.exhibitors = json_['servers']
             return json_['servers'], int(json_['port'])

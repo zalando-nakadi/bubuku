@@ -5,6 +5,7 @@ from test_config import build_test_properties
 
 zk_fake_host = 'zk_host:8181/path'
 
+
 class FakeProcessManager(BrokerManager):
     def _open_process(self):
         return object()
