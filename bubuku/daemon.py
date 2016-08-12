@@ -6,12 +6,13 @@ import logging
 from bubuku import health
 from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
-from bubuku.config import load_config, KafkaProperties
+from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.controller import Controller
 from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
-from bubuku.features.rebalance_by_size import RebalanceBySize, GenerateDataSizeStatistics
+from bubuku.features.data_size_stats import GenerateDataSizeStatistics
 from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
+from bubuku.features.swap_partitions import CheckBrokersDiskImbalance
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
@@ -21,19 +22,19 @@ from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
 _LOG = logging.getLogger('bubuku.main')
 
 
-def apply_features(features: str, controller: Controller, buku_proxy: BukuExhibitor, broker: BrokerManager,
+def apply_features(features: dict, controller: Controller, buku_proxy: BukuExhibitor, broker: BrokerManager,
                    kafka_properties: KafkaProperties, amazon: Amazon) -> list:
-    for feature in set(features.split(',')):
+    for feature, config in features.items():
         if feature == 'restart_on_exhibitor':
             controller.add_check(CheckExhibitorAddressChanged(buku_proxy, broker))
         elif feature == 'rebalance_on_start':
             controller.add_check(RebalanceOnStartCheck(buku_proxy, broker))
         elif feature == 'rebalance_on_brokers_change':
             controller.add_check(RebalanceOnBrokerListChange(buku_proxy, broker))
-        elif feature == 'rebalance_by_size':
+        elif feature == 'balance_data_size':
             controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, CmdHelper(),
                                                             kafka_properties.get_property("log.dirs").split(",")))
-            controller.add_check(RebalanceBySize(buku_proxy, broker))
+            controller.add_check(CheckBrokersDiskImbalance(buku_proxy, broker, config["diff_threshold_mb"] * 1024))
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':

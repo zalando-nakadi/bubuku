@@ -21,7 +21,7 @@ def test_load_restart_on_exhibitor():
 
     controller = TestController()
 
-    apply_features('restart_on_exhibitor', controller, exhibitor, broker, None, None)
+    apply_features({'restart_on_exhibitor': {}}, controller, exhibitor, broker, None, None)
 
     assert len(controller.checks) == 1
     check = controller.checks[0]
@@ -36,7 +36,7 @@ def test_rebalance_on_start():
 
     controller = TestController()
 
-    apply_features('rebalance_on_start', controller, exhibitor, broker, None, None)
+    apply_features({'rebalance_on_start': {}}, controller, exhibitor, broker, None, None)
 
     assert len(controller.checks) == 1
     check = controller.checks[0]
@@ -52,7 +52,7 @@ def test_rebalance_on_broker_list_change():
 
     controller = TestController()
 
-    apply_features('rebalance_on_brokers_change', controller, exhibitor, broker, None, None)
+    apply_features({'rebalance_on_brokers_change': {}}, controller, exhibitor, broker, None, None)
 
     assert len(controller.checks) == 1
     check = controller.checks[0]
@@ -70,7 +70,7 @@ def test_graceful_terminate():
 
     controller = TestController()
 
-    apply_features('graceful_terminate', controller, None, broker, None, None)
+    apply_features({'graceful_terminate': {}}, controller, None, broker, None, None)
 
     assert len(controller.checks) == 0
 
@@ -86,6 +86,6 @@ def test_use_ip_address():
     amazon = MagicMock()
     amazon.get_own_ip = MagicMock(return_value='172.31.146.57')
 
-    apply_features('use_ip_address', None, None, None, props, amazon)
+    apply_features({'use_ip_address': {}}, None, None, None, props, amazon)
 
     assert props.get_property('advertised.host.name') == '172.31.146.57'
