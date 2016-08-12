@@ -100,7 +100,7 @@ class _ZookeeperProxy(object):
         else:
             self.client.stop()
             self.client.set_hosts(conn_str)
-            self.client.start()
+        self.client.start()
 
     def session_listener(self, state):
         pass
