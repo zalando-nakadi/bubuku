@@ -53,9 +53,10 @@ class SlowlyUpdatedCache(object):
                 self.force = False
             else:
                 value = self.load_func()
-            if value is not None and value != self.value:
-                self.value = value
-                self.next_apply = (now + self.delay) if self.last_check is not None else now
+            if value is not None:
+                if value != self.value:
+                    self.value = value
+                    self.next_apply = (now + self.delay) if self.last_check is not None else now
                 self.last_check = now
         if self.next_apply is not None and self.next_apply - now <= 0:
             self.update_func(self.value)
