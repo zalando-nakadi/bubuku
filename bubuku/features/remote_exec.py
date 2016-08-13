@@ -29,6 +29,9 @@ class RemoteCommandExecutorCheck(Check):
             return RebalanceChange(self.zk, self.zk.get_broker_ids())
         return None
 
+    def __str__(self):
+        return 'RemoteCommandExecutorCheck'
+
     @staticmethod
     def register_restart(zk: BukuExhibitor, broker_id: str):
         with zk.lock():

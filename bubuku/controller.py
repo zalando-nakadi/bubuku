@@ -33,6 +33,7 @@ class Check(object):
     def check_if_time(self) -> Change:
         if self.time_till_check() <= 0:
             self.__last_check_timestamp_s = time()
+            _LOG.info('Executing check {}'.format(self))
             return self.check()
         return None
 
@@ -132,7 +133,6 @@ class Controller(object):
         self._release_changes_lock(changes_to_remove)
         if self.running:
             for check in self.checks:
-                _LOG.info('Executing check {}'.format(check))
                 self._add_change_to_queue(check.check_if_time())
 
     def _add_change_to_queue(self, change):

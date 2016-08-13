@@ -1,5 +1,5 @@
-from collections import namedtuple
 import logging
+from collections import namedtuple
 from operator import attrgetter
 
 from bubuku.broker import BrokerManager
@@ -27,12 +27,12 @@ class SwapPartitionsChange(BaseRebalanceChange):
             return True
         try:
             _LOG.info("Running swap partitions change: {}".format(self))
-            return self.__run_internal(current_actions)
+            return self.__run_internal()
         except Exception:
             _LOG.warn("Error occurred when performing partitions swap change", exc_info=True)
             return False
 
-    def __run_internal(self, current_actions):
+    def __run_internal(self):
         # if there is already a swap which was postponed - just execute it
         if self.to_move:
             return not self.__perform_swap(self.to_move)
@@ -150,6 +150,9 @@ class CheckBrokersDiskImbalance(Check):
             except Exception:
                 _LOG.warn("Error occurred when performing disk imbalance check", exc_info=True)
         return None
+
+    def __str__(self):
+        return 'CheckBrokersDiskImbalance'
 
     def create_swap_partition_change(self) -> SwapPartitionsChange:
         size_stats = self.zk.get_disk_stats()

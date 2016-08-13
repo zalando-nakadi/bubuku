@@ -25,6 +25,9 @@ class GenerateDataSizeStatistics(Check):
                 _LOG.warn("Error occurred when collecting size statistics", exc_info=True)
         return None
 
+    def __str__(self):
+        return 'GenerateDataSizeStatistics'
+
     def __generate_stats(self):
         topics_stats = self.__get_topics_stats()
         disk_stats = self.__get_disk_stats()
