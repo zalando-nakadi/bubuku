@@ -292,7 +292,7 @@ class BukuExhibitor(object):
         while not registered:
             name = '/bubuku/actions/{}/{}'.format(broker_id, uuid.uuid4())
             try:
-                self.exhibitor.create(name, json.dumps(data), makepath=True)
+                self.exhibitor.create(name, json.dumps(data).encode('utf-8'), makepath=True)
                 _LOG.info('Action {} registered with name {}'.format(data, name))
                 registered = True
             except NodeExistsError:
