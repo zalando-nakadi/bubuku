@@ -62,6 +62,8 @@ class Controller(object):
         self.checks.append(check)
 
     def _register_running_changes(self, ip: str) -> dict:
+        if not self.changes:
+            return {}  # Do not take lock if there are no changes to register
         _LOG.debug('Taking lock for processing')
         with self.zk.lock(ip):
             _LOG.debug('Lock is taken')

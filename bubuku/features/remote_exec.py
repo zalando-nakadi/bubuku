@@ -11,7 +11,7 @@ _LOG = logging.getLogger('bubuku.features.remote_exec')
 
 class RemoteCommandExecutorCheck(Check):
     def __init__(self, zk: BukuExhibitor, broker_manager: BrokerManager):
-        super().__init__()
+        super().__init__(check_interval_s=30)
         self.zk = zk
         self.broker_manager = broker_manager
 
