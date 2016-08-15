@@ -2,6 +2,7 @@ import logging
 
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
+from bubuku.features.migrate import MigrationChange
 from bubuku.features.rebalance import RebalanceChange
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
 from bubuku.zookeeper import BukuExhibitor
@@ -25,8 +26,10 @@ class RemoteCommandExecutorCheck(Check):
             return None
         if data['name'] == 'restart':
             return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
-        if data['name'] == 'rebalance':
+        elif data['name'] == 'rebalance':
             return RebalanceChange(self.zk, self.zk.get_broker_ids())
+        elif data['name'] == 'migrate':
+            return MigrationChange(data['from'], data['to'], data['shrink'])
         return None
 
     def __str__(self):
@@ -46,3 +49,22 @@ class RemoteCommandExecutorCheck(Check):
                 zk.register_action({'name': 'rebalance'}, broker_id=broker_id)
             else:
                 zk.register_action({'name': 'rebalance'})
+
+    @staticmethod
+    def register_migration(zk: BukuExhibitor, brokers_from: list, brokers_to: list, shrink: bool):
+        if len(brokers_from) != len(brokers_to):
+            raise Exception('Brokers list {} and {} must have the same size'.format(brokers_from, brokers_to))
+        if any(b in brokers_from for b in brokers_to) or any(b in brokers_to for b in brokers_from):
+            raise Exception('Broker lists can not hold same broker ids')
+
+        if len(set(brokers_from)) != len(brokers_from):
+            raise Exception('Can not use same broker ids for source_list {}'.format(brokers_from))
+        if len(set(brokers_to)) != len(brokers_to):
+            raise Exception('Can not use same broker ids for source_list {}'.format(brokers_from))
+
+        active_ids = zk.get_broker_ids()
+        if any(b not in active_ids for b in brokers_from) or any(b not in active_ids for b in brokers_to):
+            raise Exception('Brokers dead from: {} to: {} alive:{}'.format(brokers_from, brokers_to, active_ids))
+
+        with zk.lock():
+            zk.register_action({'name': 'migrate', 'from': brokers_from, 'to': brokers_to, 'shrink': bool(shrink)})

@@ -58,5 +58,14 @@ def rebalance_partitions(broker: str):
     RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id)
 
 
+@cli.command('migrate')
+@click.option('--from', type=click.STRING, help='List of brokers to migrate from')
+@click.option('--to', type=click.STRING, help='List of brokers to migrate to')
+@click.option('--shrink', is_flag=True, default=False)
+def migrate_1(from_: str, to: str, shrink: bool):
+    _, __, zookeeper = __prepare_configs()
+    RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink)
+
+
 if __name__ == '__main__':
     cli()
