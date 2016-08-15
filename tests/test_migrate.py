@@ -47,3 +47,21 @@ class TestMigrate(unittest.TestCase):
         }
 
         assert expected == result
+
+    def test_replica_generation_no_shrink(self):
+        change = MigrationChange(MagicMock(), [1, 2, 3], [4, 5, 6], False)
+
+        assert [4, 5, 6] == change._replace_replicas([4, 5, 6])
+        assert [1, 2, 3, 4, 5, 6] == change._replace_replicas([1, 2, 3])
+        assert [1, 2, 6, 4, 5] == change._replace_replicas([1, 2, 6])
+        assert [1, 6, 2, 4, 5] == change._replace_replicas([1, 6, 2])
+        assert [1, 6, 3, 4] == change._replace_replicas([1, 6, 3])
+
+    def test_replica_generation_shrink(self):
+        change = MigrationChange(MagicMock(), [1, 2, 3], [4, 5, 6], True)
+
+        assert [4, 5, 6] == change._replace_replicas([1, 2, 3])
+        assert [4, 5, 6] == change._replace_replicas([4, 2, 6])
+        assert [8, 5, 10] == change._replace_replicas([8, 2, 10])
+        assert [4, 8, 5] == change._replace_replicas([1, 8, 2])
+        assert [4, 5, 6] == change._replace_replicas([1, 2, 3, 4, 5, 6])

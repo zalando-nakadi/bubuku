@@ -52,8 +52,11 @@ class MigrationChange(BaseRebalanceChange):
     def _replace_replicas(self, replicas):
         replacement = [self.migration[k] for k in replicas if k in self.migration]
         if self.shrink:
-            oldies = [k for k in replicas if k not in self.migration]
-            addition = [k for k in replacement if k not in oldies]
-            return oldies + addition
+            result = []
+            for v in replicas:
+                to_use = self.migration.get(v, v)
+                if to_use not in result:
+                    result.append(to_use)
+            return result
         else:
             return replicas + [k for k in replacement if k not in replicas]
