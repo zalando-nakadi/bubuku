@@ -23,7 +23,7 @@ from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
 _LOG = logging.getLogger('bubuku.main')
 
 
-def apply_features(features: dict, controller: Controller, buku_proxy: BukuExhibitor, broker: BrokerManager,
+def apply_features(api_port, features: dict, controller: Controller, buku_proxy: BukuExhibitor, broker: BrokerManager,
                    kafka_properties: KafkaProperties, amazon: Amazon) -> list:
     for feature, config in features.items():
         if feature == 'restart_on_exhibitor':
@@ -33,9 +33,8 @@ def apply_features(features: dict, controller: Controller, buku_proxy: BukuExhib
         elif feature == 'rebalance_on_brokers_change':
             controller.add_check(RebalanceOnBrokerListChange(buku_proxy, broker))
         elif feature == 'balance_data_size':
-            controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, CmdHelper(),
-                                                            kafka_properties.get_property("log.dirs").split(",")))
-            controller.add_check(CheckBrokersDiskImbalance(buku_proxy, broker, config["diff_threshold_mb"] * 1024))
+            controller.add_check(
+                CheckBrokersDiskImbalance(buku_proxy, broker, config["diff_threshold_mb"] * 1024, api_port))
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':
@@ -68,12 +67,15 @@ def main():
     _LOG.info("Creating controller")
     controller = Controller(broker, buku_proxy, amazon)
 
+    cmd_helper = CmdHelper()
     controller.add_check(CheckBrokerStopped(broker, buku_proxy))
     controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker))
-    apply_features(config.features, controller, buku_proxy, broker, kafka_properties, amazon)
+    controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, cmd_helper,
+                                                    kafka_properties.get_property("log.dirs").split(",")))
+    apply_features(config.health_port, config.features, controller, buku_proxy, broker, kafka_properties, amazon)
 
     _LOG.info('Starting health server')
-    health.start_server(config.health_port)
+    health.start_server(config.health_port, cmd_helper)
 
     _LOG.info('Starting main controller loop')
     controller.loop()

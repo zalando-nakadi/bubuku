@@ -1,4 +1,5 @@
 import logging
+
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check
 from bubuku.utils import CmdHelper
@@ -30,8 +31,8 @@ class GenerateDataSizeStatistics(Check):
 
     def __generate_stats(self):
         topics_stats = self.__get_topics_stats()
-        disk_stats = self.__get_disk_stats()
-        stats = {"disk": disk_stats, "topics": topics_stats}
+        used_kb, free_kb = self.cmd_helper.get_disk_stats()
+        stats = {"disk": {'used_kb': used_kb, 'free_kb': free_kb}, "topics": topics_stats}
         self.zk.update_disk_stats(self.broker.id_manager.get_broker_id(), stats)
 
     def __get_topics_stats(self):
@@ -65,14 +66,3 @@ class GenerateDataSizeStatistics(Check):
                 topic, partition = tuple(tp_parts)
                 return topic, partition, size_kb
         return None
-
-    def __get_disk_stats(self):
-        disks = self.cmd_helper.cmd_run("df -k | tail -n +2 |  awk '{ print $3, $4 }'").split("\n")
-        total_used = total_free = 0
-        for disk in disks:
-            parts = disk.split(" ")
-            if len(parts) == 2:
-                used, free = tuple(parts)
-                total_used += int(used)
-                total_free += int(free)
-        return {"used_kb": total_used, "free_kb": total_free}
