@@ -82,8 +82,8 @@ def show_stats():
     slim_broker_id, fat_broker_id, calculated_gap, stats_data = load_swap_data(zookeeper, config.health_port, 0)
     print('Broker list (broker_id, ip_address, free_space_kb, used_space_kb):')
     for broker_id, data in stats_data.items():
-        data_stats = data.get('disk')
-        print('{}\t{}\t{}\t{}'.format(broker_id, data.get('host'), data_stats.get('free_kb'), data.get('used_kb')))
+        disk = data.get('disk')
+        print('{}\t{}\t{}\t{}'.format(broker_id, data.get('host'), disk.get('free_kb'), disk.get('used_kb')))
     print('Calculated gap between {}(fat) and {}(slim) is {} kb'.format(fat_broker_id, slim_broker_id, calculated_gap))
 
 
