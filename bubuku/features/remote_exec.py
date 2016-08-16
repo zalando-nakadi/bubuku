@@ -5,16 +5,18 @@ from bubuku.controller import Check, Change
 from bubuku.features.migrate import MigrationChange
 from bubuku.features.rebalance import RebalanceChange
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
+from bubuku.features.swap_partitions import SwapPartitionsChange, load_swap_data
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.remote_exec')
 
 
 class RemoteCommandExecutorCheck(Check):
-    def __init__(self, zk: BukuExhibitor, broker_manager: BrokerManager):
+    def __init__(self, zk: BukuExhibitor, broker_manager: BrokerManager, api_port):
         super().__init__(check_interval_s=30)
         self.zk = zk
         self.broker_manager = broker_manager
+        self.api_port = api_port
 
     def check(self) -> Change:
         with self.zk.lock():
@@ -30,6 +32,12 @@ class RemoteCommandExecutorCheck(Check):
             return RebalanceChange(self.zk, self.zk.get_broker_ids())
         elif data['name'] == 'migrate':
             return MigrationChange(data['from'], data['to'], data['shrink'])
+        elif data['name'] == 'fatboyslim':
+            try:
+                return SwapPartitionsChange(self.zk,
+                                            lambda x: load_swap_data(x, self.api_port, int(data['threshold_kb'])))
+            except Exception as e:
+                _LOG.error('Failed to create swap change for {}'.format(data), exc_info=e)
         return None
 
     def __str__(self):
@@ -68,3 +76,10 @@ class RemoteCommandExecutorCheck(Check):
 
         with zk.lock():
             zk.register_action({'name': 'migrate', 'from': brokers_from, 'to': brokers_to, 'shrink': bool(shrink)})
+
+    @staticmethod
+    def register_fatboy_slim(zk: BukuExhibitor, threshold_kb: int):
+        if zk.is_rebalancing():
+            _LOG.warn('Rebalance is already in progress, may be it will take time for this command to start processing')
+        with zk.lock():
+            zk.register_action({'name': 'fatboyslim', 'threshold_kb': threshold_kb})
