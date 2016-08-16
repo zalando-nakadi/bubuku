@@ -69,7 +69,7 @@ def main():
 
     cmd_helper = CmdHelper()
     controller.add_check(CheckBrokerStopped(broker, buku_proxy))
-    controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker))
+    controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker, config.health_port))
     controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, cmd_helper,
                                                     kafka_properties.get_property("log.dirs").split(",")))
     apply_features(config.health_port, config.features, controller, buku_proxy, broker, kafka_properties, amazon)
