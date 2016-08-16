@@ -60,7 +60,7 @@ class TestPartitionsSwap(unittest.TestCase):
         self.zk.reallocate_partitions.assert_called_with([('t2', 2, [111, 222]), ('t2', 1, [222, 333])])
 
     def test_swap_partitions_change_not_performed(self):
-        swap_change = SwapPartitionsChange(self.zk, lambda x: load_swap_data(x, -1, 80))
+        swap_change = SwapPartitionsChange(self.zk, lambda x: load_swap_data(x, -1, 10001))
         result = swap_change.run([])
 
         # change should not trigger partitions swap as there is no possible

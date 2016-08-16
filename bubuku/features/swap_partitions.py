@@ -153,7 +153,7 @@ def _load_disk_stats(zk: BukuExhibitor, api_port: int):
     return result
 
 
-def load_swap_data(zk: BukuExhibitor, api_port: int, gap: int) -> (str, str, int):
+def load_swap_data(zk: BukuExhibitor, api_port: int, gap: int) -> (str, str, int, dict):
     """
     Finds brokers that could be used for gap of size gap
     :param zk: Bubuku exhibitor
