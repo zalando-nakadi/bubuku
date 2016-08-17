@@ -39,3 +39,8 @@ class AWSExhibitorAddressProvider(AddressListProvider):
 
     def query_from_amazon(self):
         return self.amazon.get_addresses_by_lb_name(self.zk_stack_name)
+
+
+class LocalAddressProvider(AddressListProvider):
+    def get_latest_address(self) -> (list, int):
+        return ('zookeeper',), 2181

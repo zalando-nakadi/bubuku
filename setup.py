@@ -8,6 +8,7 @@ import sys
 import setuptools
 from setuptools import setup
 from setuptools.command.test import test
+from distutils.core import Command
 
 if sys.version_info < (3, 4, 0):
     sys.stderr.write('FATAL: Bubuku needs to be run with Python 3.4+\n')
@@ -53,6 +54,36 @@ CONSOLE_SCRIPTS = [
 ]
 
 
+class DockerUpCommand(Command):
+    description = "Start up docker compose with 3 bubuku and 1 zookeeper instances"
+    user_options = [
+        ('bubuku-scale=', None, 'Specify number of bubuku instances')
+    ]
+
+    def initialize_options(self):
+        self.bubuku_scale = 2
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        os.system('docker-compose up -d --build && docker-compose scale bubuku=' + str(self.bubuku_scale))
+
+
+class DockerDownCommand(Command):
+    description = "Stop docker compose"
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        os.system('docker-compose down')
+
+
 class PyTest(test):
     def run_tests(self):
         try:
@@ -85,12 +116,13 @@ def setup_package():
         test_suite='tests',
         packages=setuptools.find_packages(exclude=['tests', 'tests.*']),
         install_requires=[req for req in read('requirements.txt').split('\\n') if req != ''],
-        cmdclass={'test': PyTest},
+        cmdclass={'test': PyTest, 'docker_up': DockerUpCommand, 'docker_down': DockerDownCommand},
         tests_require=['pytest-cov', 'pytest'],
         command_options=command_options,
-        entry_points={'console_scripts': CONSOLE_SCRIPTS},
+        entry_points={
+            'console_scripts': CONSOLE_SCRIPTS,
+        },
     )
-
 
 if __name__ == '__main__':
     setup_package()

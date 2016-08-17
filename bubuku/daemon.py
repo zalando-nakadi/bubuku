@@ -4,7 +4,6 @@
 import logging
 
 from bubuku import health
-from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
 from bubuku.config import load_config, KafkaProperties
 from bubuku.controller import Controller
@@ -18,13 +17,12 @@ from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
 from bubuku.zookeeper import BukuExhibitor, load_exhibitor_proxy
-from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
-
+from bubuku.env_provider import EnvProvider
 _LOG = logging.getLogger('bubuku.main')
 
 
 def apply_features(features: dict, controller: Controller, buku_proxy: BukuExhibitor, broker: BrokerManager,
-                   kafka_properties: KafkaProperties, amazon: Amazon) -> list:
+                   kafka_properties: KafkaProperties, env_provider: EnvProvider) -> list:
     for feature, config in features.items():
         if feature == 'restart_on_exhibitor':
             controller.add_check(CheckExhibitorAddressChanged(buku_proxy, broker))
@@ -39,7 +37,7 @@ def apply_features(features: dict, controller: Controller, buku_proxy: BukuExhib
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':
-            kafka_properties.set_property('advertised.host.name', amazon.get_own_ip())
+            kafka_properties.set_property('advertised.host.name', env_provider.get_own_ip())
         else:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
@@ -52,25 +50,24 @@ def main():
     kafka_properties = KafkaProperties(config.kafka_settings_template,
                                        '{}/config/server.properties'.format(config.kafka_dir))
 
-    amazon = Amazon()
-
-    address_provider = AWSExhibitorAddressProvider(amazon, config.zk_stack_name)
+    env_provider = EnvProvider.create_env_provider(config.development_mode)
+    address_provider = env_provider.get_address_provider(config.zk_stack_name)
 
     _LOG.info("Loading exhibitor configuration")
     buku_proxy = load_exhibitor_proxy(address_provider, config.zk_prefix)
 
     _LOG.info("Loading broker_id policy")
-    broker_id_manager = get_broker_id_policy(config.id_policy, buku_proxy, kafka_properties, amazon)
+    broker_id_manager = get_broker_id_policy(config.id_policy, buku_proxy, kafka_properties, env_provider)
 
     _LOG.info("Building broker manager")
     broker = BrokerManager(config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)
 
     _LOG.info("Creating controller")
-    controller = Controller(broker, buku_proxy, amazon)
+    controller = Controller(broker, buku_proxy, env_provider)
 
     controller.add_check(CheckBrokerStopped(broker, buku_proxy))
     controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker))
-    apply_features(config.features, controller, buku_proxy, broker, kafka_properties, amazon)
+    apply_features(config.features, controller, buku_proxy, broker, kafka_properties, env_provider)
 
     _LOG.info('Starting health server')
     health.start_server(config.health_port)

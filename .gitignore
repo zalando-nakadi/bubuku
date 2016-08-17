@@ -4,3 +4,5 @@
 .eggs/
 bubuku.egg-info/
 .cache/
+build/
+dist/

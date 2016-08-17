@@ -3,6 +3,7 @@ from time import sleep, time
 
 from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
+from bubuku.env_provider import EnvProvider
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.controller')
@@ -49,10 +50,10 @@ def _exclude_self(ip, name, running_actions):
 
 
 class Controller(object):
-    def __init__(self, broker_manager: BrokerManager, zk: BukuExhibitor, amazon: Amazon):
+    def __init__(self, broker_manager: BrokerManager, zk: BukuExhibitor, env_provider: EnvProvider):
         self.broker_manager = broker_manager
         self.zk = zk
-        self.amazon = amazon
+        self.env_provider = env_provider
         self.checks = []
         self.changes = {}  # Holds mapping from change name to array of pending changes
         self.running = True
@@ -112,7 +113,7 @@ class Controller(object):
                     self.zk.unregister_change(name)
 
     def loop(self):
-        ip = self.amazon.get_own_ip()
+        ip = self.env_provider.get_own_ip()
 
         while self.running or self.changes:
             self.make_step(ip)
