@@ -307,7 +307,11 @@ class BukuExhibitor(object):
                 pass
 
     def take_action(self, broker_id):
-        for base_path in ('/bubuku/actions/{}'.format(broker_id), '/bubuku/actions/global'):
+        paths = ['/bubuku/actions/global']
+        if broker_id:
+            paths.insert(0, '/bubuku/actions/{}'.format(broker_id))
+
+        for base_path in paths:
             for action in self.exhibitor.get_children(base_path):
                 name = '{}/{}'.format(base_path, action)
                 try:
@@ -327,9 +331,9 @@ class BukuExhibitor(object):
             for change in self.exhibitor.get_children('/bubuku/changes')
             }
 
-    def register_change(self, name, ip):
+    def register_change(self, name, provider_id):
         _LOG.info('Registering change in zk: {}'.format(name))
-        self.exhibitor.create('/bubuku/changes/{}'.format(name), ip.encode('utf-8'), ephemeral=True)
+        self.exhibitor.create('/bubuku/changes/{}'.format(name), provider_id.encode('utf-8'), ephemeral=True)
 
     def unregister_change(self, name):
         _LOG.info('Removing change {} from locks'.format(name))
