@@ -1,7 +1,6 @@
 import logging
 from time import sleep, time
 
-from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager
 from bubuku.env_provider import EnvProvider
 from bubuku.zookeeper import BukuExhibitor

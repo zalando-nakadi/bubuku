@@ -92,7 +92,9 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
 
     def is_registered(self):
         broker_id = self.detect_broker_id()
-        return self.zk.is_broker_registered(broker_id)
+        if broker_id:
+            return self.zk.is_broker_registered(broker_id)
+        return False
 
 
 def get_broker_id_policy(policy: str, zk: BukuExhibitor,
