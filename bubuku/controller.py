@@ -119,7 +119,7 @@ class Controller(object):
                     self.zk.unregister_change(name)
 
     def loop(self):
-        ip = self.env_provider.get_own_ip()
+        ip = self.env_provider.get_id()
 
         while self.running or self.changes:
             self.make_step(ip)

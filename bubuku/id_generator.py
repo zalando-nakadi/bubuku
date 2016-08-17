@@ -100,7 +100,7 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
 def get_broker_id_policy(policy: str, zk: BukuExhibitor,
                          kafka_props: KafkaProperties, env_provider: EnvProvider) -> BrokerIdGenerator:
     if policy == 'ip':
-        return BrokerIDByIp(zk, env_provider.get_own_ip(), kafka_props)
+        return BrokerIDByIp(zk, env_provider.get_id(), kafka_props)
     elif policy == 'auto':
         return BrokerIdAutoAssign(zk, kafka_props)
     else:

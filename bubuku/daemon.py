@@ -37,7 +37,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':
-            kafka_properties.set_property('advertised.host.name', env_provider.get_own_ip())
+            kafka_properties.set_property('advertised.host.name', env_provider.get_id())
         else:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
