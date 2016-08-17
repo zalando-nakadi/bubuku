@@ -60,13 +60,15 @@ def rebalance_partitions(broker: str):
 
 
 @cli.command('migrate', help='Replace one broker with another for all partitions')
-@click.option('--from', type=click.STRING, help='List of brokers to migrate from (separated with ",")')
+@click.option('--from', 'from_', type=click.STRING, help='List of brokers to migrate from (separated with ",")')
 @click.option('--to', type=click.STRING, help='List of brokers to migrate to (separated with ",")')
 @click.option('--shrink', is_flag=True, default=False, show_default=True,
               help='Whether or not to shrink replaced broker ids form partition assignment')
-def migrate_broker(from_: str, to: str, shrink: bool):
-    _, __, zookeeper = __prepare_configs()
-    RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink)
+@click.option('--broker', type=click.STRING, help='Optional broker id to execute check on')
+def migrate_broker(from_: str, to: str, shrink: bool, broker: str):
+    config, amazon, zookeeper = __prepare_configs()
+    broker_id = __get_opt_broker_id(broker, config, zookeeper, amazon) if broker else None
+    RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink, broker_id)
 
 
 @cli.command('swap_fat_slim', help='Move one partition from fat broker to slim one')

@@ -31,7 +31,7 @@ class RemoteCommandExecutorCheck(Check):
         elif data['name'] == 'rebalance':
             return RebalanceChange(self.zk, self.zk.get_broker_ids())
         elif data['name'] == 'migrate':
-            return MigrationChange(data['from'], data['to'], data['shrink'])
+            return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
         elif data['name'] == 'fatboyslim':
             try:
                 return SwapPartitionsChange(self.zk,
@@ -59,7 +59,7 @@ class RemoteCommandExecutorCheck(Check):
                 zk.register_action({'name': 'rebalance'})
 
     @staticmethod
-    def register_migration(zk: BukuExhibitor, brokers_from: list, brokers_to: list, shrink: bool):
+    def register_migration(zk: BukuExhibitor, brokers_from: list, brokers_to: list, shrink: bool, broker_id: str):
         if len(brokers_from) != len(brokers_to):
             raise Exception('Brokers list {} and {} must have the same size'.format(brokers_from, brokers_to))
         if any(b in brokers_from for b in brokers_to) or any(b in brokers_to for b in brokers_from):
@@ -74,8 +74,16 @@ class RemoteCommandExecutorCheck(Check):
         if any(b not in active_ids for b in brokers_from) or any(b not in active_ids for b in brokers_to):
             raise Exception('Brokers dead from: {} to: {} alive:{}'.format(brokers_from, brokers_to, active_ids))
 
+        if broker_id and str(broker_id) not in active_ids:
+            raise Exception('Broker id to run change on ({}) is not in active list {}'.format(
+                broker_id, active_ids))
+
         with zk.lock():
-            zk.register_action({'name': 'migrate', 'from': brokers_from, 'to': brokers_to, 'shrink': bool(shrink)})
+            action = {'name': 'migrate', 'from': brokers_from, 'to': brokers_to, 'shrink': bool(shrink)}
+            if broker_id:
+                zk.register_action(action, str(broker_id))
+            else:
+                zk.register_action(action)
 
     @staticmethod
     def register_fatboy_slim(zk: BukuExhibitor, threshold_kb: int):
