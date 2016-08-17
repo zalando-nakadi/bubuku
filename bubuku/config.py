@@ -52,7 +52,8 @@ class KafkaProperties(object):
 def load_config() -> Config:
     zk_prefix = os.getenv('ZOOKEEPER_PREFIX', '/')
 
-    features = {key: {} for key in os.getenv('BUKU_FEATURES', '').lower().split(',')}
+    features_str = os.getenv('BUKU_FEATURES', '').lower()
+    features = {key: {} for key in features_str.split(',')} if features_str else {}
     if "balance_data_size" in features:
         features["balance_data_size"]["diff_threshold_mb"] = int(os.getenv('FREE_SPACE_DIFF_THRESHOLD_MB', '50000'))
 

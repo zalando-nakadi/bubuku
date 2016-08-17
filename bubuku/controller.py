@@ -63,6 +63,8 @@ class Controller(object):
         self.checks.append(check)
 
     def _register_running_changes(self, ip: str) -> dict:
+        if not self.changes:
+            return {}  # Do not take lock if there are no changes to register
         _LOG.debug('Taking lock for processing')
         with self.zk.lock(ip):
             _LOG.debug('Lock is taken')
@@ -89,11 +91,16 @@ class Controller(object):
                 change = change_list[0]
                 _LOG.info('Executing action {} step'.format(change))
                 if self.running or change.can_run_at_exit():
-                    if not change.run(_exclude_self(ip, change.get_name(), running_changes)):
-                        _LOG.info('Action {} completed'.format(change))
+                    try:
+                        if not change.run(_exclude_self(ip, change.get_name(), running_changes)):
+                            _LOG.info('Action {} completed'.format(change))
+                            changes_to_remove.append(change.get_name())
+                        else:
+                            _LOG.info('Action {} will be executed on next loop step'.format(change))
+                    except Exception as e:
+                        _LOG.error('Failed to execute change {} because of exception, removing'.format(change),
+                                   exc_info=e)
                         changes_to_remove.append(change.get_name())
-                    else:
-                        _LOG.info('Action {} will be executed on next loop step'.format(change))
                 else:
                     _LOG.info(
                         'Action {} can not be run while stopping, forcing to stop it'.format(change))

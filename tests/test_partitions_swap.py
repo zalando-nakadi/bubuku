@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
-from bubuku.features.swap_partitions import CheckBrokersDiskImbalance, SwapPartitionsChange
+
+from bubuku.features.swap_partitions import CheckBrokersDiskImbalance, SwapPartitionsChange, load_swap_data
 
 
 class TestPartitionsSwap(unittest.TestCase):
@@ -36,31 +37,30 @@ class TestPartitionsSwap(unittest.TestCase):
         self.broker = self.__mock_broker()
 
     def test_check_requires_swap_partitions_change(self):
-        check_imbalance = CheckBrokersDiskImbalance(self.zk, self.broker, 3000)
+        check_imbalance = CheckBrokersDiskImbalance(self.zk, self.broker, 3000, -1)
         change = check_imbalance.check()
 
         assert change
-        assert change.fat_broker_id == 111
-        assert change.slim_broker_id == 333
-        assert change.gap == 10000
-        assert change.size_stats == self.test_size_stats
 
     def test_check_requires_not_swap_partitions_change(self):
-        check_imbalance = CheckBrokersDiskImbalance(self.zk, self.broker, 15000)
+        check_imbalance = CheckBrokersDiskImbalance(self.zk, self.broker, 15000, -1)
         change = check_imbalance.check()
 
         # change should not be created as the gap between brokers is less than threshold
         assert not change
 
     def test_swap_partitions_change_performed(self):
-        swap_change = SwapPartitionsChange(self.zk, 111, 333, 10000, self.test_size_stats)
+        def _swap_data_provider(zk):
+            return load_swap_data(zk, -1, 10000)
+
+        swap_change = SwapPartitionsChange(self.zk, _swap_data_provider)
         result = swap_change.run([])
 
         assert not result
         self.zk.reallocate_partitions.assert_called_with([('t2', 2, [111, 222]), ('t2', 1, [222, 333])])
 
     def test_swap_partitions_change_not_performed(self):
-        swap_change = SwapPartitionsChange(self.zk, 111, 333, 80, self.test_size_stats)
+        swap_change = SwapPartitionsChange(self.zk, lambda x: load_swap_data(x, -1, 10001))
         result = swap_change.run([])
 
         # change should not trigger partitions swap as there is no possible
@@ -71,7 +71,7 @@ class TestPartitionsSwap(unittest.TestCase):
     def test_swap_partitions_change_postponed(self):
         self.zk.reallocate_partitions.return_value = False
 
-        swap_change = SwapPartitionsChange(self.zk, 111, 333, 10000, self.test_size_stats)
+        swap_change = SwapPartitionsChange(self.zk, lambda x: load_swap_data(x, -1, 10000))
         result = swap_change.run([])
 
         # if the write to ZK wasn't possible for some reason, the change should
@@ -82,7 +82,7 @@ class TestPartitionsSwap(unittest.TestCase):
     def test_swap_partitions_change_postponed_when_rebalancing(self):
         self.zk.is_rebalancing.return_value = True
 
-        swap_change = SwapPartitionsChange(self.zk, None, None, None, None)
+        swap_change = SwapPartitionsChange(self.zk, None)
         result = swap_change.run([])
 
         # if there was a rebalance node in ZK - the change should be postponed
@@ -90,7 +90,7 @@ class TestPartitionsSwap(unittest.TestCase):
         assert not swap_change.to_move
 
     def test_swap_partitions_change_performed_existing(self):
-        swap_change = SwapPartitionsChange(self.zk, None, None, None, None)
+        swap_change = SwapPartitionsChange(self.zk, None)
         dummy_move_list = ["dummy"]
         swap_change.to_move = ["dummy"]
         result = swap_change.run([])
