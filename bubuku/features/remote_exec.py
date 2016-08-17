@@ -26,18 +26,20 @@ class RemoteCommandExecutorCheck(Check):
         if 'name' not in data:
             _LOG.error('Action name can not be restored from {}, skipping'.format(data))
             return None
-        if data['name'] == 'restart':
-            return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
-        elif data['name'] == 'rebalance':
-            return RebalanceChange(self.zk, self.zk.get_broker_ids())
-        elif data['name'] == 'migrate':
-            return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
-        elif data['name'] == 'fatboyslim':
-            try:
+        try:
+            if data['name'] == 'restart':
+                return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
+            elif data['name'] == 'rebalance':
+                return RebalanceChange(self.zk, self.zk.get_broker_ids())
+            elif data['name'] == 'migrate':
+                return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
+            elif data['name'] == 'fatboyslim':
                 return SwapPartitionsChange(self.zk,
                                             lambda x: load_swap_data(x, self.api_port, int(data['threshold_kb'])))
-            except Exception as e:
-                _LOG.error('Failed to create swap change for {}'.format(data), exc_info=e)
+            else:
+                _LOG.error('Action {} not supported'.format(data))
+        except Exception as e:
+            _LOG.error('Failed to create action from {}'.format(data), exc_info=e)
         return None
 
     def __str__(self):

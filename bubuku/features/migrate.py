@@ -18,7 +18,7 @@ class MigrationChange(BaseRebalanceChange):
             return True
         if self.zk.is_rebalancing():
             return True
-        active_ids = self.zk.get_broker_ids()
+        active_ids = [int(k) for k in self.zk.get_broker_ids()]
         if any(b not in active_ids for b in self.migration.keys()):
             _LOG.error('Source brokers {} are not in active list {}. Stopping.'.format(
                 self.migration.keys(), active_ids))
