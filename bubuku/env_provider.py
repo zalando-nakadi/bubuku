@@ -52,7 +52,7 @@ class AmazonEnvProvider(EnvProvider):
         return doc['privateIp'] if doc else '127.0.0.1'
 
     def get_address_provider(self, config: Config):
-        return AWSExhibitorAddressProvider(self, config.zk_stack_name)
+        return AWSExhibitorAddressProvider(config.zk_stack_name)
 
 
 class LocalEnvProvider(EnvProvider):

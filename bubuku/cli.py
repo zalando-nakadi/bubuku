@@ -65,8 +65,8 @@ def rebalance_partitions(broker: str):
               help='Whether or not to shrink replaced broker ids form partition assignment')
 @click.option('--broker', type=click.STRING, help='Optional broker id to execute check on')
 def migrate_broker(from_: str, to: str, shrink: bool, broker: str):
-    config, amazon, zookeeper = __prepare_configs()
-    broker_id = __get_opt_broker_id(broker, config, zookeeper, amazon) if broker else None
+    config, env_provider, zookeeper = __prepare_configs()
+    broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
     RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink, broker_id)
 
 
@@ -79,7 +79,7 @@ def swap_partitions(threshold: int):
 
 @cli.command('stats', help='Display statistics about brokers')
 def show_stats():
-    config, amazon, zookeeper = __prepare_configs()
+    config, env_provider, zookeeper = __prepare_configs()
     slim_broker_id, fat_broker_id, calculated_gap, stats_data = load_swap_data(zookeeper, config.health_port, 0)
     print('Broker list (broker_id, ip_address, free_space_kb, used_space_kb):')
     for broker_id, data in stats_data.items():

@@ -25,6 +25,6 @@ ADD log4j.properties ${KAFKA_DIR}/config/
 RUN mkdir /bubuku/
 WORKDIR /bubuku/
 ADD ./ /bubuku/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 CMD python3 setup.py develop && bubuku
