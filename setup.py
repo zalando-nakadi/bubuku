@@ -61,7 +61,7 @@ class DockerUpCommand(Command):
     ]
 
     def initialize_options(self):
-        self.bubuku_scale = 2
+        self.bubuku_scale = 3
 
     def finalize_options(self):
         pass
