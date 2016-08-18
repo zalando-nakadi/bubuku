@@ -3,9 +3,11 @@ import logging
 
 import requests
 
+from bubuku.id_generator import BrokerIDByIp, BrokerIdAutoAssign
+from bubuku.zookeeper import BukuExhibitor
 from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
 from bubuku.zookeeper.exhibior import LocalAddressProvider
-from bubuku.config import Config
+from bubuku.config import Config, KafkaProperties
 import uuid
 
 _LOG = logging.getLogger('bubuku.amazon')
@@ -18,17 +20,19 @@ class EnvProvider(object):
     def get_address_provider(self, config: Config):
         raise NotImplementedError('Not implemented')
 
+    def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
+        raise NotImplementedError('Not implemented')
+
     @staticmethod
-    def create_env_provider(dev_mode: bool):
-        return LocalEnvProvider() if dev_mode else AmazonEnvProvider()
+    def create_env_provider(config: Config):
+        return LocalEnvProvider() if config.dog_food else AmazonEnvProvider(config)
 
 
 class AmazonEnvProvider(EnvProvider):
-    NONE = object()
-
-    def __init__(self):
+    def __init__(self, config: Config):
         self.document = None
         self.aws_addr = '169.254.169.254'
+        self.config = config
 
     def _get_document(self) -> dict:
         if not self.document:
@@ -40,8 +44,7 @@ class AmazonEnvProvider(EnvProvider):
                     json.dumps(self.document, indent=2)))
             except Exception as ex:
                 _LOG.warn('Failed to download AWS document', exc_info=ex)
-                self.document = AmazonEnvProvider.NONE
-        return self.document if self.document != AmazonEnvProvider.NONE else None
+        return self.document
 
     def get_aws_region(self) -> str:
         doc = self._get_document()
@@ -51,8 +54,11 @@ class AmazonEnvProvider(EnvProvider):
         doc = self._get_document()
         return doc['privateIp'] if doc else '127.0.0.1'
 
-    def get_address_provider(self, config: Config):
-        return AWSExhibitorAddressProvider(config.zk_stack_name)
+    def get_address_provider(self):
+        return AWSExhibitorAddressProvider(self.config.zk_stack_name, self.get_aws_region())
+
+    def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
+        return BrokerIDByIp(zk, self.get_id(), kafka_props)
 
 
 class LocalEnvProvider(EnvProvider):
@@ -61,6 +67,9 @@ class LocalEnvProvider(EnvProvider):
     def get_id(self) -> str:
         return self.unique_id
 
-    def get_address_provider(self, config: Config):
+    def get_address_provider(self):
         return LocalAddressProvider()
+
+    def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
+        return BrokerIdAutoAssign(zk, kafka_props)
 

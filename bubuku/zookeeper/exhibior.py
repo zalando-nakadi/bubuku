@@ -11,8 +11,9 @@ _LOG = logging.getLogger('bubuku.zookeeper.exhibitor')
 
 
 class AWSExhibitorAddressProvider(AddressListProvider):
-    def __init__(self, zk_stack_name: str):
+    def __init__(self, zk_stack_name: str, region: str):
         self.zk_stack_name = zk_stack_name
+        self.region = region
         self.exhibitors = self.get_addresses_by_lb_name()
 
     def get_latest_address(self) -> (list, int):
@@ -38,13 +39,12 @@ class AWSExhibitorAddressProvider(AddressListProvider):
 
     def get_addresses_by_lb_name(self) -> list:
         lb_name = self.zk_stack_name
-        region = self.get_aws_region()
 
         private_ips = []
 
-        if region is not None:
-            elb = boto3.client('elb', region_name=region)
-            ec2 = boto3.client('ec2', region_name=region)
+        if self.region is not None:
+            elb = boto3.client('elb', region_name=self.region)
+            ec2 = boto3.client('ec2', region_name=self.region)
 
             response = elb.describe_instance_health(LoadBalancerName=lb_name)
 

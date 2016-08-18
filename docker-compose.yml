@@ -6,8 +6,7 @@ services:
     depends_on:
       - zookeeper
     environment:
-      BROKER_ID_POLICY: "auto"
-      DEVELOPMENT_MODE: "True"
+      DOG_FOOD: "True"
       HEALTH_PORT: "8080"
       BUKU_FEATURES: "restart_on_exhibitor,rebalance_on_start,graceful_terminate,use_ip_address"
 

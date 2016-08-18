@@ -6,7 +6,6 @@ import re
 from time import sleep, time
 
 from bubuku.config import KafkaProperties
-from bubuku.env_provider import EnvProvider
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.id_generator')
@@ -95,13 +94,3 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
         if broker_id:
             return self.zk.is_broker_registered(broker_id)
         return False
-
-
-def get_broker_id_policy(policy: str, zk: BukuExhibitor,
-                         kafka_props: KafkaProperties, env_provider: EnvProvider) -> BrokerIdGenerator:
-    if policy == 'ip':
-        return BrokerIDByIp(zk, env_provider.get_id(), kafka_props)
-    elif policy == 'auto':
-        return BrokerIdAutoAssign(zk, kafka_props)
-    else:
-        raise Exception('Unsupported id generator policy')

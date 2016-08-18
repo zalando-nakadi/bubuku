@@ -27,8 +27,8 @@ def __get_opt_broker_id(broker_id: str, config: Config, zk: BukuExhibitor, env_p
 def __prepare_configs():
     config = load_config()
     _LOG.info('Using config: {}'.format(config))
-    env_provider = EnvProvider.create_env_provider(config.development_mode)
-    zookeeper = load_exhibitor_proxy(env_provider.get_address_provider(config), config.zk_prefix)
+    env_provider = EnvProvider.create_env_provider(config)
+    zookeeper = load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix)
     return config, env_provider, zookeeper
 
 

@@ -14,7 +14,6 @@ from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.swap_partitions import CheckBrokersDiskImbalance
 from bubuku.features.terminate import register_terminate_on_interrupt
-from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
 from bubuku.zookeeper import BukuExhibitor, load_exhibitor_proxy
 from bubuku.env_provider import EnvProvider
@@ -50,14 +49,14 @@ def main():
     kafka_properties = KafkaProperties(config.kafka_settings_template,
                                        '{}/config/server.properties'.format(config.kafka_dir))
 
-    env_provider = EnvProvider.create_env_provider(config.development_mode)
-    address_provider = env_provider.get_address_provider(config.zk_stack_name)
+    env_provider = EnvProvider.create_env_provider(config)
+    address_provider = env_provider.get_address_provider()
 
     _LOG.info("Loading exhibitor configuration")
     buku_proxy = load_exhibitor_proxy(address_provider, config.zk_prefix)
 
     _LOG.info("Loading broker_id policy")
-    broker_id_manager = get_broker_id_policy(config.id_policy, buku_proxy, kafka_properties, env_provider)
+    broker_id_manager = env_provider.create_broker_id_manager(buku_proxy, kafka_properties)
 
     _LOG.info("Building broker manager")
     broker = BrokerManager(config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)
