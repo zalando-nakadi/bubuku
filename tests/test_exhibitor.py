@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
+from bubuku.zookeeper.exhibitor import AWSExhibitorAddressProvider
 
 
 def test_get_latest_address():

@@ -5,8 +5,8 @@ import requests
 
 from bubuku.id_generator import BrokerIDByIp, BrokerIdAutoAssign
 from bubuku.zookeeper import BukuExhibitor
-from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
-from bubuku.zookeeper.exhibior import LocalAddressProvider
+from bubuku.zookeeper.exhibitor import AWSExhibitorAddressProvider
+from bubuku.zookeeper.exhibitor import LocalAddressProvider
 from bubuku.config import Config, KafkaProperties
 import uuid
 
