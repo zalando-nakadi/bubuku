@@ -32,7 +32,7 @@ class BrokerManager(object):
         self.exhibitor = exhibitor
         self.kafka_properties = kafka_properties
         self.process_holder = process_holder
-        self.wait_timeout = 5 * 60
+        self.wait_timeout = 15 * 60
 
     def is_running_and_registered(self):
         if not self.process_holder.get():
