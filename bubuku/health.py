@@ -36,7 +36,3 @@ def start_server(port, cmd_helper: CmdHelper) -> threading.Thread:
     _LOG.info('Starting health server on port {}'.format(port))
     t.start()
     return t
-
-
-if __name__ == '__main__':
-    start_server(8080, CmdHelper())
