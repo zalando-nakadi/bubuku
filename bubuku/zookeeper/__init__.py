@@ -99,6 +99,10 @@ class _ZookeeperProxy(object):
                 self.client.set_hosts(self.conn_str)
             self.client.start()
 
+    def terminate(self):
+        if self.client:
+            self.client.stop()
+
     def session_listener(self, state):
         pass
 
@@ -160,6 +164,14 @@ class BukuExhibitor(object):
                 self.exhibitor.create('/bubuku/{}'.format(node), makepath=True)
             except NodeExistsError:
                 pass
+
+    def __enter__(self):
+        _LOG.info('Entered safe exhibitor space')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        _LOG.info()
+        self.exhibitor.terminate()
 
     def is_broker_registered(self, broker_id):
         try:

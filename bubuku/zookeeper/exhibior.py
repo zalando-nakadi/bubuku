@@ -14,7 +14,7 @@ class AWSExhibitorAddressProvider(AddressListProvider):
     def __init__(self, amazon: Amazon, zk_stack_name: str):
         self.amazon = amazon
         self.zk_stack_name = zk_stack_name
-        self.exhibitors = self.query_from_amazon()
+        self.exhibitors = []
 
     def get_latest_address(self) -> (list, int):
         json_ = self._query_exhibitors(self.exhibitors)
@@ -27,6 +27,8 @@ class AWSExhibitorAddressProvider(AddressListProvider):
         return None
 
     def _query_exhibitors(self, exhibitors):
+        if not exhibitors:
+            return None
         random.shuffle(exhibitors)
         for host in exhibitors:
             url = 'http://{}:{}{}'.format(host, 8181, '/exhibitor/v1/cluster/list')

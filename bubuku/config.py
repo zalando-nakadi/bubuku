@@ -12,7 +12,7 @@ class KafkaProperties(object):
     def __init__(self, template: str, kafka_settings: str):
         self.lines = []
         self.settings_file = kafka_settings
-        _LOG.info('Loading template properties from {}'.format(self.settings_file))
+        _LOG.info('Loading template properties from {}'.format(template))
         with open(template, 'r') as f:
             for l in f.readlines():
                 self.lines.append(_make_clean_line(l))
@@ -72,5 +72,7 @@ def _make_clean_line(l: str) -> str:
     result = l.strip()
     if result.startswith('#') or not result:
         return result
+    if '=' not in result:
+        return ''
     n, v = result.split('=', 1)
     return '{}={}'.format(n.strip(), v)

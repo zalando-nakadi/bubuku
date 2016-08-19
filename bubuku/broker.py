@@ -13,18 +13,29 @@ class LeaderElectionInProgress(Exception):
     pass
 
 
+class KafkaProcessHolder(object):
+    def __init__(self):
+        self.process = None
+
+    def get(self):
+        return self.process
+
+    def set(self, process):
+        self.process = process
+
+
 class BrokerManager(object):
-    def __init__(self, kafka_dir: str, exhibitor: BukuExhibitor, id_manager: BrokerIdGenerator,
-                 kafka_properties: KafkaProperties):
+    def __init__(self, process_holder: KafkaProcessHolder, kafka_dir: str, exhibitor: BukuExhibitor,
+                 id_manager: BrokerIdGenerator, kafka_properties: KafkaProperties):
         self.kafka_dir = kafka_dir
         self.id_manager = id_manager
         self.exhibitor = exhibitor
         self.kafka_properties = kafka_properties
-        self.process = None
+        self.process_holder = process_holder
         self.wait_timeout = 5 * 60
 
     def is_running_and_registered(self):
-        if not self.process:
+        if not self.process_holder.get():
             return False
         return self.id_manager.is_registered()
 
@@ -47,14 +58,14 @@ class BrokerManager(object):
         return not self._is_leadership_transferred(dead_broker_ids=[broker_id])
 
     def _terminate_process(self):
-        if self.process is not None:
+        if self.process_holder.get() is not None:
             try:
-                self.process.terminate()
-                self.process.wait()
+                self.process_holder.get().terminate()
+                self.process_holder.get().wait()
             except Exception as e:
                 _LOG.error('Failed to wait for termination of kafka process', exc_info=e)
             finally:
-                self.process = None
+                self.process_holder.set(None)
 
     def _wait_for_zk_absence(self):
         try:
@@ -71,7 +82,7 @@ class BrokerManager(object):
         :param zookeeper_address: Address to use for kafka
         :raise LeaderElectionInProgress: raised when broker can not be started because leader election is in progress
         """
-        if not self.process:
+        if not self.process_holder.get():
             if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_broker_ids()):
                 raise LeaderElectionInProgress()
 
@@ -88,7 +99,7 @@ class BrokerManager(object):
             self.kafka_properties.dump()
 
             _LOG.info('Staring kafka process')
-            self.process = self._open_process()
+            self.process_holder.set(self._open_process())
 
             _LOG.info('Waiting for kafka to start up with timeout {} seconds'.format(self.wait_timeout))
             if not self.id_manager.wait_for_broker_id_presence(self.wait_timeout):
