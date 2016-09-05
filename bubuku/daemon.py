@@ -4,14 +4,14 @@
 import logging
 
 from bubuku import health
-from bubuku.broker import BrokerManager
+from bubuku.broker import BrokerManager, KafkaProcessHolder
 from bubuku.config import load_config, KafkaProperties
 from bubuku.controller import Controller
 from bubuku.features.data_size_stats import GenerateDataSizeStatistics
 from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
 from bubuku.features.restart_if_dead import CheckBrokerStopped
-from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
+from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged, RestartBrokerChange
 from bubuku.features.swap_partitions import CheckBrokersDiskImbalance
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.utils import CmdHelper
@@ -41,10 +41,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
 
-def main():
-    logging.basicConfig(level=getattr(logging, 'INFO', None))
-
-    config = load_config()
+def run_daemon_loop(config: Config, process_holder: KafkaProcessHolder, cmd_helper: CmdHelper, restart_on_init: bool):
     _LOG.info("Using configuration: {}".format(config))
     kafka_properties = KafkaProperties(config.kafka_settings_template,
                                        '{}/config/server.properties'.format(config.kafka_dir))
@@ -53,29 +50,45 @@ def main():
     address_provider = env_provider.get_address_provider()
 
     _LOG.info("Loading exhibitor configuration")
-    buku_proxy = load_exhibitor_proxy(address_provider, config.zk_prefix)
+    with load_exhibitor_proxy(address_provider, config.zk_prefix) as buku_proxy:
+        _LOG.info("Loading broker_id policy")
+        broker_id_manager = env_provider.create_broker_id_manager(buku_proxy, kafka_properties)
 
-    _LOG.info("Loading broker_id policy")
-    broker_id_manager = env_provider.create_broker_id_manager(buku_proxy, kafka_properties)
+        _LOG.info("Building broker manager")
+        broker = BrokerManager(process_holder, config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)
 
-    _LOG.info("Building broker manager")
-    broker = BrokerManager(config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)
+        _LOG.info("Creating controller")
+        controller = Controller(broker, buku_proxy, env_provider)
 
-    _LOG.info("Creating controller")
-    controller = Controller(broker, buku_proxy, env_provider)
+        controller.add_check(CheckBrokerStopped(broker, buku_proxy))
+        controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker, config.health_port))
+        controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, cmd_helper,
+                                                        kafka_properties.get_property("log.dirs").split(",")))
+        apply_features(config.health_port, config.features, controller, buku_proxy, broker, kafka_properties, env_provider)
 
-    cmd_helper = CmdHelper()
-    controller.add_check(CheckBrokerStopped(broker, buku_proxy))
-    controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker, config.health_port))
-    controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, cmd_helper,
-                                                    kafka_properties.get_property("log.dirs").split(",")))
-    apply_features(config.health_port, config.features, controller, buku_proxy, broker, kafka_properties, env_provider)
+        _LOG.info('Starting main controller loop')
+        controller.loop(RestartBrokerChange(buku_proxy, broker, lambda: False) if restart_on_init else None)
 
+
+def main():
+    logging.basicConfig(level=getattr(logging, 'INFO', None))
+
+    config = load_config()
+    _LOG.info("Using configuration: {}".format(config))
+    process_holder = KafkaProcessHolder()
     _LOG.info('Starting health server')
+    cmd_helper = CmdHelper()
     health.start_server(config.health_port, cmd_helper)
-
-    _LOG.info('Starting main controller loop')
-    controller.loop()
+    restart_on_init = False
+    while True:
+        try:
+            run_daemon_loop(config, process_holder, cmd_helper, restart_on_init)
+            break
+        except:
+            _LOG.error("WOW! Almost died! Will try to restart from the begin. "
+                       "After initialization will be complete, will try to restart", exc_info=True)
+            if process_holder.get():
+                restart_on_init = True
 
 
 if __name__ == '__main__':

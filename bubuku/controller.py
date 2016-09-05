@@ -118,9 +118,10 @@ class Controller(object):
                 for name in changes_to_remove:
                     self.zk.unregister_change(name)
 
-    def loop(self):
-        provider_id = self.env_provider.get_id()
-
+    def loop(self, change_on_init=None):
+        ip = self.env_provider.get_id()
+        if change_on_init:
+            self._add_change_to_queue(change_on_init)
         while self.running or self.changes:
             self.make_step(provider_id)
 

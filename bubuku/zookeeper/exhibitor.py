@@ -23,10 +23,12 @@ class AWSExhibitorAddressProvider(AddressListProvider):
             json_ = self._query_exhibitors(self.exhibitors)
         if isinstance(json_, dict) and 'servers' in json_ and 'port' in json_:
             self.exhibitors = json_['servers']
-            return json_['servers'], int(json_['port'])
+            return sorted(json_['servers']), int(json_['port'])
         return None
 
     def _query_exhibitors(self, exhibitors):
+        if not exhibitors:
+            return None
         random.shuffle(exhibitors)
         for host in exhibitors:
             url = 'http://{}:{}{}'.format(host, 8181, '/exhibitor/v1/cluster/list')
@@ -62,3 +64,4 @@ class AWSExhibitorAddressProvider(AddressListProvider):
 class LocalAddressProvider(AddressListProvider):
     def get_latest_address(self) -> (list, int):
         return ('zookeeper',), 2181
+
