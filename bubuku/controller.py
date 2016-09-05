@@ -119,7 +119,7 @@ class Controller(object):
                     self.zk.unregister_change(name)
 
     def loop(self, change_on_init=None):
-        ip = self.env_provider.get_id()
+        provider_id = self.env_provider.get_id()
         if change_on_init:
             self._add_change_to_queue(change_on_init)
         while self.running or self.changes:

@@ -14,7 +14,7 @@ class AWSExhibitorAddressProvider(AddressListProvider):
     def __init__(self, zk_stack_name: str, region: str):
         self.zk_stack_name = zk_stack_name
         self.region = region
-        self.exhibitors = self.get_addresses_by_lb_name()
+        self.exhibitors = []
 
     def get_latest_address(self) -> (list, int):
         json_ = self._query_exhibitors(self.exhibitors)
@@ -64,4 +64,3 @@ class AWSExhibitorAddressProvider(AddressListProvider):
 class LocalAddressProvider(AddressListProvider):
     def get_latest_address(self) -> (list, int):
         return ('zookeeper',), 2181
-

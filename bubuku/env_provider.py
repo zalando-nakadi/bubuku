@@ -17,7 +17,7 @@ class EnvProvider(object):
     def get_id(self) -> str:
         raise NotImplementedError('Not implemented')
 
-    def get_address_provider(self, config: Config):
+    def get_address_provider(self):
         raise NotImplementedError('Not implemented')
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
@@ -25,7 +25,12 @@ class EnvProvider(object):
 
     @staticmethod
     def create_env_provider(config: Config):
-        return LocalEnvProvider() if config.dog_food else AmazonEnvProvider(config)
+        if config.mode == 'amazon':
+            return AmazonEnvProvider(config)
+        elif config.mode == 'local':
+            return LocalEnvProvider()
+        else:
+            raise NotImplementedError('Configuration mode "{}" is not supported'.format(config.mode))
 
 
 class AmazonEnvProvider(EnvProvider):

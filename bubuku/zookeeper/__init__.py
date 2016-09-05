@@ -170,7 +170,7 @@ class BukuExhibitor(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        _LOG.info()
+        _LOG.info('Exiting safe exhibitor space')
         self.exhibitor.terminate()
 
     def is_broker_registered(self, broker_id):
