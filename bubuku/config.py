@@ -5,7 +5,7 @@ from collections import namedtuple
 _LOG = logging.getLogger('bubuku.properties')
 
 Config = namedtuple('Config', ('kafka_dir', 'kafka_settings_template', 'zk_stack_name',
-                               'zk_prefix', 'features', 'health_port', 'mode'))
+                               'zk_prefix', 'features', 'health_port', 'mode', 'timeout'))
 
 
 class KafkaProperties(object):
@@ -49,6 +49,10 @@ class KafkaProperties(object):
                 f.write('{}\n'.format(l))
 
 
+def _parse_timeout(value: str):
+    return {a: b for a, b in [tuple(x.split('=', 1)) for x in value.split(':')]}
+
+
 def load_config() -> Config:
     zk_prefix = os.getenv('ZOOKEEPER_PREFIX', '/')
 
@@ -64,7 +68,8 @@ def load_config() -> Config:
         zk_prefix=zk_prefix if zk_prefix.startswith('/') or not zk_prefix else '/{}'.format(zk_prefix),
         features=features,
         health_port=int(os.getenv('HEALTH_PORT', '8888')),
-        mode=str(os.getenv('BUBUKU_MODE', 'amazon')).lower()
+        mode=str(os.getenv('BUBUKU_MODE', 'amazon')).lower(),
+        timeout=_parse_timeout(os.getenv('STARTUP_TIMEOUT', 'type=linear:initial=300:step=60'))
     )
 
 

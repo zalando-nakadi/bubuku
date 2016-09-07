@@ -1,7 +1,7 @@
 import os
 from tempfile import mkstemp
 
-from bubuku.config import KafkaProperties, load_config
+from bubuku.config import KafkaProperties, load_config, _parse_timeout
 
 __PROPS = """
 log.dirs=/data/kafka-logs
@@ -109,3 +109,7 @@ def test_zk_prefix_replacement():
 
     os.environ['ZOOKEEPER_PREFIX'] = '/test'
     assert load_config().zk_prefix == '/test'
+
+
+def test_parse_timeout():
+    assert {'type': 'linear', 'initial': '300', 'step': '60'} == _parse_timeout('type=linear:initial=300:step=60')

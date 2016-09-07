@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from bubuku.broker import BrokerManager, LeaderElectionInProgress, KafkaProcessHolder
+from bubuku.broker import BrokerManager, LeaderElectionInProgress, KafkaProcessHolder, StartupTimeout
 from test_config import build_test_properties
 
 zk_fake_host = 'zk_host:8181/path'
@@ -30,7 +30,8 @@ def test_broker_checks_death():
     kafka_props = build_test_properties()
     kafka_props.set_property('unclean.leader.election.enable', 'true')
 
-    manager = FakeProcessManager(KafkaProcessHolder(), 'kafka_dir', exhibitor, id_manager, kafka_props)
+    manager = FakeProcessManager(KafkaProcessHolder(), 'kafka_dir', exhibitor, id_manager, kafka_props,
+                                 StartupTimeout.build({'type': 'linear'}))
 
     assert not manager.has_leadership()
 
@@ -48,7 +49,8 @@ def __prepare_for_start_fail(broker_ids, leader, isr):
     id_manager.get_broker_id = lambda: '1'
     kafka_props = build_test_properties()
 
-    broker = FakeProcessManager(KafkaProcessHolder(), 'kafka_dir', exhibitor, id_manager, kafka_props)
+    broker = FakeProcessManager(KafkaProcessHolder(), 'kafka_dir', exhibitor, id_manager, kafka_props,
+                                StartupTimeout.build({'type': 'linear'}))
 
     kafka_props.set_property('unclean.leader.election.enable', 'false')
     return kafka_props, broker
@@ -98,6 +100,7 @@ def test_broker_start_success_unclean_2():
     kafka_props.set_property('unclean.leader.election.enable', 'true')
     # suppose that broker is free to start
     broker.start_kafka_process(zk_fake_host)
+
 
 def test_broker_start_fail_no_zk_conn():
     kafka_props, broker = __prepare_for_start_fail(['1', '2'], 3, [1, 5])
