@@ -20,7 +20,7 @@ class RemoteCommandExecutorCheck(Check):
 
     def check(self) -> Change:
         with self.zk.lock():
-            data = self.zk.take_action(self.broker_manager.id_manager.get_broker_id())
+            data = self.zk.take_action(self.broker_manager.id_manager.detect_broker_id())
         if not data:
             return None
         if 'name' not in data:

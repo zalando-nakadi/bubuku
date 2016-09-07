@@ -84,7 +84,7 @@ def test_use_ip_address():
     assert props.get_property('advertised.host.name') is None
 
     amazon = MagicMock()
-    amazon.get_own_ip = MagicMock(return_value='172.31.146.57')
+    amazon.get_id = MagicMock(return_value='172.31.146.57')
 
     apply_features(-1, {'use_ip_address': {}}, None, None, None, props, amazon)
 

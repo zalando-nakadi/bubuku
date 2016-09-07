@@ -4,7 +4,6 @@
 import logging
 
 from bubuku import health
-from bubuku.amazon import Amazon
 from bubuku.broker import BrokerManager, KafkaProcessHolder
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.controller import Controller
@@ -15,16 +14,15 @@ from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged, RestartBrokerChange
 from bubuku.features.swap_partitions import CheckBrokersDiskImbalance
 from bubuku.features.terminate import register_terminate_on_interrupt
-from bubuku.id_generator import get_broker_id_policy
 from bubuku.utils import CmdHelper
 from bubuku.zookeeper import BukuExhibitor, load_exhibitor_proxy
-from bubuku.zookeeper.exhibior import AWSExhibitorAddressProvider
+from bubuku.env_provider import EnvProvider
 
 _LOG = logging.getLogger('bubuku.main')
 
 
 def apply_features(api_port, features: dict, controller: Controller, buku_proxy: BukuExhibitor, broker: BrokerManager,
-                   kafka_properties: KafkaProperties, amazon: Amazon) -> list:
+                   kafka_properties: KafkaProperties, env_provider: EnvProvider) -> list:
     for feature, config in features.items():
         if feature == 'restart_on_exhibitor':
             controller.add_check(CheckExhibitorAddressChanged(buku_proxy, broker))
@@ -38,38 +36,38 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
         elif feature == 'graceful_terminate':
             register_terminate_on_interrupt(controller, broker)
         elif feature == 'use_ip_address':
-            kafka_properties.set_property('advertised.host.name', amazon.get_own_ip())
+            kafka_properties.set_property('advertised.host.name', env_provider.get_id())
         else:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
 
 def run_daemon_loop(config: Config, process_holder: KafkaProcessHolder, cmd_helper: CmdHelper, restart_on_init: bool):
     _LOG.info("Using configuration: {}".format(config))
-    kafka_properties = KafkaProperties(config.kafka_settings_template,
+    kafka_props = KafkaProperties(config.kafka_settings_template,
                                        '{}/config/server.properties'.format(config.kafka_dir))
-    amazon = Amazon()
 
-    address_provider = AWSExhibitorAddressProvider(amazon, config.zk_stack_name)
+    env_provider = EnvProvider.create_env_provider(config)
+    address_provider = env_provider.get_address_provider()
 
     _LOG.info("Loading exhibitor configuration")
-    with load_exhibitor_proxy(address_provider, config.zk_prefix) as buku_proxy:
+    with load_exhibitor_proxy(address_provider, config.zk_prefix) as zookeeper:
         _LOG.info("Loading broker_id policy")
-        broker_id_manager = get_broker_id_policy(config.id_policy, buku_proxy, kafka_properties, amazon)
+        broker_id_manager = env_provider.create_broker_id_manager(zookeeper, kafka_props)
 
         _LOG.info("Building broker manager")
-        broker = BrokerManager(process_holder, config.kafka_dir, buku_proxy, broker_id_manager, kafka_properties)
+        broker = BrokerManager(process_holder, config.kafka_dir, zookeeper, broker_id_manager, kafka_props)
 
         _LOG.info("Creating controller")
-        controller = Controller(broker, buku_proxy, amazon)
+        controller = Controller(broker, zookeeper, env_provider)
 
-        controller.add_check(CheckBrokerStopped(broker, buku_proxy))
-        controller.add_check(RemoteCommandExecutorCheck(buku_proxy, broker, config.health_port))
-        controller.add_check(GenerateDataSizeStatistics(buku_proxy, broker, cmd_helper,
-                                                        kafka_properties.get_property("log.dirs").split(",")))
-        apply_features(config.health_port, config.features, controller, buku_proxy, broker, kafka_properties, amazon)
+        controller.add_check(CheckBrokerStopped(broker, zookeeper))
+        controller.add_check(RemoteCommandExecutorCheck(zookeeper, broker, config.health_port))
+        controller.add_check(GenerateDataSizeStatistics(zookeeper, broker, cmd_helper,
+                                                        kafka_props.get_property("log.dirs").split(",")))
+        apply_features(config.health_port, config.features, controller, zookeeper, broker, kafka_props, env_provider)
 
         _LOG.info('Starting main controller loop')
-        controller.loop(RestartBrokerChange(buku_proxy, broker, lambda: False) if restart_on_init else None)
+        controller.loop(RestartBrokerChange(zookeeper, broker, lambda: False) if restart_on_init else None)
 
 
 def main():

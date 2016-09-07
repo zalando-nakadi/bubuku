@@ -5,7 +5,6 @@ import os
 import re
 from time import sleep, time
 
-from bubuku.amazon import Amazon
 from bubuku.config import KafkaProperties
 from bubuku.zookeeper import BukuExhibitor
 
@@ -14,6 +13,9 @@ _LOG = logging.getLogger('bubuku.id_generator')
 
 class BrokerIdGenerator(object):
     def get_broker_id(self) -> str:
+        raise NotImplementedError('Not implemented')
+
+    def detect_broker_id(self):
         raise NotImplementedError('Not implemented')
 
     def wait_for_broker_id_absence(self):
@@ -58,6 +60,9 @@ class BrokerIDByIp(BrokerIdGenerator):
     def get_broker_id(self):
         return self.broker_id
 
+    def detect_broker_id(self):
+        return self.broker_id
+
     def is_registered(self):
         return self.zk.is_broker_registered(self.broker_id)
 
@@ -72,23 +77,20 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
     def get_broker_id(self):
         return None
 
-    def is_registered(self):
+    def detect_broker_id(self):
         meta_path = '{}/meta.properties'.format(self.kafka_properties.get_property('log.dirs'))
         while not os.path.isfile(meta_path):
-            return False
+            return None
         with open(meta_path) as f:
             lines = f.readlines()
             for line in lines:
                 match = re.search('broker\.id=(\d+)', line)
                 if match:
-                    return self.zk.is_broker_registered(match.group(1))
+                    return match.group(1)
+        return None
+
+    def is_registered(self):
+        broker_id = self.detect_broker_id()
+        if broker_id:
+            return self.zk.is_broker_registered(broker_id)
         return False
-
-
-def get_broker_id_policy(policy: str, zk: BukuExhibitor, kafka_props: KafkaProperties, amazon: Amazon) -> BrokerIdGenerator:
-    if policy == 'ip':
-        return BrokerIDByIp(zk, amazon.get_own_ip(), kafka_props)
-    elif policy == 'auto':
-        return BrokerIdAutoAssign(zk, kafka_props)
-    else:
-        raise Exception('Unsupported id generator policy')
