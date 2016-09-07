@@ -33,4 +33,5 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 EXPOSE 9092 8080 8778
 
-CMD python3 setup.py develop && bubuku
+RUN python3 setup.py develop
+ENTRYPOINT ["/bin/bash", "-c", "exec bubuku"]
