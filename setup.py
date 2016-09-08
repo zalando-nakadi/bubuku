@@ -49,7 +49,7 @@ CLASSIFIERS = [
 ]
 
 CONSOLE_SCRIPTS = [
-    'bubuku = bubuku.daemon:main',
+    'bubuku-daemon = bubuku.daemon:main',
     'bubuku-cli = bubuku.cli:cli'
 ]
 
