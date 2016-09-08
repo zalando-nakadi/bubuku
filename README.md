@@ -106,7 +106,7 @@ Pluggable features are defined in configuration and are disabled by default. Lis
   ```
   # Progressive timeout configuration
   # Initial timeout=300 seconds, after each failed start increase by timeout * 0.5 (450, 675 and so on)
-  export STARTUP_TIMEOUT="type=progressive:initial=300:step=0.5"
+  export STARTUP_TIMEOUT="type=progressive:initial=300:scale=0.5"
   ```
 
  Default value for timeout is `type=linear:initial=300:step=60`.
