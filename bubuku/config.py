@@ -49,8 +49,10 @@ class KafkaProperties(object):
                 f.write('{}\n'.format(l))
 
 
-def _parse_timeout(value: str):
-    return {a: b for a, b in [tuple(x.split('=', 1)) for x in value.split(':')]}
+def _load_timeout_dict(load_func):
+    startup_timeout_pairs = [(name, load_func('STARTUP_TIMEOUT_{}'.format(name.upper()))) for name in
+                             ['type', 'initial', 'step']]
+    return {name: value for name, value in startup_timeout_pairs if value}
 
 
 def load_config() -> Config:
@@ -60,7 +62,6 @@ def load_config() -> Config:
     features = {key: {} for key in features_str.split(',')} if features_str else {}
     if "balance_data_size" in features:
         features["balance_data_size"]["diff_threshold_mb"] = int(os.getenv('FREE_SPACE_DIFF_THRESHOLD_MB', '50000'))
-
     return Config(
         kafka_dir=os.getenv('KAFKA_DIR'),
         kafka_settings_template=os.getenv('KAFKA_SETTINGS'),
@@ -69,7 +70,7 @@ def load_config() -> Config:
         features=features,
         health_port=int(os.getenv('HEALTH_PORT', '8888')),
         mode=str(os.getenv('BUBUKU_MODE', 'amazon')).lower(),
-        timeout=_parse_timeout(os.getenv('STARTUP_TIMEOUT', 'type=linear:initial=300:step=60'))
+        timeout=_load_timeout_dict(os.getenv)
     )
 
 

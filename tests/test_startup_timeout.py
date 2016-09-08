@@ -29,7 +29,7 @@ class TestDataSizeStats(unittest.TestCase):
         TestDataSizeStats._verify(o, 300., 150.)
 
     def test_progressive(self):
-        o = StartupTimeout.build({'type': 'progressive', 'initial': '16', 'scale': '0.25'})
+        o = StartupTimeout.build({'type': 'progressive', 'initial': '16', 'step': '0.25'})
 
         TestDataSizeStats._verify(o, 16., 4.)
 

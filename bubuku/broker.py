@@ -43,14 +43,14 @@ class StartupTimeout(object):
 
     @staticmethod
     def build(props: dict):
-        type_ = props.get('type')
+        type_ = props.get('type', 'linear')
         result = StartupTimeout(float(props.get('initial', '300')),
                                 ','.join('{}={}'.format(k, v) for k, v in props.items()))
         if type_ == 'linear':
             step = float(props.get('step', '60'))
             result.get_step = lambda: step
         elif type_ == 'progressive':
-            scale = float(props.get('scale', '0.5'))
+            scale = float(props.get('step', '0.5'))
             result.get_step = lambda: result.timeout * scale
         else:
             raise NotImplementedError('Startup timeout type {} is not valid'.format(type_))
