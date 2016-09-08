@@ -40,13 +40,13 @@ def get_registration():
 
 def register_terminate_on_interrupt(controller: Controller, broker: BrokerManager):
     global __REGISTERED
-    if __REGISTERED:
-        return
 
     def _sig_handler(*args, **kwargs):
         _LOG.info('Signal was caught, stopping controller gracefully')
         controller.stop(StopBrokerChange(broker))
 
     _LOG.info('Registering signal handler')
-    signal.signal(signal.SIGTERM, _sig_handler)
+    old_handler = signal.signal(signal.SIGTERM, _sig_handler)
+    if old_handler:
+        _LOG.warn('Old handler is removed: {}'.format(old_handler))
     __REGISTERED = (controller, broker)
