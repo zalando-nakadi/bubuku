@@ -49,10 +49,10 @@ class SlowlyUpdatedCache(object):
             value = None
             if self.force:
                 while value is None:
-                    value = self.load_func()
+                    value = self._load_value_safe()
                 self.force = False
             else:
-                value = self.load_func()
+                value = self._load_value_safe()
             if value is not None:
                 if value != self.value:
                     self.value = value
@@ -61,6 +61,13 @@ class SlowlyUpdatedCache(object):
         if self.next_apply is not None and self.next_apply - now <= 0:
             self.update_func(self.value)
             self.next_apply = None
+
+    def _load_value_safe(self):
+        try:
+            return self.load_func()
+        except Exception as e:
+            _LOG.error('Failed to load value to update', exc_info=e)
+        return None
 
 
 class AddressListProvider(object):

@@ -1,14 +1,15 @@
 import json
 import logging
+import uuid
+from functools import partial
 
+import boto3
 import requests
 
-from bubuku.id_generator import BrokerIDByIp, BrokerIdAutoAssign
-from bubuku.zookeeper import BukuExhibitor
-from bubuku.zookeeper.exhibitor import AWSExhibitorAddressProvider
-from bubuku.zookeeper.exhibitor import LocalAddressProvider
 from bubuku.config import Config, KafkaProperties
-import uuid
+from bubuku.id_generator import BrokerIDByIp, BrokerIdAutoAssign
+from bubuku.zookeeper import BukuExhibitor, AddressListProvider
+from bubuku.zookeeper.exhibitor import ExhibitorAddressProvider
 
 _LOG = logging.getLogger('bubuku.amazon')
 
@@ -35,35 +36,49 @@ class EnvProvider(object):
 
 class AmazonEnvProvider(EnvProvider):
     def __init__(self, config: Config):
-        self.document = None
         self.aws_addr = '169.254.169.254'
         self.config = config
+        self.ip_address = None
 
     def _get_document(self) -> dict:
-        if not self.document:
-            try:
-                self.document = requests.get(
-                    'http://{}/latest/dynamic/instance-identity/document'.format(self.aws_addr),
-                    timeout=5).json()
-                _LOG.info("Amazon specific information loaded from AWS: {}".format(
-                    json.dumps(self.document, indent=2)))
-            except Exception as ex:
-                _LOG.warn('Failed to download AWS document', exc_info=ex)
-        return self.document
-
-    def get_aws_region(self) -> str:
-        doc = self._get_document()
-        return doc['region'] if doc else None
+        document = requests.get('http://{}/latest/dynamic/instance-identity/document'.format(self.aws_addr),
+                                timeout=5).json()
+        _LOG.info("Amazon specific information loaded from AWS: {}".format(json.dumps(document, indent=2)))
+        return document
 
     def get_id(self) -> str:
-        doc = self._get_document()
-        return doc['privateIp'] if doc else '127.0.0.1'
+        if not self.ip_address:
+            self.ip_address = self._get_document()['privateIp']
+        return self.ip_address
+
+    def _load_instance_ips(self, lb_name: str):
+        region = self._get_document()['region']
+
+        private_ips = []
+
+        elb = boto3.client('elb', region_name=region)
+        ec2 = boto3.client('ec2', region_name=region)
+
+        response = elb.describe_instance_health(LoadBalancerName=lb_name)
+
+        for instance in response['InstanceStates']:
+            if instance['State'] == 'InService':
+                private_ips.append(ec2.describe_instances(
+                    InstanceIds=[instance['InstanceId']])['Reservations'][0]['Instances'][0]['PrivateIpAddress'])
+
+        _LOG.info("Ip addresses for {} are: {}".format(lb_name, private_ips))
+        return private_ips
 
     def get_address_provider(self):
-        return AWSExhibitorAddressProvider(self.config.zk_stack_name, self.get_aws_region())
+        return ExhibitorAddressProvider(partial(self._load_instance_ips, self.config.zk_stack_name))
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
         return BrokerIDByIp(zk, self.get_id(), kafka_props)
+
+
+class _LocalAddressProvider(AddressListProvider):
+    def get_latest_address(self) -> (list, int):
+        return ('zookeeper',), 2181
 
 
 class LocalEnvProvider(EnvProvider):
@@ -73,8 +88,7 @@ class LocalEnvProvider(EnvProvider):
         return self.unique_id
 
     def get_address_provider(self):
-        return LocalAddressProvider()
+        return _LocalAddressProvider()
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
         return BrokerIdAutoAssign(zk, kafka_props)
-
