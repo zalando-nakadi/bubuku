@@ -5,7 +5,7 @@ from collections import namedtuple
 _LOG = logging.getLogger('bubuku.properties')
 
 Config = namedtuple('Config', ('kafka_dir', 'kafka_settings_template', 'zk_stack_name',
-                               'zk_prefix', 'features', 'health_port', 'mode'))
+                               'zk_prefix', 'features', 'health_port', 'mode', 'timeout'))
 
 
 class KafkaProperties(object):
@@ -49,6 +49,12 @@ class KafkaProperties(object):
                 f.write('{}\n'.format(l))
 
 
+def _load_timeout_dict(load_func):
+    startup_timeout_pairs = [(name, load_func('STARTUP_TIMEOUT_{}'.format(name.upper()))) for name in
+                             ['type', 'initial', 'step']]
+    return {name: value for name, value in startup_timeout_pairs if value}
+
+
 def load_config() -> Config:
     zk_prefix = os.getenv('ZOOKEEPER_PREFIX', '/')
 
@@ -56,7 +62,6 @@ def load_config() -> Config:
     features = {key: {} for key in features_str.split(',')} if features_str else {}
     if "balance_data_size" in features:
         features["balance_data_size"]["diff_threshold_mb"] = int(os.getenv('FREE_SPACE_DIFF_THRESHOLD_MB', '50000'))
-
     return Config(
         kafka_dir=os.getenv('KAFKA_DIR'),
         kafka_settings_template=os.getenv('KAFKA_SETTINGS'),
@@ -64,7 +69,8 @@ def load_config() -> Config:
         zk_prefix=zk_prefix if zk_prefix.startswith('/') or not zk_prefix else '/{}'.format(zk_prefix),
         features=features,
         health_port=int(os.getenv('HEALTH_PORT', '8888')),
-        mode=str(os.getenv('BUBUKU_MODE', 'amazon')).lower()
+        mode=str(os.getenv('BUBUKU_MODE', 'amazon')).lower(),
+        timeout=_load_timeout_dict(os.getenv)
     )
 
 

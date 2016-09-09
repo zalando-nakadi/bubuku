@@ -4,9 +4,10 @@
 import logging
 
 from bubuku import health
-from bubuku.broker import BrokerManager, KafkaProcessHolder
+from bubuku.broker import BrokerManager, KafkaProcessHolder, StartupTimeout
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.controller import Controller
+from bubuku.env_provider import EnvProvider
 from bubuku.features.data_size_stats import GenerateDataSizeStatistics
 from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
@@ -16,7 +17,6 @@ from bubuku.features.swap_partitions import CheckBrokersDiskImbalance
 from bubuku.features.terminate import register_terminate_on_interrupt
 from bubuku.utils import CmdHelper
 from bubuku.zookeeper import BukuExhibitor, load_exhibitor_proxy
-from bubuku.env_provider import EnvProvider
 
 _LOG = logging.getLogger('bubuku.main')
 
@@ -44,10 +44,11 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
 def run_daemon_loop(config: Config, process_holder: KafkaProcessHolder, cmd_helper: CmdHelper, restart_on_init: bool):
     _LOG.info("Using configuration: {}".format(config))
     kafka_props = KafkaProperties(config.kafka_settings_template,
-                                       '{}/config/server.properties'.format(config.kafka_dir))
+                                  '{}/config/server.properties'.format(config.kafka_dir))
 
     env_provider = EnvProvider.create_env_provider(config)
     address_provider = env_provider.get_address_provider()
+    startup_timeout = StartupTimeout.build(config.timeout)
 
     _LOG.info("Loading exhibitor configuration")
     with load_exhibitor_proxy(address_provider, config.zk_prefix) as zookeeper:
@@ -55,7 +56,8 @@ def run_daemon_loop(config: Config, process_holder: KafkaProcessHolder, cmd_help
         broker_id_manager = env_provider.create_broker_id_manager(zookeeper, kafka_props)
 
         _LOG.info("Building broker manager")
-        broker = BrokerManager(process_holder, config.kafka_dir, zookeeper, broker_id_manager, kafka_props)
+        broker = BrokerManager(process_holder, config.kafka_dir, zookeeper, broker_id_manager, kafka_props,
+                               startup_timeout)
 
         _LOG.info("Creating controller")
         controller = Controller(broker, zookeeper, env_provider)

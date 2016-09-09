@@ -58,6 +58,7 @@ Bubuku can be configured using environment properties:
  - `BUKU_FEATURES` - List of optional bubuku features, see [features](#features) section
  - `HEALTH_PORT` - Port for health checks
  - `FREE_SPACE_DIFF_THRESHOLD_MB` - Threshold for starting `balance_data_size` feature, if it's enabled
+ - `STARTUP_TIMEOUT_TYPE`, `STARTUP_TIMEOUT_INITIAL`, `STARTUP_TIMEOUT_STEP` - The way bubuku manages [time to start for kafka](#startup_timeout).
  
 # Features #
 
@@ -88,6 +89,36 @@ Pluggable features are defined in configuration and are disabled by default. Lis
  address instead of hostname.
  - `balance_data_size` - Swap partitions one by one by one if imbalance in size on brokers is bigger than 
  `FREE_SPACE_DIFF_THRESHOLD_MB` megabytes.
+ 
+## <a name="startup_timeout"></a> Timeouts for startup
+ Each time when bubuku tries to start kafka, it uses special startup timeout. This means, that if kafka broker id 
+ is not found within this timeout in zookeeper node `/broker/ids/{id}`, kafka process will be forcibly killed, timeout 
+ for start updated, and startup will be retried. 
+  
+  There are two ways to increase timeout - linear and progressive. Linear adds the same amount of time after each 
+  failed start. Progressive adds time, that is relative to current timeout. Configuration for that is provided by 
+  `STARTUP_TIMEOUT_TYPE`, `STARTUP_TIMEOUT_INITIAL`, `STARTUP_TIMEOUT_STEP` parameters.
+  ```
+  # Linear timeout configuration 
+  # initial timeout=300 seconds, after each failed start increase by 60 seconds (360, 420 and so on)
+  export STARTUP_TIMEOUT_TYPE="linear"
+  export STARTUP_TIMEOUT_INITIAL="300"
+  export STARTUP_TIMEOUT_STEP="60"
+  ```
+  ```
+  # Progressive timeout configuration
+  # Initial timeout=300 seconds, after each failed start increase by timeout * 0.5 (450, 675 and so on)
+  export STARTUP_TIMEOUT_TYPE="progressive"
+  export STARTUP_TIMEOUT_INITIAL="300"
+  export STARTUP_TIMEOUT_STEP="0.5"
+  ```
+
+ Default values for timeout are
+ ```
+  export STARTUP_TIMEOUT_TYPE="linear"
+  export STARTUP_TIMEOUT_INITIAL="300"
+  export STARTUP_TIMEOUT_STEP="60"
+ ```
  
 # How to contribute
 

@@ -24,15 +24,48 @@ class KafkaProcessHolder(object):
         self.process = process
 
 
+class StartupTimeout(object):
+    def __init__(self, initial_value: float, config: str):
+        self.timeout = initial_value
+        self.config = config
+
+    def get_timeout(self) -> float:
+        return self.timeout
+
+    def on_timeout_fail(self):
+        self.timeout += self.get_step()
+
+    def get_step(self) -> float:
+        return 0.
+
+    def __str__(self):
+        return 'timeout={}, step={}, config={}'.format(self.get_timeout(), self.get_step(), self.config)
+
+    @staticmethod
+    def build(props: dict):
+        type_ = props.get('type', 'linear')
+        result = StartupTimeout(float(props.get('initial', '300')),
+                                ','.join('{}={}'.format(k, v) for k, v in props.items()))
+        if type_ == 'linear':
+            step = float(props.get('step', '60'))
+            result.get_step = lambda: step
+        elif type_ == 'progressive':
+            scale = float(props.get('step', '0.5'))
+            result.get_step = lambda: result.timeout * scale
+        else:
+            raise NotImplementedError('Startup timeout type {} is not valid'.format(type_))
+        return result
+
+
 class BrokerManager(object):
     def __init__(self, process_holder: KafkaProcessHolder, kafka_dir: str, exhibitor: BukuExhibitor,
-                 id_manager: BrokerIdGenerator, kafka_properties: KafkaProperties):
+                 id_manager: BrokerIdGenerator, kafka_properties: KafkaProperties, timeout: StartupTimeout):
         self.kafka_dir = kafka_dir
         self.id_manager = id_manager
         self.exhibitor = exhibitor
         self.kafka_properties = kafka_properties
         self.process_holder = process_holder
-        self.wait_timeout = 15 * 60
+        self.timeout = timeout
 
     def is_running_and_registered(self):
         if not self.process_holder.get():
@@ -101,12 +134,12 @@ class BrokerManager(object):
             _LOG.info('Staring kafka process')
             self.process_holder.set(self._open_process())
 
-            _LOG.info('Waiting for kafka to start up with timeout {} seconds'.format(self.wait_timeout))
-            if not self.id_manager.wait_for_broker_id_presence(self.wait_timeout):
-                self.wait_timeout += 60
+            _LOG.info('Waiting for kafka to start up with timeout {} seconds'.format(self.timeout.get_timeout()))
+            if not self.id_manager.wait_for_broker_id_presence(self.timeout.get_timeout()):
+                self.timeout.on_timeout_fail()
                 _LOG.error(
-                    'Failed to wait for broker to start up, probably will kill, increasing timeout to {} seconds'.format(
-                        self.wait_timeout))
+                    'Failed to wait for broker to start up, probably will kill, next timeout is'.format(
+                        self.timeout.get_timeout()))
 
     def _is_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
         _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
