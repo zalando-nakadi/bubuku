@@ -214,6 +214,27 @@ class SlowlyUpdatedCacheTest(unittest.TestCase):
         cache.touch()
         assert result[0] == (['test'], 1)
 
+    def test_exception_eating(self):
+        result = [10, None]
+
+        def _update(value_):
+            result[1] = value_
+
+        def _load():
+            if result[0] > 0:
+                result[0] -= 1
+                raise Exception()
+            return ['test'], 1
+
+        cache = SlowlyUpdatedCache(_load, _update, 0, 0)
+        cache.force = False  # Small hack to avoid initial refresh cycle
+        for i in range(0, 10):
+            cache.touch()
+            assert result[1] is None
+            assert result[0] == 9 - i
+        cache.touch()
+        assert result[1] == (['test'], 1)
+
     def test_initial_update_slow(self):
         result = [None]
         call_count = [0]

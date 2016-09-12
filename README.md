@@ -24,7 +24,7 @@ Start supervisor:
 ```
 KAFKA_DIR=/opt/kafka KAFKA_SETTINGS=/opt/kafka/config/server.properties ZOOKEEPER_STACK_NAME=my_zookeeper \
 ZOOKEEPER_PREFIX=/test BROKER_ID_POLICY=ip BUKU_FEATURES=restart_on_exhibitor,graceful_terminate \
-HEALTH_PORT=8888 bubuku 
+HEALTH_PORT=8888 bubuku-daemon
 ```
 Run commands on cluster:
 ```
