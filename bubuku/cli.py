@@ -1,6 +1,8 @@
 import logging
 
 import click
+import requests
+from requests import Response
 
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.env_provider import EnvProvider
@@ -98,6 +100,91 @@ def swap_partitions(threshold: int):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         RemoteCommandExecutorCheck.register_fatboy_slim(zookeeper, threshold_kb=threshold)
+
+
+@cli.group(name='actions', help='Work with running actions')
+def actions():
+    pass
+
+
+@actions.command('list', help='List all the actions on broker(s)')
+@click.option('--broker', type=click.STRING,
+              help='Broker id to list actions on. By default all brokers are enumerated')
+def list_actions(broker: str):
+    table = []
+    config, env_provider = __prepare_configs()
+
+    for broker_id, address in _list_broker_addresses(config, env_provider, broker):
+        try:
+            response = requests.get('http://{}:{}/api/controller/queue'.format(address, config.health_port))
+        except Exception as e:
+            print('Failed to query information on {} ({})'.format(broker_id, address))
+            _LOG.error('Failed to query information on {} ({})'.format(broker_id, address), exc_info=e)
+            continue
+        line = {
+            '_broker_id': broker_id,
+            '_broker_address': address,
+        }
+        if response.status_code != 200:
+            line['error'] = _extract_error(response)
+            table.append(line)
+        else:
+            changes = response.json()
+            if not changes:
+                line.update({
+                    'type': None,
+                    'description': None,
+                    'running': None
+                })
+                table.append(line)
+            else:
+                for change in changes:
+                    line_copy = dict(line)
+                    line_copy.update(change)
+                    table.append(line_copy)
+    if not table:
+        print('No brokers found')
+    else:
+        _print_table(table)
+
+
+@actions.command('delete', help='List all the actions on broker(s)')
+@click.option('--action', type=click.STRING,
+              help='Action to delete')
+@click.option('--broker', type=click.STRING,
+              help='Broker id to list actions on. By default all brokers are enumerated')
+def delete_actions(action: str, broker: str):
+    if not action:
+        print('No action specified. Please specify it')
+    config, env_provider = __prepare_configs()
+
+    for broker_id, address in _list_broker_addresses(config, env_provider, broker):
+        try:
+            response = requests.delete('http://{}:{}/api/controller/queue/{}'.format(address, config.health_port, action))
+        except Exception as e:
+            print('Failed to query information on {} ({})'.format(broker_id, address))
+            _LOG.error('Failed to query information on {} ({})'.format(broker_id, address), exc_info=e)
+            continue
+        if response.status_code not in (200, 204):
+            print('Failed to delete action from {} ({}): {}'.format(broker, address, _extract_error(response)))
+        else:
+            print('Removed action {} from {} ({})'.format(action, broker_id, address))
+
+
+def _extract_error(response: Response):
+    try:
+        return response.json()['message']
+    except Exception as e:
+        _LOG.error('Failed to parse response message', exc_info=e)
+        return response.text()
+
+
+def _list_broker_addresses(config, env_provider, broker):
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        for broker_id in zookeeper.get_broker_ids():
+            if broker and broker != broker_id:
+                continue
+            yield broker_id, zookeeper.get_broker_address(broker_id)
 
 
 @cli.command('stats', help='Display statistics about brokers')

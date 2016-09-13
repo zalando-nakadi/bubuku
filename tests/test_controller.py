@@ -41,40 +41,40 @@ def test_multiple_changes_are_executed_one_by_one():
                 return FakeChange(self.changes_issued - 1)
 
     current_changes = {}
-    ip = 'fake'
     zk = MagicMock()
     zk.get_running_changes.return_value = current_changes
     zk.register_change = lambda x, y: current_changes.update({x: y})
     zk.unregister_change = lambda x: current_changes.pop(x)
 
     controller = Controller(MagicMock(), zk, MagicMock())
+    controller.provider_id = 'fake'
     controller.add_check(FakeCheck())
 
     assert [3, 3, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert not current_changes
     assert [3, 3, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert current_changes
     assert [2, 3, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert [1, 3, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 3, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 2, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 1, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 0, 3] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 0, 2] == running_count
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 0, 1] == running_count
     assert current_changes
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 0, 0] == running_count
     assert not current_changes
-    controller.make_step(ip)
+    controller.make_step()
     assert [0, 0, 0] == running_count
     assert not current_changes

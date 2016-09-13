@@ -59,7 +59,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _run_controller_action(self, action):
         if action.split('/')[0] == 'queue':
-            return execute_on_controller_thread(load_controller_queue, _CONTROLLER_TIMEOUT)
+            return self._send_response(execute_on_controller_thread(load_controller_queue, _CONTROLLER_TIMEOUT), 200)
         else:
             return self._send_response({'message': 'Action {} is not supported'.format(action)}, 404)
 

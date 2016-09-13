@@ -5,7 +5,7 @@ from queue import Queue, Empty, Full
 
 __COMMAND_QUEUE = Queue()
 
-_LOG = logging.getLogger('bubuku.communicates')
+_LOG = logging.getLogger('bubuku.communicate')
 
 
 def sleep_and_operate(controller, timeout: float):
