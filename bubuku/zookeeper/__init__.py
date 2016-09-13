@@ -144,7 +144,10 @@ class _ZookeeperProxy(object):
 
     def delete(self, *args, **kwargs):
         self.hosts_cache.touch()
-        return self.client.retry(self.client.delete, *args, **kwargs)
+        try:
+            return self.client.retry(self.client.delete, *args, **kwargs)
+        except NoNodeError:
+            pass
 
     def get_children(self, *params):
         self.hosts_cache.touch()
