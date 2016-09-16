@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 from bubuku.daemon import apply_features
-from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
+from bubuku.features.rebalance.check import RebalanceOnStartCheck, RebalanceOnBrokerListCheck
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged
 from bubuku.features.terminate import get_registration
 from test_config import build_test_properties
@@ -56,7 +56,7 @@ def test_rebalance_on_broker_list_change():
 
     assert len(controller.checks) == 1
     check = controller.checks[0]
-    assert type(check) == RebalanceOnBrokerListChange
+    assert type(check) == RebalanceOnBrokerListCheck
     assert check.zk == exhibitor
     assert check.broker == broker
 

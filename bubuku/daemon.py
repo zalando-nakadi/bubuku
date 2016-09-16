@@ -9,7 +9,7 @@ from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.controller import Controller
 from bubuku.env_provider import EnvProvider
 from bubuku.features.data_size_stats import GenerateDataSizeStatistics
-from bubuku.features.rebalance import RebalanceOnStartCheck, RebalanceOnBrokerListChange
+from bubuku.features.rebalance.check import RebalanceOnStartCheck, RebalanceOnBrokerListCheck
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
 from bubuku.features.restart_if_dead import CheckBrokerStopped
 from bubuku.features.restart_on_zk_change import CheckExhibitorAddressChanged, RestartBrokerChange
@@ -29,7 +29,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
         elif feature == 'rebalance_on_start':
             controller.add_check(RebalanceOnStartCheck(buku_proxy, broker))
         elif feature == 'rebalance_on_brokers_change':
-            controller.add_check(RebalanceOnBrokerListChange(buku_proxy, broker))
+            controller.add_check(RebalanceOnBrokerListCheck(buku_proxy, broker))
         elif feature == 'balance_data_size':
             controller.add_check(
                 CheckBrokersDiskImbalance(buku_proxy, broker, config["diff_threshold_mb"] * 1024, api_port))
@@ -86,9 +86,9 @@ def main():
         try:
             run_daemon_loop(config, process_holder, cmd_helper, restart_on_init)
             break
-        except:
+        except Exception as ex:
             _LOG.error("WOW! Almost died! Will try to restart from the begin. "
-                       "After initialization will be complete, will try to restart", exc_info=True)
+                       "After initialization will be complete, will try to restart", exc_info=ex)
             if process_holder.get():
                 restart_on_init = True
 
