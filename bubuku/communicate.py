@@ -13,9 +13,9 @@ def sleep_and_operate(controller, timeout: float):
     finish = cur_time + (0.1 if timeout <= 0 else timeout)
     while cur_time < finish:
         try:
-            commnad = __COMMAND_QUEUE.get(block=True, timeout=finish - cur_time)
+            command = __COMMAND_QUEUE.get(block=True, timeout=finish - cur_time)
             try:
-                commnad(controller)
+                command(controller)
             except Exception as e:
                 _LOG.error('Command finished with error', exc_info=e)
         except Empty:

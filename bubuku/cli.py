@@ -148,11 +148,11 @@ def list_actions(broker: str):
         _print_table(table)
 
 
-@actions.command('delete', help='List all the actions on broker(s)')
+@actions.command('delete', help='Remove all actions of specified type on broker(s)')
 @click.option('--action', type=click.STRING,
               help='Action to delete')
 @click.option('--broker', type=click.STRING,
-              help='Broker id to list actions on. By default all brokers are enumerated')
+              help='Broker id to delete actions on. By default actions are deleted on all brokers')
 def delete_actions(action: str, broker: str):
     if not action:
         print('No action specified. Please specify it')
