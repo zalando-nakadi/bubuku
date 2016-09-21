@@ -1,7 +1,8 @@
 import logging
-from time import sleep, time
+from time import time
 
 from bubuku.broker import BrokerManager
+from bubuku.communicate import sleep_and_operate
 from bubuku.env_provider import EnvProvider
 from bubuku.zookeeper import BukuExhibitor
 
@@ -56,16 +57,43 @@ class Controller(object):
         self.checks = []
         self.changes = {}  # Holds mapping from change name to array of pending changes
         self.running = True
+        self.provider_id = None  # provider id must not be requested on initialization
+
+    def enumerate_changes(self):
+        with self.zk.lock(self.provider_id):
+            running_changes = self.zk.get_running_changes()
+
+        result = []
+        for name, change_list in self.changes.items():
+            running = running_changes.get(name) == self.provider_id
+            first = True
+            for change in change_list:
+                result.append({
+                    'type': name,
+                    'description': str(change),
+                    'running': bool(first and running)
+                })
+                first = False
+        return result
+
+    def cancel_changes(self, name):
+        result = len(self.changes.get(name, {}))
+        if result:
+            with self.zk.lock(self.provider_id):
+                self.zk.unregister_change(name)
+
+            del self.changes[name]
+        return result
 
     def add_check(self, check):
         _LOG.info('Adding check {}'.format(str(check)))
         self.checks.append(check)
 
-    def _register_running_changes(self, provider_id: str) -> dict:
+    def _register_running_changes(self) -> dict:
         if not self.changes:
             return {}  # Do not take lock if there are no changes to register
         _LOG.debug('Taking lock for processing')
-        with self.zk.lock(provider_id):
+        with self.zk.lock(self.provider_id):
             _LOG.debug('Lock is taken')
             # Get list of current running changes
             running_changes = self.zk.get_running_changes()
@@ -75,23 +103,23 @@ class Controller(object):
             for name, change_list in self.changes.items():
                 # Only first change is able to run
                 first_change = change_list[0]
-                if first_change.can_run(_exclude_self(provider_id, name, running_changes)):
+                if first_change.can_run(_exclude_self(self.provider_id, name, running_changes)):
                     if name not in running_changes:
-                        self.zk.register_change(name, provider_id)
-                        running_changes[name] = provider_id
+                        self.zk.register_change(name, self.provider_id)
+                        running_changes[name] = self.provider_id
                 else:
                     _LOG.info('Change {} is waiting for others: {}'.format(name, running_changes))
             return running_changes
 
-    def _run_changes(self, running_changes: dict, provider_id: str) -> list:
+    def _run_changes(self, running_changes: dict) -> list:
         changes_to_remove = []
         for name, change_list in self.changes.items():
-            if name in running_changes and running_changes[name] == provider_id:
+            if name in running_changes and running_changes[name] == self.provider_id:
                 change = change_list[0]
                 _LOG.info('Executing action {} step'.format(change))
                 if self.running or change.can_run_at_exit():
                     try:
-                        if not change.run(_exclude_self(provider_id, change.get_name(), running_changes)):
+                        if not change.run(_exclude_self(self.provider_id, change.get_name(), running_changes)):
                             _LOG.info('Action {} completed'.format(change))
                             changes_to_remove.append(change.get_name())
                         else:
@@ -119,24 +147,23 @@ class Controller(object):
                     self.zk.unregister_change(name)
 
     def loop(self, change_on_init=None):
-        provider_id = self.env_provider.get_id()
+        self.provider_id = self.env_provider.get_id()
         if change_on_init:
             self._add_change_to_queue(change_on_init)
         while self.running or self.changes:
-            self.make_step(provider_id)
+            self.make_step()
 
             if self.changes:
-                sleep(0.5)
+                timeout = 0.5
             else:
-                min_time_till_check = min([check.time_till_check() for check in self.checks])
-                if min_time_till_check > 0:
-                    sleep(min_time_till_check)
+                timeout = min([check.time_till_check() for check in self.checks])
+            sleep_and_operate(self, timeout)
 
-    def make_step(self, provider_id):
+    def make_step(self):
         # register running changes
-        running_changes = self._register_running_changes(provider_id)
+        running_changes = self._register_running_changes()
         # apply changes without holding lock
-        changes_to_remove = self._run_changes(running_changes, provider_id)
+        changes_to_remove = self._run_changes(running_changes)
         # remove processed actions
         self._release_changes_lock(changes_to_remove)
         if self.running:
