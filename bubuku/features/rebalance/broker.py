@@ -76,7 +76,7 @@ class BrokerDescription(object):
         return self._broker_id
 
     def __str__(self):
-        return 'BrokerDistribution(id={}, leaders={}, replicas={})'.format(
+        return 'BrokerDescription(id={}, leaders={}, replicas={})'.format(
             self._broker_id, self._leaders, self._replicas)
 
     def set_leader_expectation(self, leader_count: int):
