@@ -7,16 +7,15 @@ from bubuku.zookeeper import BukuExhibitor
 _LOG = logging.getLogger('bubuku.features.rebalance')
 
 
-def distribute(amount, items, weight_key, apply_func):
+def distribute(amount: int, items: list, weight_key):
     if not items:
-        return
+        return []
     items = sorted(items, key=weight_key, reverse=True)
     ceil_amount = int(amount / len(items))
     amounts = [ceil_amount for _ in range(0, len(items))]
     for idx in range(0, min(amount - sum(amounts), len(items))):
         amounts[idx] += 1
-    for idx in range(0, len(items)):
-        apply_func(items[idx], amounts[idx])
+    return amounts
 
 
 class OptimizedRebalanceChange(BaseRebalanceChange):
@@ -235,14 +234,16 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
                 self.broker_distribution[replica].add_partition(first, topic_partition)
                 first = False
         active_brokers = [broker for id_, broker in self.broker_distribution.items() if id_ in self.broker_ids]
-        distribute(
-            sum(b.get_leader_count() for b in self.broker_distribution.values()),
-            active_brokers, BrokerDescription.get_leader_count, BrokerDescription.set_leader_expectation)
+        total_leaders = sum(b.get_leader_count() for b in self.broker_distribution.values())
+
+        new_leader_count = distribute(total_leaders, active_brokers, BrokerDescription.get_leader_count)
+        for i in range(0, len(active_brokers)):
+            active_brokers[i].set_leader_expectation(new_leader_count[i])
+
         # Here is one trick. Across all the code replica list does not contain leaders.
         # But in order to balance correctly (max(diff(replica+leaders) <= 1) we should add leaders and substract it
         # again
-        distribute(
-            sum((b.get_replica_count() + b.get_leader_count()) for b in self.broker_distribution.values()),
-            active_brokers,
-            BrokerDescription.get_replica_count,
-            lambda x, y: x.set_replica_expectation(y - x.get_expected_leaders()))
+        total_replicas = sum(b.get_replica_count() for b in self.broker_distribution.values()) + sum(new_leader_count)
+        new_replica_count = distribute(total_replicas, active_brokers, BrokerDescription.get_replica_count)
+        for i in range(0, len(active_brokers)):
+            active_brokers[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
