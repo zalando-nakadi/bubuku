@@ -1,5 +1,4 @@
 import logging
-from typing import Iterable, Dict, List, Tuple
 
 from bubuku.features.rebalance import BaseRebalanceChange
 from bubuku.features.rebalance.broker import BrokerDescription
@@ -20,7 +19,12 @@ def distribute(amount: int, items: list, weight_key):
 
 
 class DistributionMap(object):
-    def __init__(self, brokers: Iterable[BrokerDescription]):
+    """
+    Topic distribution map. Used to correctly balance leadership across brokers. Internal collection of candidates is a
+    dict with reflection of (source_broker, target_broker) -> sorted_list_of_topics_and weights.
+    """
+
+    def __init__(self, brokers: iter):
         self.candidates = {}
         for source_broker in brokers:
             if not source_broker.have_extra_leaders():
@@ -37,7 +41,12 @@ class DistributionMap(object):
                     self.candidates[(source_broker, target_broker)] = sorted(
                         weight_list, key=lambda x: x[1], reverse=True)
 
-    def take_move_pair(self):
+    def take_move_pair(self) -> tuple:
+        """
+        Selects best source_broker, target_broker, topic to move leadership. Internal data is updated as if change was
+        already performed
+        :return: tuple source_broker, target_broker, topic_name
+        """
         top_candidate = None
         for broker_pair, weight_list in self.candidates.items():
             if not top_candidate:
@@ -92,7 +101,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_distribution = None
         self.source_distribution = None
-        self.action_queue = None
+        self.action_queue = []
         self.state = OptimizedRebalanceChange._LOAD_STATE
 
     def __str__(self):
@@ -115,7 +124,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             self._load_data()
             self.state = OptimizedRebalanceChange._COMPUTE_LEADERS
         elif self.state == OptimizedRebalanceChange._COMPUTE_LEADERS:
-            self.action_queue = self.rebalance_leaders(self.broker_distribution)
+            self._rebalance_leaders()
             self.state = OptimizedRebalanceChange._COMPUTE_REPLICAS
         elif self.state == OptimizedRebalanceChange._COMPUTE_REPLICAS:
             self._rebalance_replicas()
@@ -137,30 +146,35 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         return False
 
     def _rebalance_replicas(self):
+        """
+        Balances replicas distribution.
+        """
         # Remove duplicates
         self._remove_replica_copies()
         if not self._rebalance_replicas_template(False):
             # It may happen, that data can not be copied, because there is leader of this topic already there.
             self._rebalance_replicas_template(True)
             if not self._rebalance_replicas_template(False):
-                _LOG.error('Failed to rebalance replicas... Reason is unclear, will just stop the process')
+                _LOG.error('Failed to rebalance replicas. Probably because of replication factor problems. '
+                           'Will just stop the process')
                 raise Exception('Failed to perform replica rebalance {}, {}, {}'.format(
                     self.broker_distribution, self.broker_ids, self.action_queue))
 
     def _sort_actions(self):
         result = {}
         for topic_partition, source_broker_id, target_broker_id in self.action_queue:
-            # Here comes small trick. Each action includes only one replacement.
             if topic_partition not in result:
                 result[topic_partition] = list(self.source_distribution[topic_partition])
             tmp_result = result[topic_partition]
             for i in range(len(tmp_result) - 1, -1, -1):
+                # Here comes small trick. Each action includes only one replacement. We are starting replacements from
+                # back and perform them only once.
                 if tmp_result[i] == source_broker_id:
                     tmp_result[i] = target_broker_id
                     break
         return result
 
-    def _list_active_brokers_with_skip(self, skip_id: int) -> List[BrokerDescription]:
+    def _list_active_brokers_with_skip(self, skip_id: int) -> list:
         """
         Lists active brokers without broker with id `skip_id`
         :param skip_id: Broker id to skip
@@ -176,12 +190,13 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if it will lead to some additional steps in rebalance.
         """
         for broker in self.broker_distribution.values():
-            # List all brokers, without free_replica_slots optimization.
             for topic_partition in broker.list_replica_copies():
                 targets = [b for b in self._list_active_brokers_with_skip(broker.broker_id)]
                 moved_to = broker.move_replica(topic_partition, [t for t in targets if t.has_free_replica_slots()])
                 if not moved_to:
                     moved_to = broker.move_replica(topic_partition, targets)
+                if not moved_to:
+                    raise Exception('Failed to move replica ' + str(topic_partition) + ', not enough replicas')
                 self.action_queue.append((topic_partition, broker.broker_id, moved_to.broker_id))
 
     def _rebalance_replicas_template(self, force: bool):
@@ -205,11 +220,12 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
                     targets = [t for t in targets if t.has_free_replica_slots()]
         return True
 
-    @staticmethod
-    def rebalance_leaders(brokers: Dict[int, BrokerDescription]) -> list:
-        candidates = DistributionMap(brokers.values())
-        queue_list = []
-        while any([broker.have_extra_leaders() for broker in brokers.values()]):
+    def _rebalance_leaders(self):
+        """
+        Balances leadership across active brokers.
+        """
+        candidates = DistributionMap(self.broker_distribution.values())
+        while any([broker.have_extra_leaders() for broker in self.broker_distribution.values()]):
             # Get broker objects
             source_broker, target_broker, topic = candidates.take_move_pair()
             # Selecting best partition to move (It is better to just swap leadership, instead of copying data)
@@ -226,24 +242,29 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             # Update brokers state
             target_broker.accept_leader(source_broker, topic_partition)
             # add transfer to queue
-            queue_list.append((topic_partition, source_broker.broker_id, target_broker.broker_id))
+            self.action_queue.append((topic_partition, source_broker.broker_id, target_broker.broker_id))
             # Remove empty lists
             candidates.cleanup()
-        return queue_list
 
     def _load_data(self):
+        """
+        Loads data from zk and prepares to perform rebalance. Fills in leader and replica count expectations.
+        """
         self.broker_distribution = {id_: BrokerDescription(id_) for id_ in self.broker_ids}
         self.source_distribution = {(topic, partition): replicas for topic, partition, replicas in
                                     self.zk.load_partition_assignment()}
         for topic_partition, replicas in self.source_distribution.items():
             if not replicas:
                 continue
-            first = True
+            leader = True
             for replica in replicas:
                 if replica not in self.broker_distribution:
                     self.broker_distribution[replica] = BrokerDescription(replica)
-                self.broker_distribution[replica].add_partition(first, topic_partition)
-                first = False
+                if leader:
+                    self.broker_distribution[replica].add_leader(topic_partition)
+                    leader = False
+                else:
+                    self.broker_distribution[replica].add_replica(topic_partition)
         active_brokers = [broker for id_, broker in self.broker_distribution.items() if id_ in self.broker_ids]
         total_leaders = sum(b.get_leader_count() for b in self.broker_distribution.values())
 

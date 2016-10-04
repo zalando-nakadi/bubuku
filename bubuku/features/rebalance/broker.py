@@ -1,6 +1,3 @@
-from typing import Tuple
-
-
 class _TopicPartitions(object):
     __slots__ = (
         '_items',
@@ -88,8 +85,11 @@ class BrokerDescription(object):
     def set_replica_expectation(self, replica_count: int):
         self._replicas.set_expectation(replica_count)
 
-    def add_partition(self, leader: bool, topic_partition: tuple):
-        (self._leaders if leader else self._replicas).add(topic_partition)
+    def add_leader(self, topic_partition: tuple):
+        self._leaders.add(topic_partition)
+
+    def add_replica(self, topic_partition: tuple):
+        self._replicas.add(topic_partition)
 
     def get_leader_count(self):
         return self._leaders.get_item_count()
@@ -112,9 +112,14 @@ class BrokerDescription(object):
     def get_expected_leaders(self):
         return self._leaders.get_expectation()
 
-    def accept_leader(self, source_broker, topic_partitions: tuple):
-        self._leaders.add(topic_partitions)
-        source_broker._leaders.remove(topic_partitions)
+    def accept_leader(self, source_broker, topic_partition: tuple):
+        """
+        Moves topic_partition from source_broker to self broker.
+        :param source_broker: Broker to take topic_partition from.
+        :param topic_partition: topic and partition tuple to take.
+        """
+        self._leaders.add(topic_partition)
+        source_broker._leaders.remove(topic_partition)
 
     def _accept_replica(self, source_broker, topic_partition: tuple):
         # Already a leader for this partition
@@ -127,7 +132,13 @@ class BrokerDescription(object):
         source_broker._replicas.remove(topic_partition)
         return True
 
-    def move_replica(self, topic_partition: Tuple[str, int], broker_list: list):
+    def move_replica(self, topic_partition: tuple, broker_list: list):
+        """
+        Moves replica topic_partition to some broker from broker_list.
+        :param topic_partition: Topic and partition to move
+        :param broker_list: List of brokers (BrokerDescription) to move to
+        :return: Broker, to which partition was moved
+        """
         for target in broker_list:
             if target._accept_replica(self, topic_partition):
                 return target
@@ -144,6 +155,12 @@ class BrokerDescription(object):
 
     @property
     def topic_cardinality(self):
+        """
+        Calculates (or returns cached) 'topic to leader count' dictionary on this broker.
+        For example, topic t0 have partitions 0, 1, 2, 3. If leaders for partitions 0, 3 are located on this broker
+         than return value will contain mapping t0->2 (there are 2 leaders for topic t0 on this broker)
+        :return: Dictionary with leaders count per topic for this broker.
+        """
         if self._topic_cardinality is None:
             self._topic_cardinality = self._leaders.calculate_cardinality()
         return self._topic_cardinality

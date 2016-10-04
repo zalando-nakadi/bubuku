@@ -122,6 +122,21 @@ class TestRebalance(unittest.TestCase):
             pass
         _verify_balanced(['1', '3'], distribution)
 
+    def test_rebalance_fail_with_not_enough_replicas(self):
+        distribution = {
+            ('t0', '0'): ['2', '1', '3'],
+            ('t0', '1'): ['1', '2'],
+        }
+
+        _, zk = _create_zk_for_topics(distribution, broker_ids=['1', '3'])
+        o = OptimizedRebalanceChange(zk, ['1', '3'])
+        try:
+            while o.run([]):
+                pass
+            assert False, "Balancing can not work with low replication factor"
+        except Exception:
+            pass
+
     def test_rebalance_recovered_with_additional_copy1(self):
         distribution = {
             ('t0', '0'): ['2', '1'],

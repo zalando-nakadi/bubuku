@@ -245,9 +245,6 @@ class BukuExhibitor(object):
                     yield (topic, int(partition), state)
 
     def reallocate_partition(self, topic: str, partition: object, replicas: list) -> bool:
-        return self.reallocate_partitions([(topic, partition, replicas)])
-
-    def reallocate_partitions(self, partitions_data: list) -> bool:
         """
         Reallocates partition to replica list
         :param topic: topic to move
@@ -255,6 +252,9 @@ class BukuExhibitor(object):
         :param replicas: list of replicas to move to
         :return: If reallocation was successful (node for reallocation was created)
         """
+        return self.reallocate_partitions([(topic, partition, replicas)])
+
+    def reallocate_partitions(self, partitions_data: list) -> bool:
         j = {
             "version": "1",
             "partitions": [
