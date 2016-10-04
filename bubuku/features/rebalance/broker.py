@@ -1,3 +1,6 @@
+from typing import Tuple
+
+
 class _TopicPartitions(object):
     __slots__ = (
         '_items',
@@ -113,7 +116,7 @@ class BrokerDescription(object):
         self._leaders.add(topic_partitions)
         source_broker._leaders.remove(topic_partitions)
 
-    def accept_replica(self, source_broker, topic_partition: tuple):
+    def _accept_replica(self, source_broker, topic_partition: tuple):
         # Already a leader for this partition
         if self._leaders.contains(topic_partition):
             return False
@@ -123,6 +126,12 @@ class BrokerDescription(object):
         self._replicas.add(topic_partition)
         source_broker._replicas.remove(topic_partition)
         return True
+
+    def move_replica(self, topic_partition: Tuple[str, int], broker_list: list):
+        for target in broker_list:
+            if target._accept_replica(self, topic_partition):
+                return target
+        return None
 
     def list_replica_copies(self):
         return list([tp for tp in self._replicas.iterate_items() if self._leaders.contains(tp)])

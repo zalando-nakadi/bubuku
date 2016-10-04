@@ -1,4 +1,5 @@
 import logging
+from typing import Iterable, Dict, List, Tuple
 
 from bubuku.features.rebalance import BaseRebalanceChange
 from bubuku.features.rebalance.broker import BrokerDescription
@@ -16,6 +17,67 @@ def distribute(amount: int, items: list, weight_key):
     for idx in range(0, min(amount - sum(amounts), len(items))):
         amounts[idx] += 1
     return amounts
+
+
+class DistributionMap(object):
+    def __init__(self, brokers: Iterable[BrokerDescription]):
+        self.candidates = {}
+        for source_broker in brokers:
+            if not source_broker.have_extra_leaders():
+                continue
+            for target_broker in brokers:
+                if not target_broker.have_less_leaders():
+                    continue
+                weight_list = []
+                for topic in source_broker.topic_cardinality.keys():
+                    delta = source_broker.topic_cardinality[topic] - target_broker.topic_cardinality.get(topic, 0)
+                    weight_list.append((topic, delta))
+                # Now the first element is the first to rebalance.
+                if weight_list:
+                    self.candidates[(source_broker, target_broker)] = sorted(
+                        weight_list, key=lambda x: x[1], reverse=True)
+
+    def take_move_pair(self):
+        top_candidate = None
+        for broker_pair, weight_list in self.candidates.items():
+            if not top_candidate:
+                top_candidate = broker_pair
+            else:
+                if weight_list[0][1] > self.candidates[top_candidate][0][1]:
+                    top_candidate = broker_pair
+                    # Taking best topic to move
+        topic, _ = self.candidates[top_candidate][0]
+        # Updating cardinality map
+        for broker_pair, weight_list in self.candidates.items():
+            if top_candidate == broker_pair:
+                DistributionMap._rearrange_topic_weights(weight_list, topic, -2)
+            elif top_candidate[0] == broker_pair[0] or top_candidate[1] == broker_pair[1]:  # src or dst matches
+                DistributionMap._rearrange_topic_weights(weight_list, topic, -1)
+        # Get broker objects
+        return top_candidate[0], top_candidate[1], topic
+
+    @staticmethod
+    def _rearrange_topic_weights(array: list, topic: str, cardinality_change: int):
+        old_cardinality = None
+        for item in array:
+            if item[0] == topic:
+                old_cardinality = item[1]
+                array.remove(item)
+                break
+        if old_cardinality is None:
+            return
+        new_cardinality = old_cardinality + cardinality_change
+        idx = len(array)
+        for i in range(idx - 1, -1, -1):
+            if array[i][1] >= new_cardinality:
+                idx = i + 1
+                break
+        array.insert(idx, (topic, new_cardinality))
+
+    def cleanup(self):
+        for bp in [bp for bp, wl in self.candidates.items()
+                   if not bp[0].have_extra_leaders() or not bp[1].have_less_leaders()]:
+            del self.candidates[bp]
 
 
 class OptimizedRebalanceChange(BaseRebalanceChange):
@@ -98,28 +160,29 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
                     break
         return result
 
-    def _list_active_brokers_with_skip(self, skip_id: int):
-        # Method was created only in optimization purposes
+    def _list_active_brokers_with_skip(self, skip_id: int) -> List[BrokerDescription]:
+        """
+        Lists active brokers without broker with id `skip_id`
+        :param skip_id: Broker id to skip
+        :return:
+        """
         return [b for b in self.broker_distribution.values() if
                 b.broker_id != skip_id and b.broker_id in self.broker_ids]
 
     def _remove_replica_copies(self):
+        """
+        During leadership rebalance it may happen that leader for replica was placed to broker that is already have
+        this partition. Before starting real rebalance it is needed to move such partitions to different brokers, even
+        if it will lead to some additional steps in rebalance.
+        """
         for broker in self.broker_distribution.values():
             # List all brokers, without free_replica_slots optimization.
             for topic_partition in broker.list_replica_copies():
-                success = self._move_partition_to_replica(
-                    broker, topic_partition,
-                    [b for b in self._list_active_brokers_with_skip(broker.broker_id) if b.has_free_replica_slots()])
-                if not success:
-                    self._move_partition_to_replica(
-                        broker, topic_partition, self._list_active_brokers_with_skip(broker.broker_id))
-
-    def _move_partition_to_replica(self, broker, topic_partition, broker_iterable):
-        for target in broker_iterable:
-            if target.accept_replica(broker, topic_partition):
-                self.action_queue.append((topic_partition, broker.broker_id, target.broker_id))
-                return True
-        return False
+                targets = [b for b in self._list_active_brokers_with_skip(broker.broker_id)]
+                moved_to = broker.move_replica(topic_partition, [t for t in targets if t.has_free_replica_slots()])
+                if not moved_to:
+                    moved_to = broker.move_replica(topic_partition, targets)
+                self.action_queue.append((topic_partition, broker.broker_id, moved_to.broker_id))
 
     def _rebalance_replicas_template(self, force: bool):
         for broker in self.broker_distribution.values():
@@ -130,75 +193,25 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             if not force:
                 targets = [t for t in targets if t.has_free_replica_slots()]
             for _ in range(0, to_move):
-                copied = False
+                target = False
                 for topic_partition in broker.list_replicas():
-                    if self._move_partition_to_replica(broker, topic_partition, targets):
-                        copied = True
+                    target = broker.move_replica(topic_partition, targets)
+                    if target:
+                        self.action_queue.append((topic_partition, broker.broker_id, target.broker_id))
                         break
-                if not copied:
+                if target is None:
                     return False
                 if not force:
                     targets = [t for t in targets if t.has_free_replica_slots()]
         return True
 
     @staticmethod
-    def _build_leader_distribution_weights(brokers: dict):
-        candidates = {}
-        for source_broker_id, source_broker in brokers.items():
-            if not source_broker.have_extra_leaders():
-                continue
-            for target_broker_id, target_broker in brokers.items():
-                if not target_broker.have_less_leaders():
-                    continue
-                weight_list = []
-                for topic in source_broker.topic_cardinality.keys():
-                    delta = source_broker.topic_cardinality[topic] - target_broker.topic_cardinality.get(topic, 0)
-                    weight_list.append((topic, delta))
-                # Now the first element is the first to rebalance.
-                if weight_list:
-                    candidates[(source_broker_id, target_broker_id)] = sorted(
-                        weight_list, key=lambda x: x[1], reverse=True)
-        return candidates
-
-    @staticmethod
-    def _place_to_cardinalities(array: list, topic: str, cardinality_change: int):
-        old_cardinality = None
-        for item in [(a, b) for a, b in array if a == topic]:
-            old_cardinality = item[1]
-            array.remove(item)
-        if old_cardinality is None:
-            return
-        new_cardinality = old_cardinality + cardinality_change
-        idx = len(array)
-        for i in range(idx - 1, -1, -1):
-            if array[i][1] >= new_cardinality:
-                idx = i + 1
-                break
-        array.insert(idx, (topic, new_cardinality))
-
-    @staticmethod
-    def rebalance_leaders(brokers: dict) -> list:
-        candidates = OptimizedRebalanceChange._build_leader_distribution_weights(brokers)
+    def rebalance_leaders(brokers: Dict[int, BrokerDescription]) -> list:
+        candidates = DistributionMap(brokers.values())
         queue_list = []
         while any([broker.have_extra_leaders() for broker in brokers.values()]):
-            top_candidate = None
-            for broker_pair, weight_list in candidates.items():
-                if not top_candidate:
-                    top_candidate = broker_pair
-                else:
-                    if weight_list[0][1] > candidates[top_candidate][0][1]:
-                        top_candidate = broker_pair
-            # Taking best topic to move
-            topic, _ = candidates[top_candidate][0]
-            # Updating cardinality map
-            for broker_pair, weight_list in candidates.items():
-                if top_candidate == broker_pair:
-                    OptimizedRebalanceChange._place_to_cardinalities(weight_list, topic, -2)
-                elif top_candidate[0] == broker_pair[0] or top_candidate[1] == broker_pair[1]:  # src or dst matches
-                    OptimizedRebalanceChange._place_to_cardinalities(weight_list, topic, -1)
             # Get broker objects
-            source_broker, target_broker = brokers[top_candidate[0]], brokers[top_candidate[1]]
-
+            source_broker, target_broker, topic = candidates.take_move_pair()
             # Selecting best partition to move (It is better to just swap leadership, instead of copying data)
             selected_partition = None
             source_partitions = source_broker.list_partitions(topic, False)
@@ -215,9 +228,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             # add transfer to queue
             queue_list.append((topic_partition, source_broker.broker_id, target_broker.broker_id))
             # Remove empty lists
-            for bp in [bp for bp, wl in candidates.items() if
-                       not brokers[bp[0]].have_extra_leaders() or not brokers[bp[1]].have_less_leaders()]:
-                del candidates[bp]
+            candidates.cleanup()
         return queue_list
 
     def _load_data(self):
