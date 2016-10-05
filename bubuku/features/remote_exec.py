@@ -3,7 +3,7 @@ import logging
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
 from bubuku.features.migrate import MigrationChange
-from bubuku.features.rebalance import RebalanceChange
+from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
 from bubuku.features.swap_partitions import SwapPartitionsChange, load_swap_data
 from bubuku.zookeeper import BukuExhibitor
@@ -30,7 +30,7 @@ class RemoteCommandExecutorCheck(Check):
             if data['name'] == 'restart':
                 return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
             elif data['name'] == 'rebalance':
-                return RebalanceChange(self.zk, self.zk.get_broker_ids())
+                return OptimizedRebalanceChange(self.zk, self.zk.get_broker_ids())
             elif data['name'] == 'migrate':
                 return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
             elif data['name'] == 'fatboyslim':
