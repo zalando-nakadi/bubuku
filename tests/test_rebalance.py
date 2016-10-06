@@ -194,3 +194,16 @@ class TestRebalance(unittest.TestCase):
         zk.get_broker_ids.return_value = ['1', '2', '4']
         assert check.check() is not None
         assert check.check() is None
+
+    def test_leader_partition_limit(self):
+        distribution = {
+            ('t0', '0'): ['1', '2'],
+            ('t0', '1'): ['1', '2'],
+            ('t0', '2'): ['1', '2'],
+            ('t1', '2'): ['1', '2'],
+        }
+        _, zk = _create_zk_for_topics(distribution, ['2', '3'])
+        o = OptimizedRebalanceChange(zk, ['2', '3'])
+        while o.run([]):
+            pass
+        _verify_balanced(['2', '3'], distribution)
