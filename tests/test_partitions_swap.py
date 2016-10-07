@@ -24,12 +24,12 @@ class TestPartitionsSwap(unittest.TestCase):
     }
 
     test_assignment = [
-        ("t1", 1, [333, 111]),
+        ("t1", 1, [111, 333]),
         ("t1", 2, [111, 222]),
-        ("t2", 1, [111, 222]),
+        ("t2", 1, [222, 111]),
         ("t2", 2, [222, 333]),
         ("t3", 1, [333, 111]),
-        ("t3", 2, [222, 333]),
+        ("t3", 2, [333, 222]),
     ]
 
     def setUp(self):
@@ -57,7 +57,7 @@ class TestPartitionsSwap(unittest.TestCase):
         result = swap_change.run([])
 
         assert not result
-        self.zk.reallocate_partitions.assert_called_with([('t2', 2, [111, 222]), ('t2', 1, [222, 333])])
+        self.zk.reallocate_partitions.assert_called_with([('t2', 2, [222, 111]), ('t2', 1, [222, 333])])
 
     def test_swap_partitions_change_not_performed(self):
         swap_change = SwapPartitionsChange(self.zk, lambda x: load_swap_data(x, -1, 10001))
@@ -77,7 +77,7 @@ class TestPartitionsSwap(unittest.TestCase):
         # if the write to ZK wasn't possible for some reason, the change should
         # return True and repeat write to ZK during next trigger by controller
         assert result
-        assert swap_change.to_move == [('t2', 2, [111, 222]), ('t2', 1, [222, 333])]
+        assert swap_change.to_move == [('t2', 2, [222, 111]), ('t2', 1, [222, 333])]
 
     def test_swap_partitions_change_postponed_when_rebalancing(self):
         self.zk.is_rebalancing.return_value = True
