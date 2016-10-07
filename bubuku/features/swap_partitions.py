@@ -24,14 +24,6 @@ class SwapPartitionsChange(BaseRebalanceChange):
         if self.should_be_paused(current_actions):
             _LOG.info("Pausing swap partitions change as there are conflicting actions: {}".format(current_actions))
             return True
-        try:
-            _LOG.info("Running swap partitions change: {}".format(self))
-            return self.__run_internal()
-        except Exception:
-            _LOG.warn("Error occurred when performing partitions swap change", exc_info=True)
-            return False
-
-    def __run_internal(self):
         # if there's a rebalance currently running - postpone current change
         if self.zk.is_rebalancing():
             return True
@@ -83,19 +75,19 @@ class SwapPartitionsChange(BaseRebalanceChange):
         return self.zk.reallocate_partitions(rebalance_list)
 
     def __find_all_swap_candidates(self, fat_broker_id: int, slim_broker_id: int, topics_stats: dict) -> dict:
-        partition_assignment = self.zk.load_partition_assignment()
-        swap_partition_candidates = {}
-        for topic, partition, replicas in partition_assignment:
+        swap_partition_candidates = {fat_broker_id: [], slim_broker_id: []}
+        for topic, partition, replicas in self.zk.load_partition_assignment():
             if topic not in topics_stats or str(partition) not in topics_stats[topic]:
                 continue  # we skip this partition as there is not data size stats for it
+
+            if replicas[0] in (fat_broker_id, slim_broker_id):
+                continue  # Skip leadership transfer
 
             if fat_broker_id in replicas and slim_broker_id in replicas:
                 continue  # we skip this partition as it exists on both involved brokers
 
             for broker_id in [slim_broker_id, fat_broker_id]:
                 if broker_id in replicas:
-                    if broker_id not in swap_partition_candidates:
-                        swap_partition_candidates[broker_id] = []
                     swap_partition_candidates[broker_id].append(
                         TpData(topic, partition, topics_stats[topic][str(partition)], replicas))
         return swap_partition_candidates
