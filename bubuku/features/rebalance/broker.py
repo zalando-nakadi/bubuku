@@ -62,14 +62,12 @@ class BrokerDescription(object):
         '_broker_id',
         '_leaders',
         '_replicas',
-        '_topic_cardinality',
     )
 
     def __init__(self, broker_id: int):
         self._broker_id = broker_id
         self._leaders = _TopicPartitions()
         self._replicas = _TopicPartitions()
-        self._topic_cardinality = None
 
     @property
     def broker_id(self):
@@ -153,14 +151,11 @@ class BrokerDescription(object):
     def list_replicas(self):
         return self._replicas.iterate_items()
 
-    @property
-    def topic_cardinality(self):
+    def calculate_topic_cardinality(self):
         """
-        Calculates (or returns cached) 'topic to leader count' dictionary on this broker.
+        Calculates 'topic to leader count' dictionary on this broker.
         For example, topic t0 have partitions 0, 1, 2, 3. If leaders for partitions 0, 3 are located on this broker
          than return value will contain mapping t0->2 (there are 2 leaders for topic t0 on this broker)
         :return: Dictionary with leaders count per topic for this broker.
         """
-        if self._topic_cardinality is None:
-            self._topic_cardinality = self._leaders.calculate_cardinality()
-        return self._topic_cardinality
+        return self._leaders.calculate_cardinality()
