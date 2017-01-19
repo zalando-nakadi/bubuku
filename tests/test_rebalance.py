@@ -1,12 +1,14 @@
 import functools
 import unittest
+from time import sleep
 from unittest.mock import MagicMock
 
+import requests
 from kazoo.exceptions import NoNodeError
 
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.rebalance.check import RebalanceOnBrokerListCheck
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, AddressListProvider, _ZookeeperProxy
 
 
 def _create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuExhibitor):
@@ -207,3 +209,39 @@ class TestRebalance(unittest.TestCase):
         while o.run([]):
             pass
         _verify_balanced(['2', '3'], distribution)
+
+    def test_handmade_rebalance(self):
+        class _TMP(AddressListProvider):
+            def get_latest_address(self) -> (list, int):
+                return ('127.0.0.1',), 2181
+
+        _zk_proxy = _ZookeeperProxy(_TMP(), '/live')
+        ex = BukuExhibitor(_zk_proxy)
+        while ex.is_rebalancing():
+            print('Waiting for rebalance to finish')
+            sleep(1)
+        broker_ids = ex.get_broker_ids()
+        for broker_id in broker_ids:
+            print('Broker id: {}, broker ip: {}', broker_id, ex.get_broker_address(broker_id))
+        broker_ids.remove('52397758')
+        broker_ids.remove('52407441')
+        step_size = 10
+        rebalance_data = OptimizedRebalanceChange.get_rebalance_data(ex, broker_ids)
+        while rebalance_data:
+            print('Steps left: {}'.format(len(rebalance_data)))
+            if len(rebalance_data) > step_size:
+                tmp = rebalance_data[:step_size]
+                rebalance_data = rebalance_data[step_size:]
+            else:
+                tmp = rebalance_data
+                rebalance_data = []
+            items = [(t, p, b) for t, p, b, s in tmp]
+            print('reallocating {}'.format(tmp))
+            print('data_to_write: {}'.format(items))
+            ex.reallocate_partitions(items)
+            while ex.is_rebalancing():
+                print('Waiting for rebalance to finish')
+                sleep(1)
+            ttt = 90
+            print('Waiting for {} seconds for leadership to transfer'.format(ttt))
+            sleep(ttt)
