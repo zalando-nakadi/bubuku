@@ -1,0 +1,17 @@
+approvals:
+  minimum: 1
+  ignore: pr_opener
+  pattern: "^(👍|:\\+1:|:thumbsup:|:shipit:)$"
+  veto:
+    pattern: "^(👎|:-1:|:thumbsdown:)$"
+  from:
+    users:
+      - adyach
+      - antban
+      - lmontrieux
+      - rcillo
+      - v-stepanov
+      - valgog
+      - SergKam
+X-Zalando-Team: "aruha"
+X-Zalando-Type: code
