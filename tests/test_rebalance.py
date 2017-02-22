@@ -1,4 +1,5 @@
 import functools
+import pytest
 import unittest
 from time import sleep
 from unittest.mock import MagicMock
@@ -210,6 +211,7 @@ class TestRebalance(unittest.TestCase):
             pass
         _verify_balanced(['2', '3'], distribution)
 
+    @pytest.mark.skip(reason="marked for removal")
     def test_handmade_rebalance(self):
         class _TMP(AddressListProvider):
             def get_latest_address(self) -> (list, int):
