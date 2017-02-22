@@ -6,14 +6,12 @@ approvals:
     pattern: "^(👎|:-1:|:thumbsdown:)$"
   from:
     users:
-      - adyachkov
-      - dsorokin
-      - dtscherwinka
-      - rdecillo
+      - adyach
+      - antban
       - lmontrieux
-      - vstepanov
-      - vgogichashvi
-      - skamenskyi
-      - yyankowski
+      - rcillo
+      - v-stepanov
+      - valgog
+      - SergKam
 X-Zalando-Team: "aruha"
 X-Zalando-Type: code
