@@ -115,9 +115,9 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _SORT_ACTIONS = 'sort_actions'
     _BALANCE = 'balance'
 
-    def __init__(self, zk: BukuExhibitor, broker_ids: list):
+    def __init__(self, zk: BukuExhibitor, broker_ids: list, exclude_brokers=[]):
         self.zk = zk
-        self.broker_ids = sorted(int(id_) for id_ in broker_ids)
+        self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in exclude_brokers)
         self.broker_distribution = None
         self.source_distribution = None
         self.action_queue = []
