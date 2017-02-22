@@ -51,6 +51,12 @@ def _verify_balanced(broker_ids, distribution):
 
     assert (max_total - min_total) <= 1
 
+def _verify_empty_brokers(broker_ids, distribution):
+    for brokers in distribution.values():
+        for broker in brokers:
+            if broker in broker_ids:
+                assert False
+    assert True
 
 class TestRebalance(unittest.TestCase):
     def test_rebalance_can_run(self):
@@ -89,6 +95,38 @@ class TestRebalance(unittest.TestCase):
             pass
 
         _verify_balanced(('1', '2'), distribution)
+
+    def test_rebalance_exclude_one_broker(self):
+        distribution = {
+            ('t0', '0'): ['1', '2'],
+            ('t0', '1'): ['2', '3'],
+            ('t1', '0'): ['2', '3'],
+            ('t1', '1'): ['3', '4'],
+        }
+        brokers, zk = _create_zk_for_topics(distribution)
+        o = OptimizedRebalanceChange(zk, brokers, ['2'], False)
+        while o.run([]):
+            pass
+
+        _verify_empty_brokers(('2'), distribution)
+
+    def test_rebalance_exclude_multiple_brokers(self):
+        distribution = {
+            ('t0', '0'): ['1', '2'],
+            ('t0', '1'): ['2', '3'],
+            ('t1', '0'): ['2', '3'],
+            ('t1', '1'): ['3', '4'],
+            ('t1', '2'): ['4', '5'],
+            ('t2', '0'): ['3', '4'],
+            ('t2', '1'): ['4', '5'],
+            ('t2', '2'): ['5', '6'],
+        }
+        brokers, zk = _create_zk_for_topics(distribution)
+        o = OptimizedRebalanceChange(zk, brokers, ['2','3'], False)
+        while o.run([]):
+            pass
+
+        _verify_empty_brokers(('2', '3'), distribution)
 
     def test_rebalance_on_filled2(self):
         distribution = {
