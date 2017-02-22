@@ -74,11 +74,14 @@ def restart_broker(broker: str):
               help="Broker instance on which to perform rebalance. By default, any free broker will start it")
 @click.option('--exclude_brokers', type=click.STRING,
               help="Comma-separated list of brokers to exclude from rebalance (they will be emptied)")
-def rebalance_partitions(broker: str, exclude_brokers: str):
+@click.option('--exclude_consumer_offsets', type=click.BOOL, default=False, show_default=True,
+              help="Do not rebalance '__consumer_offsets' partitions")
+def rebalance_partitions(broker: str, exclude_brokers: str, exclude_consumer_offsets):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
-        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, exclude_brokers.split(','))
+        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, exclude_brokers.split(','),
+                                                      exclude_consumer_offsets)
 
 
 @cli.command('migrate', help='Replace one broker with another for all partitions')
