@@ -21,7 +21,7 @@ class RebalanceOnStartCheck(Check):
             return None
         _LOG.info("Rebalance on start, triggering rebalance")
         self.executed = True
-        return OptimizedRebalanceChange(self.zk, self.zk.get_broker_ids())
+        return OptimizedRebalanceChange(self.zk, self.zk.get_broker_ids(), [], False)
 
     def __str__(self):
         return 'RebalanceOnStartCheck (executed={})'.format(self.executed)
@@ -41,7 +41,7 @@ class RebalanceOnBrokerListCheck(Check):
         if not new_list == self.old_broker_list:
             _LOG.info('Broker list changed from {} to {}, triggering rebalance'.format(self.old_broker_list, new_list))
             self.old_broker_list = new_list
-            return OptimizedRebalanceChange(self.zk, new_list)
+            return OptimizedRebalanceChange(self.zk, new_list, [], False)
         return None
 
     def __str__(self):

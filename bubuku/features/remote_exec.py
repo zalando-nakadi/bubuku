@@ -30,7 +30,10 @@ class RemoteCommandExecutorCheck(Check):
             if data['name'] == 'restart':
                 return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
             elif data['name'] == 'rebalance':
-                return OptimizedRebalanceChange(self.zk, self.zk.get_broker_ids(), data['exclude_brokers'])
+                return OptimizedRebalanceChange(self.zk,
+                                                self.zk.get_broker_ids(),
+                                                data['exclude_brokers'],
+                                                data['exclude_consumer_offsets'])
             elif data['name'] == 'migrate':
                 return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
             elif data['name'] == 'fatboyslim':

@@ -115,9 +115,10 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _SORT_ACTIONS = 'sort_actions'
     _BALANCE = 'balance'
 
-    def __init__(self, zk: BukuExhibitor, broker_ids: list, exclude_brokers=[]):
+    def __init__(self, zk: BukuExhibitor, broker_ids: list, exclude_brokers: list, exclude_consumer_offsets: bool):
         self.zk = zk
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in exclude_brokers)
+        self.exclude_consumer_offsets = True
         self.broker_distribution = None
         self.source_distribution = None
         self.action_queue = []
@@ -292,8 +293,9 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         Loads data from zk and prepares to perform rebalance. Fills in leader and replica count expectations.
         """
         self.broker_distribution = {id_: BrokerDescription(id_) for id_ in self.broker_ids}
+        topics_to_ignore = ["__consumer_offsets"] if self.exclude_consumer_offsets else []
         self.source_distribution = {(topic, partition): replicas for topic, partition, replicas in
-                                    self.zk.load_partition_assignment()}
+                                    self.zk.load_partition_assignment() if topic not in topics_to_ignore}
         for topic_partition, replicas in self.source_distribution.items():
             if not replicas:
                 continue
