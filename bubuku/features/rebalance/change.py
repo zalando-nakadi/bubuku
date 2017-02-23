@@ -156,28 +156,6 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             return not self._balance()
         return True
 
-    @staticmethod
-    def get_rebalance_data(zk: BukuExhibitor, broker_ids):
-        current_actions = []
-        with zk.lock('hand_rebalance'):
-            current_actions = zk.get_running_changes()
-        change = OptimizedRebalanceChange(zk, broker_ids)
-        while change.run(current_actions) and change.state != OptimizedRebalanceChange._BALANCE:
-            pass
-        disk_stats = zk.get_disk_stats()
-
-        def _get_size(v):
-            for ds in disk_stats.values():
-                size = ds['topics'].get(v[0], {}).get(str(v[1]))
-                if size is not None and size > 0:
-                    return size
-            return 0
-
-        actions_sorted_by_size = sorted(change.action_queue, key=_get_size)
-        # actions_sorted_by_size = change.action_queue
-        result = [a + (change.action_queue[a], _get_size(a)) for a in actions_sorted_by_size]
-        return result
-
     def _balance(self):
         if not self.action_queue:
             return True
