@@ -56,10 +56,10 @@ class RemoteCommandExecutorCheck(Check):
                 broker_id=broker_id)
 
     @staticmethod
-    def register_rebalance(zk: BukuExhibitor, broker_id: str, exclude_brokers: list, exclude_consumer_offsets: bool):
+    def register_rebalance(zk: BukuExhibitor, broker_id: str, exclude_brokers: list, exclude_topics: list):
         action = {'name': 'rebalance',
                   'exclude_brokers': exclude_brokers,
-                  'exclude_consumer_offsets': exclude_consumer_offsets}
+                  'exclude_topics': exclude_topics}
         with zk.lock():
             if broker_id:
                 zk.register_action(action, broker_id=broker_id)
