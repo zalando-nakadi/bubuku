@@ -72,14 +72,14 @@ def restart_broker(broker: str):
 @cli.command('rebalance', help='Run rebalance process on one of brokers')
 @click.option('--broker', type=click.STRING,
               help="Broker instance on which to perform rebalance. By default, any free broker will start it")
-@click.option('--exclude_brokers', type=click.STRING,
-              help="Comma-separated list of brokers to exclude from rebalance (they will be emptied)")
+@click.option('--empty_brokers', type=click.STRING,
+              help="Comma-separated list of brokers to empty. All partitions will be moved to other brokers")
 @click.option('--exclude_topics', type=click.STRING, help="Comma-separated list of topics to exclude from rebalance")
-def rebalance_partitions(broker: str, exclude_brokers: str, exclude_consumer_offsets: str):
+def rebalance_partitions(broker: str, empty_brokers: str, exclude_consumer_offsets: str):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
-        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, exclude_brokers.split(','),
+        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, empty_brokers.split(','),
                                                       exclude_consumer_offsets.split(','))
 
 
