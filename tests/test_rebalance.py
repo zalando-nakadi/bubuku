@@ -153,7 +153,6 @@ class TestRebalance(unittest.TestCase):
         distribution.pop(('t1', '1'))
         distribution.pop(('t1', '2'))
 
-        print(distribution.values())
         brokers = [item for sublist in distribution.values() for item in sublist]
         assert '2' not in brokers
         assert '3' not in brokers
