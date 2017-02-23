@@ -129,6 +129,35 @@ class TestRebalance(unittest.TestCase):
 
         _verify_empty_brokers(('2', '3'), distribution)
 
+    def test_rebalance_empty_brokers_and_exclude_topics(self):
+        distribution = {
+            ('t0', '0'): ['1', '2'],
+            ('t0', '1'): ['2', '3'],
+            ('t1', '0'): ['2', '3'],
+            ('t1', '1'): ['3', '4'],
+            ('t1', '2'): ['4', '5'],
+            ('t2', '0'): ['3', '4'],
+            ('t2', '1'): ['4', '5'],
+            ('t2', '2'): ['5', '6'],
+        }
+        brokers, zk = _create_zk_for_topics(distribution)
+        o = OptimizedRebalanceChange(zk, brokers, ['2','3'], ['t1'])
+        while o.run([]):
+            pass
+
+        assert distribution[('t1', '0')] == ['2', '3']
+        assert distribution[('t1', '1')] == ['3', '4']
+        assert distribution[('t1', '2')] == ['4', '5']
+
+        distribution.pop(('t1', '0'))
+        distribution.pop(('t1', '1'))
+        distribution.pop(('t1', '2'))
+
+        print(distribution.values())
+        brokers = [item for sublist in distribution.values() for item in sublist]
+        assert '2' not in brokers
+        assert '3' not in brokers
+
     def test_rebalance_on_filled2(self):
         distribution = {
             ('t0', '0'): ['2', '1'],
