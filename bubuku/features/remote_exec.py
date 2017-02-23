@@ -33,7 +33,7 @@ class RemoteCommandExecutorCheck(Check):
                 return OptimizedRebalanceChange(self.zk,
                                                 self.zk.get_broker_ids(),
                                                 data['empty_brokers'],
-                                                data['exclude_consumer_offsets'])
+                                                data['exclude_topics'])
             elif data['name'] == 'migrate':
                 return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
             elif data['name'] == 'fatboyslim':
