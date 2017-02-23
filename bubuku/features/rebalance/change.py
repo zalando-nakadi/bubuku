@@ -117,6 +117,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
 
     def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list):
         self.zk = zk
+        self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
         self.exclude_topics = exclude_topics
         self.broker_distribution = None
@@ -135,11 +136,11 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             return True
         if self.zk.is_rebalancing():
             return True
-        # new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
-        # if new_broker_ids != self.broker_ids:
-        #     _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(
-        #         self.broker_ids, new_broker_ids))
-        #     return False
+        new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
+        if new_broker_ids != (sorted(int(id_) for id_ in self.all_broker_ids)):
+            _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(
+                self.all_broker_ids, new_broker_ids))
+            return False
         if self.state == OptimizedRebalanceChange._LOAD_STATE:
             self._load_data()
             self.state = OptimizedRebalanceChange._COMPUTE_LEADERS
