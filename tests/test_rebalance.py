@@ -97,7 +97,7 @@ class TestRebalance(unittest.TestCase):
 
         _verify_balanced(('1', '2'), distribution)
 
-    def test_rebalance_exclude_one_broker(self):
+    def test_rebalance_empty_one_broker(self):
         distribution = {
             ('t0', '0'): ['1', '2'],
             ('t0', '1'): ['2', '3'],
@@ -111,7 +111,7 @@ class TestRebalance(unittest.TestCase):
 
         _verify_empty_brokers(('2'), distribution)
 
-    def test_rebalance_exclude_multiple_brokers(self):
+    def test_rebalance_empty_multiple_brokers(self):
         distribution = {
             ('t0', '0'): ['1', '2'],
             ('t0', '1'): ['2', '3'],
