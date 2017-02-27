@@ -4,11 +4,11 @@ import unittest
 from time import sleep
 from unittest.mock import MagicMock
 
-import requests
 from kazoo.exceptions import NoNodeError
 
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.rebalance.check import RebalanceOnBrokerListCheck
+from bubuku.features.swap_leadership import SwapLeadershipChange
 from bubuku.zookeeper import BukuExhibitor, AddressListProvider, _ZookeeperProxy
 
 
@@ -276,3 +276,13 @@ class TestRebalance(unittest.TestCase):
         while o.run([]):
             pass
         _verify_balanced(['2', '3'], distribution)
+
+    def test_leader_reallocation(self):
+        class _TMP(AddressListProvider):
+            def get_latest_address(self) -> (list, int):
+                return ('127.0.0.1',), 2181
+
+        _zk_proxy = _ZookeeperProxy(_TMP(), '/live')
+        ex = BukuExhibitor(_zk_proxy)
+        print({bid: ex.get_broker_address(bid) for bid in ex.get_broker_ids()})
+        SwapLeadershipChange(ex, 52399986, 52397959).run([])

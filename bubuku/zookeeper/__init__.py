@@ -276,6 +276,11 @@ class BukuExhibitor(object):
             _LOG.info("Waiting for free reallocation slot, still in progress...")
         return False
 
+    def get_actual_assignment(self, topic, partition):
+        state_data = json.loads(self.exhibitor.get(
+            '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))[0].decode('utf-8'))
+        return state_data['leader'], state_data['isr']
+
     def update_disk_stats(self, broker_id: str, data: dict):
         data_bytes = json.dumps(data, separators=(',', ':')).encode('utf-8')
         path = '/bubuku/size_stats/{}'.format(broker_id)
