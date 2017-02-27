@@ -30,6 +30,7 @@ def _print_table(table: list, print_function=None):
 def __validate_not_empty(ctx, param, value):
     if not value:
         raise click.BadParameter('Parameter must have value')
+    return value
 
 
 def __get_opt_broker_id(broker_id: str, config: Config, zk: BukuExhibitor, env_provider: EnvProvider) -> str:
