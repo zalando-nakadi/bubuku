@@ -43,6 +43,19 @@ def __get_opt_broker_id(broker_id: str, config: Config, zk: BukuExhibitor, env_p
         raise Exception('Broker id {} is not registered ({}), can not restart'.format(broker_id, running_brokers))
     return broker_id
 
+def __check_all_broker_ids_exist(broker_ids: list, zk: BukuExhibitor):
+    unknown_brokers = [broker_id for broker_id in broker_ids if not __check_broker_id_exists(broker_id, zk)]
+    if len(unknown_brokers) != 0:
+        raise Exception('{} broker ids are not valid: {}'.format(len(unknown_brokers), ",".join(unknown_brokers)))
+
+def __check_broker_id_exists(broker_id: str, zk: BukuExhibitor) -> bool:
+    if broker_id is None:
+        return False
+    running_brokers = zk.get_broker_ids()
+    if broker_id not in running_brokers:
+        return False
+    return True
+
 
 def __prepare_configs():
     config = load_config()
@@ -78,9 +91,12 @@ def restart_broker(broker: str):
 def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
+        exclude_topics_list = [] if exclude_topics is None else exclude_topics.split(',')
+        __check_all_broker_ids_exist(empty_brokers_list, zookeeper)
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
-        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, empty_brokers.split(','),
-                                                      exclude_topics.split(','))
+        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, empty_brokers_list,
+                                                      exclude_topics_list)
 
 
 @cli.command('migrate', help='Replace one broker with another for all partitions')
