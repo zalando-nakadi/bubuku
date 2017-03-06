@@ -137,7 +137,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if self.zk.is_rebalancing():
             return True
         new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
-        if new_broker_ids != (sorted(int(id_) for id_ in self.all_broker_ids)):
+        if new_broker_ids != self.all_broker_ids:
             _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(
                 self.all_broker_ids, new_broker_ids))
             return False
