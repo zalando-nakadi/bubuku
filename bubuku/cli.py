@@ -43,18 +43,14 @@ def __get_opt_broker_id(broker_id: str, config: Config, zk: BukuExhibitor, env_p
         raise Exception('Broker id {} is not registered ({}), can not restart'.format(broker_id, running_brokers))
     return broker_id
 
-def __check_all_broker_ids_exist(broker_ids: list, zk: BukuExhibitor):
-    unknown_brokers = [broker_id for broker_id in broker_ids if not __check_broker_id_exists(broker_id, zk)]
-    if len(unknown_brokers) != 0:
-        raise Exception('{} broker ids are not valid: {}'.format(len(unknown_brokers), ",".join(unknown_brokers)))
 
-def __check_broker_id_exists(broker_id: str, zk: BukuExhibitor) -> bool:
-    if broker_id is None:
-        return False
-    running_brokers = zk.get_broker_ids()
-    if broker_id not in running_brokers:
-        return False
-    return True
+def __check_all_broker_ids_exist(broker_ids: list, zk: BukuExhibitor):
+    registered_brokers = zk.get_broker_ids()
+    unknown_brokers = [broker_id for broker_id in broker_ids if broker_id not in registered_brokers]
+    if len(unknown_brokers) == 1:
+        raise Exception('1 broker id is not valid: {}'.format(unknown_brokers[0]))
+    if len(unknown_brokers) > 1:
+        raise Exception('{} broker ids are not valid: {}'.format(len(unknown_brokers), ",".join(unknown_brokers)))
 
 
 def __prepare_configs():
