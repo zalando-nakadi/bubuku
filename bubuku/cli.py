@@ -45,6 +45,15 @@ def __get_opt_broker_id(broker_id: str, config: Config, zk: BukuExhibitor, env_p
     return broker_id
 
 
+def __check_all_broker_ids_exist(broker_ids: list, zk: BukuExhibitor):
+    registered_brokers = zk.get_broker_ids()
+    unknown_brokers = [broker_id for broker_id in broker_ids if broker_id not in registered_brokers]
+    if len(unknown_brokers) == 1:
+        raise Exception('1 broker id is not valid: {}'.format(unknown_brokers[0]))
+    if len(unknown_brokers) > 1:
+        raise Exception('{} broker ids are not valid: {}'.format(len(unknown_brokers), ",".join(unknown_brokers)))
+
+
 def __prepare_configs():
     config = load_config()
     _LOG.info('Using config: {}'.format(config))
@@ -73,11 +82,18 @@ def restart_broker(broker: str):
 @cli.command('rebalance', help='Run rebalance process on one of brokers')
 @click.option('--broker', type=click.STRING,
               help="Broker instance on which to perform rebalance. By default, any free broker will start it")
-def rebalance_partitions(broker: str):
+@click.option('--empty_brokers', type=click.STRING,
+              help="Comma-separated list of brokers to empty. All partitions will be moved to other brokers")
+@click.option('--exclude_topics', type=click.STRING, help="Comma-separated list of topics to exclude from rebalance")
+def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
+        exclude_topics_list = [] if exclude_topics is None else exclude_topics.split(',')
+        __check_all_broker_ids_exist(empty_brokers_list, zookeeper)
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
-        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id)
+        RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, empty_brokers_list,
+                                                      exclude_topics_list)
 
 
 @cli.command('migrate', help='Replace one broker with another for all partitions')
@@ -203,7 +219,6 @@ def show_stats():
                 'Used kb': disk.get('used_kb')
             })
         _print_table(table)
-
 
 if __name__ == '__main__':
     cli()

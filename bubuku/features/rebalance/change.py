@@ -115,9 +115,11 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _SORT_ACTIONS = 'sort_actions'
     _BALANCE = 'balance'
 
-    def __init__(self, zk: BukuExhibitor, broker_ids: list):
+    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list):
         self.zk = zk
-        self.broker_ids = sorted(int(id_) for id_ in broker_ids)
+        self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
+        self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
+        self.exclude_topics = exclude_topics
         self.broker_distribution = None
         self.source_distribution = None
         self.action_queue = []
@@ -135,9 +137,9 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if self.zk.is_rebalancing():
             return True
         new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
-        if new_broker_ids != self.broker_ids:
+        if new_broker_ids != self.all_broker_ids:
             _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(
-                self.broker_ids, new_broker_ids))
+                self.all_broker_ids, new_broker_ids))
             return False
         if self.state == OptimizedRebalanceChange._LOAD_STATE:
             self._load_data()
@@ -271,7 +273,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         """
         self.broker_distribution = {id_: BrokerDescription(id_) for id_ in self.broker_ids}
         self.source_distribution = {(topic, partition): replicas for topic, partition, replicas in
-                                    self.zk.load_partition_assignment()}
+                                    self.zk.load_partition_assignment() if topic not in self.exclude_topics}
         for topic_partition, replicas in self.source_distribution.items():
             if not replicas:
                 continue

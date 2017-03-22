@@ -30,7 +30,10 @@ class RemoteCommandExecutorCheck(Check):
             if data['name'] == 'restart':
                 return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
             elif data['name'] == 'rebalance':
-                return OptimizedRebalanceChange(self.zk, self.zk.get_broker_ids())
+                return OptimizedRebalanceChange(self.zk,
+                                                self.zk.get_broker_ids(),
+                                                data['empty_brokers'],
+                                                data['exclude_topics'])
             elif data['name'] == 'migrate':
                 return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
             elif data['name'] == 'fatboyslim':
@@ -53,12 +56,15 @@ class RemoteCommandExecutorCheck(Check):
                 broker_id=broker_id)
 
     @staticmethod
-    def register_rebalance(zk: BukuExhibitor, broker_id: str):
+    def register_rebalance(zk: BukuExhibitor, broker_id: str, empty_brokers: list, exclude_topics: list):
+        action = {'name': 'rebalance',
+                  'empty_brokers': empty_brokers,
+                  'exclude_topics': exclude_topics}
         with zk.lock():
             if broker_id:
-                zk.register_action({'name': 'rebalance'}, broker_id=broker_id)
+                zk.register_action(action, broker_id=broker_id)
             else:
-                zk.register_action({'name': 'rebalance'})
+                zk.register_action(action)
 
     @staticmethod
     def register_migration(zk: BukuExhibitor, brokers_from: list, brokers_to: list, shrink: bool, broker_id: str):

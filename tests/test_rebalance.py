@@ -1,12 +1,15 @@
 import functools
+import pytest
 import unittest
+from time import sleep
 from unittest.mock import MagicMock
 
+import requests
 from kazoo.exceptions import NoNodeError
 
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.rebalance.check import RebalanceOnBrokerListCheck
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, AddressListProvider, _ZookeeperProxy
 
 
 def _create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuExhibitor):
@@ -49,10 +52,16 @@ def _verify_balanced(broker_ids, distribution):
 
     assert (max_total - min_total) <= 1
 
+def _verify_empty_brokers(broker_ids, distribution):
+    for brokers in distribution.values():
+        for broker in brokers:
+            if broker in broker_ids:
+                assert False
+    assert True
 
 class TestRebalance(unittest.TestCase):
     def test_rebalance_can_run(self):
-        o = OptimizedRebalanceChange(object(), [])
+        o = OptimizedRebalanceChange(object(), [], [], [])
 
         blocked_actions = ['restart', 'start', 'stop', 'rebalance']
 
@@ -64,12 +73,12 @@ class TestRebalance(unittest.TestCase):
         assert o.can_run([])
 
     def test_rebalance_get_name(self):
-        o = OptimizedRebalanceChange(object(), [])
+        o = OptimizedRebalanceChange(object(), [], [], [])
         assert o.get_name() == 'rebalance'
 
     def test_rebalance_on_empty1(self):
         brokers, zk = _create_zk_for_topics({})
-        o = OptimizedRebalanceChange(zk, brokers)
+        o = OptimizedRebalanceChange(zk, brokers, [], [])
         while o.run([]):
             pass
 
@@ -81,12 +90,72 @@ class TestRebalance(unittest.TestCase):
             ('t0', '3'): ['1'],
         }
         brokers, zk = _create_zk_for_topics(distribution)
-        o = OptimizedRebalanceChange(zk, brokers)
+        o = OptimizedRebalanceChange(zk, brokers, [], [])
         # broker to partitions
         while o.run([]):
             pass
 
         _verify_balanced(('1', '2'), distribution)
+
+    def test_rebalance_empty_one_broker(self):
+        distribution = {
+            ('t0', '0'): ['1', '2'],
+            ('t0', '1'): ['2', '3'],
+            ('t1', '0'): ['2', '3'],
+            ('t1', '1'): ['3', '4'],
+        }
+        brokers, zk = _create_zk_for_topics(distribution)
+        o = OptimizedRebalanceChange(zk, brokers, ['2'], [])
+        while o.run([]):
+            pass
+
+        _verify_empty_brokers(('2'), distribution)
+
+    def test_rebalance_empty_multiple_brokers(self):
+        distribution = {
+            ('t0', '0'): ['1', '2'],
+            ('t0', '1'): ['2', '3'],
+            ('t1', '0'): ['2', '3'],
+            ('t1', '1'): ['3', '4'],
+            ('t1', '2'): ['4', '5'],
+            ('t2', '0'): ['3', '4'],
+            ('t2', '1'): ['4', '5'],
+            ('t2', '2'): ['5', '6'],
+        }
+        brokers, zk = _create_zk_for_topics(distribution)
+        o = OptimizedRebalanceChange(zk, brokers, ['2','3'], [])
+        while o.run([]):
+            pass
+
+        _verify_empty_brokers(('2', '3'), distribution)
+
+    def test_rebalance_empty_brokers_and_exclude_topics(self):
+        distribution = {
+            ('t0', '0'): ['1', '2'],
+            ('t0', '1'): ['2', '3'],
+            ('t1', '0'): ['2', '3'],
+            ('t1', '1'): ['3', '4'],
+            ('t1', '2'): ['4', '5'],
+            ('t2', '0'): ['3', '4'],
+            ('t2', '1'): ['4', '5'],
+            ('t2', '2'): ['5', '6'],
+        }
+        brokers, zk = _create_zk_for_topics(distribution)
+        o = OptimizedRebalanceChange(zk, brokers, ['2','3'], ['t1'])
+        while o.run([]):
+            pass
+
+        assert distribution[('t1', '0')] == ['2', '3']
+        assert distribution[('t1', '1')] == ['3', '4']
+        assert distribution[('t1', '2')] == ['4', '5']
+
+        distribution.pop(('t1', '0'))
+        distribution.pop(('t1', '1'))
+        distribution.pop(('t1', '2'))
+
+        brokers = [item for sublist in distribution.values() for item in sublist]
+        assert '2' not in brokers
+        assert '3' not in brokers
 
     def test_rebalance_on_filled2(self):
         distribution = {
@@ -99,7 +168,7 @@ class TestRebalance(unittest.TestCase):
             ('t0', '6'): ['1', '2'],
         }
         brokers, zk = _create_zk_for_topics(distribution)
-        o = OptimizedRebalanceChange(zk, brokers)
+        o = OptimizedRebalanceChange(zk, brokers, [], [])
         # broker to partitions
         while o.run([]):
             pass
@@ -117,7 +186,7 @@ class TestRebalance(unittest.TestCase):
             ('t0', '6'): ['1', '2'],
         }
         _, zk = _create_zk_for_topics(distribution, broker_ids=['1', '3'])
-        o = OptimizedRebalanceChange(zk, ['1', '3'])
+        o = OptimizedRebalanceChange(zk, ['1', '3'], [], [])
         while o.run([]):
             pass
         _verify_balanced(['1', '3'], distribution)
@@ -129,7 +198,7 @@ class TestRebalance(unittest.TestCase):
         }
 
         _, zk = _create_zk_for_topics(distribution, broker_ids=['1', '3'])
-        o = OptimizedRebalanceChange(zk, ['1', '3'])
+        o = OptimizedRebalanceChange(zk, ['1', '3'], [], [])
         try:
             while o.run([]):
                 pass
@@ -144,7 +213,7 @@ class TestRebalance(unittest.TestCase):
             ('t0', '2'): ['3', '4']
         }
         _, zk = _create_zk_for_topics(distribution, ['1', '2', '3'])
-        o = OptimizedRebalanceChange(zk, ['1', '2', '3'])
+        o = OptimizedRebalanceChange(zk, ['1', '2', '3'], [], [])
         while o.run([]):
             pass
         _verify_balanced(['1', '2', '3'], distribution)
@@ -156,7 +225,7 @@ class TestRebalance(unittest.TestCase):
             ('t0', '2'): ['3', '4']
         }
         _, zk = _create_zk_for_topics(distribution, ['1', '2', '4'])
-        o = OptimizedRebalanceChange(zk, ['1', '2', '4'])
+        o = OptimizedRebalanceChange(zk, ['1', '2', '4'], [], [])
         while o.run([]):
             pass
         _verify_balanced(['1', '2', '4'], distribution)
@@ -170,7 +239,7 @@ class TestRebalance(unittest.TestCase):
             distribution.update({(topic, str(partition)): ['1', '2', '3'] for partition in range(0, partition_count)})
         _, zk = _create_zk_for_topics(distribution, broker_ids=['1', '2', '3', '4', '5'])
 
-        o = OptimizedRebalanceChange(zk, ['1', '2', '3', '4', '5'])
+        o = OptimizedRebalanceChange(zk, ['1', '2', '3', '4', '5'], [], [])
         steps = 0
         while o.run([]):
             steps += 1
@@ -203,7 +272,7 @@ class TestRebalance(unittest.TestCase):
             ('t1', '2'): ['1', '2'],
         }
         _, zk = _create_zk_for_topics(distribution, ['2', '3'])
-        o = OptimizedRebalanceChange(zk, ['2', '3'])
+        o = OptimizedRebalanceChange(zk, ['2', '3'], [], [])
         while o.run([]):
             pass
         _verify_balanced(['2', '3'], distribution)
