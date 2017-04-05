@@ -214,8 +214,6 @@ class BukuExhibitor(object):
                 data = json.loads(value.decode('utf-8'))
                 for k, v in data['partitions'].items():
                     yield (topic, int(k), v)
-            pass
-
         else:
             for topic in topics_:
                 data = json.loads(self.exhibitor.get('/brokers/topics/{}'.format(topic))[0].decode('utf-8'))
