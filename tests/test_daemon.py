@@ -46,19 +46,20 @@ def test_rebalance_on_start():
     assert not check.executed
 
 
-def test_rebalance_on_broker_list_change():
-    exhibitor = object()
-    broker = object()
-
-    controller = TestController()
-
-    apply_features(-1, {'rebalance_on_brokers_change': {}}, controller, exhibitor, broker, None, None)
-
-    assert len(controller.checks) == 1
-    check = controller.checks[0]
-    assert type(check) == RebalanceOnBrokerListCheck
-    assert check.zk == exhibitor
-    assert check.broker == broker
+# Check is temporary disabled
+# def test_rebalance_on_broker_list_change():
+#     exhibitor = object()
+#     broker = object()
+#
+#     controller = TestController()
+#
+#     apply_features(-1, {'rebalance_on_brokers_change': {}}, controller, exhibitor, broker, None, None)
+#
+#     assert len(controller.checks) == 1
+#     check = controller.checks[0]
+#     assert type(check) == RebalanceOnBrokerListCheck
+#     assert check.zk == exhibitor
+#     assert check.broker == broker
 
 
 def test_graceful_terminate():

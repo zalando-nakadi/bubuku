@@ -29,7 +29,8 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
         elif feature == 'rebalance_on_start':
             controller.add_check(RebalanceOnStartCheck(buku_proxy, broker))
         elif feature == 'rebalance_on_brokers_change':
-            controller.add_check(RebalanceOnBrokerListCheck(buku_proxy, broker))
+            _LOG.warning('Feature {} is temprary blocked'.format(feature))
+            # controller.add_check(RebalanceOnBrokerListCheck(buku_proxy, broker))
         elif feature == 'balance_data_size':
             controller.add_check(
                 CheckBrokersDiskImbalance(buku_proxy, broker, config["diff_threshold_mb"] * 1024, api_port))
