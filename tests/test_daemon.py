@@ -14,20 +14,19 @@ class TestController(object):
     def add_check(self, check):
         self.checks.append(check)
 
-# Temporary disabled
-# def test_load_restart_on_exhibitor():
-#     exhibitor = object()
-#     broker = object()
-#
-#     controller = TestController()
-#
-#     apply_features(-1, {'restart_on_exhibitor': {}}, controller, exhibitor, broker, None, None)
-#
-#     assert len(controller.checks) == 1
-#     check = controller.checks[0]
-#     assert type(check) == CheckExhibitorAddressChanged
-#     assert check.zk == exhibitor
-#     assert check.broker == broker
+def test_load_restart_on_exhibitor():
+    exhibitor = object()
+    broker = object()
+
+    controller = TestController()
+
+    apply_features(-1, {'restart_on_exhibitor': {}}, controller, exhibitor, broker, None, None)
+
+    assert len(controller.checks) == 1
+    check = controller.checks[0]
+    assert type(check) == CheckExhibitorAddressChanged
+    assert check.zk == exhibitor
+    assert check.broker == broker
 
 
 def test_rebalance_on_start():

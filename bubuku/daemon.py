@@ -25,8 +25,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
                    kafka_properties: KafkaProperties, env_provider: EnvProvider) -> list:
     for feature, config in features.items():
         if feature == 'restart_on_exhibitor':
-            # controller.add_check(CheckExhibitorAddressChanged(buku_proxy, broker))
-            _LOG.warning('Feature {} is temprary blocked'.format(feature))
+            controller.add_check(CheckExhibitorAddressChanged(buku_proxy, broker))
         elif feature == 'rebalance_on_start':
             controller.add_check(RebalanceOnStartCheck(buku_proxy, broker))
         elif feature == 'rebalance_on_brokers_change':
