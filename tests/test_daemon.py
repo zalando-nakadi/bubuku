@@ -14,7 +14,6 @@ class TestController(object):
     def add_check(self, check):
         self.checks.append(check)
 
-
 def test_load_restart_on_exhibitor():
     exhibitor = object()
     broker = object()

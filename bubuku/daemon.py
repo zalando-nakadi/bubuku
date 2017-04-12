@@ -90,7 +90,7 @@ def main():
             _LOG.error("WOW! Almost died! Will try to restart from the begin. "
                        "After initialization will be complete, will try to restart", exc_info=ex)
             if process_holder.get():
-                restart_on_init = True
+                restart_on_init = False
 
 
 if __name__ == '__main__':
