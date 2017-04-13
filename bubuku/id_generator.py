@@ -51,7 +51,7 @@ def _create_rfc1918_address_hash(ip: str) -> (str, str):
 class BrokerIDByIp(BrokerIdGenerator):
     def __init__(self, zk: BukuExhibitor, ip: str, kafka_props: KafkaProperties):
         self.zk = zk
-        self.broker_id = _read_broker_id_from_meta_properties()
+        self.broker_id = _read_broker_id_from_meta_properties(kafka_props)
         if self.broker_id is None:
             self.broker_id, max_id = _create_rfc1918_address_hash(ip)
             _LOG.info('Built broker id {} from ip: {}'.format(self.broker_id, ip))
@@ -73,17 +73,17 @@ class BrokerIDByIp(BrokerIdGenerator):
 
 
 class BrokerIdAutoAssign(BrokerIdGenerator):
-    def __init__(self, zk: BukuExhibitor, kafka_properties: KafkaProperties):
+    def __init__(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
         super().__init__()
         self.zk = zk
-        self.kafka_properties = kafka_properties
+        self.kafka_props = kafka_props
         self.broker_id = None
 
     def get_broker_id(self):
         return None
 
     def detect_broker_id(self):
-        return _read_broker_id_from_meta_properties()
+        return _read_broker_id_from_meta_properties(self.kafka_props)
 
     def is_registered(self):
         broker_id = self.detect_broker_id()
@@ -92,8 +92,8 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
         return False
 
 
-def _read_broker_id_from_meta_properties(self):
-    meta_path = '{}/meta.properties'.format(self.kafka_properties.get_property('log.dirs'))
+def _read_broker_id_from_meta_properties(kafka_props: KafkaProperties):
+    meta_path = '{}/meta.properties'.format(kafka_props.get_property('log.dirs'))
     while not os.path.isfile(meta_path):
         return None
     with open(meta_path) as f:
