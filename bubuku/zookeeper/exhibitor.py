@@ -37,6 +37,6 @@ class ExhibitorAddressProvider(AddressListProvider):
                 _LOG.warn('Failed to query zookeeper list information from {}'.format(url), exc_info=e)
             except ConnectionError as e:
                 _LOG.warn('Failed to connect to zookeeper instance {}'.format(url), exc_info=e)
-            except:
+            except Exception as e:
                 _LOG.warn('Unknown error connecting to zookeeper instance {}'.format(url), exc_info=e)
         return None
