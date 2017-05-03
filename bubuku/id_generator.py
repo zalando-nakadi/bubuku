@@ -52,11 +52,11 @@ class BrokerIDByIp(BrokerIdGenerator):
     def __init__(self, zk: BukuExhibitor, ip: str, kafka_props: KafkaProperties):
         self.zk = zk
         self.broker_id = _read_broker_id_from_meta_properties(kafka_props)
-        max_id = str(256 * 256 * 256 * 4 + 1)
         if self.broker_id is None:
             self.broker_id, max_id = _create_rfc1918_address_hash(ip)
             _LOG.info('Built broker id {} from ip: {}'.format(self.broker_id, ip))
         else:
+            max_id = str(256 * 256 * 256 * 4 + 1)
             _LOG.info('Using existing broker id {}'.format(self.broker_id))
         kafka_props.set_property('reserved.broker.max.id', max_id)
 
