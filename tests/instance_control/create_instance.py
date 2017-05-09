@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
-import itertools
 import time
 import boto3
 from botocore.exceptions import ClientError
-import click
 import collections
 import yaml
 import requests
 import string
 import re
-from clickclick import Action, info, action
 from subprocess import check_call, call
 import tempfile
 import os
@@ -22,55 +19,46 @@ import random
 
 
 def setup_security_groups(cluster_name: str, node_ips: dict, vpc_id: str, odd_sg_id: str, result: dict) -> dict:
-    '''
-    Allow traffic between regions (or within a VPC, if `use_dmz' is False)
-    '''
     for region, ips in node_ips.items():
-        with Action('Configuring Security Group in {}..'.format(region)):
-            ec2 = boto3.client('ec2', region)
-            existing_sg = ec2.describe_security_groups(Filters=[{'Name': 'group-name', 'Values':[cluster_name]}])
-            if existing_sg['SecurityGroups']:
-                result[region] = existing_sg['SecurityGroups'][0]
-                return
-            info("Security Group does not exists, creating Security Group rule")
+        print('Configuring Security Group in {}..'.format(region))
+        ec2 = boto3.client('ec2', region)
+        existing_sg = ec2.describe_security_groups(Filters=[{'Name': 'group-name', 'Values':[cluster_name]}])
+        if existing_sg['SecurityGroups']:
+            result[region] = existing_sg['SecurityGroups'][0]
+            return
 
-            # resp = ec2.describe_vpcs()
-            # TODO: support more than one VPC..
-            # vpc = resp['Vpcs'][0]
-            sg_name = cluster_name
-            sg = ec2.create_security_group(GroupName=sg_name,
-                                           VpcId=vpc_id,
-                                           Description='Bubuku Security Group')
-            result[region] = sg
-            ec2.create_tags(Resources=[sg['GroupId']], Tags=[{'Key': 'Name', 'Value': sg_name}])
-            ip_permissions = []
-            try:
-                resp = ec2.describe_security_groups(GroupIds=[odd_sg_id])
-                odd_sg = resp['SecurityGroups'][0]
+        print("Security Group does not exists, creating Security Group rule")
+        sg_name = cluster_name
+        sg = ec2.create_security_group(GroupName=sg_name,
+                                       VpcId=vpc_id,
+                                       Description='Bubuku Security Group')
+        result[region] = sg
+        ec2.create_tags(Resources=[sg['GroupId']], Tags=[{'Key': 'Name', 'Value': sg_name}])
+        ip_permissions = []
+        try:
+            resp = ec2.describe_security_groups(GroupIds=[odd_sg_id])
+            odd_sg = resp['SecurityGroups'][0]
 
-                ip_permissions.append(get_ip_permission(odd_sg['GroupId'], 22))
-                ip_permissions.append(get_ip_permission(odd_sg['GroupId'], 8004))
-                ip_permissions.append(get_ip_permission(odd_sg['GroupId'], 8080))
-                ip_permissions.append(get_ip_permission(odd_sg['GroupId'], 8778))
-                ip_permissions.append(get_ip_permission(odd_sg['GroupId'], 9100))
-                ip_permissions.append(get_ip_permission(odd_sg['GroupId'], 9092))
+            ip_permissions.append(get_ip_permission(22))
+            ip_permissions.append(get_ip_permission(8004))
+            ip_permissions.append(get_ip_permission(8080))
+            ip_permissions.append(get_ip_permission(8778))
+            ip_permissions.append(get_ip_permission(9100))
+            ip_permissions.append(get_ip_permission(9092))
 
-            except ClientError:
-                info("Could not find Odd bastion host in region {}, skipping Security Group rule.".format(region))
-                pass
+        except ClientError as ce:
+            print(ce)
+            raise Exception("Could not find Odd bastion host in region {}, skipping Security Group rule.".format(region))
 
-            ec2.authorize_security_group_ingress(GroupId=sg['GroupId'], IpPermissions=ip_permissions)
+        ec2.authorize_security_group_ingress(GroupId=sg['GroupId'], IpPermissions=ip_permissions)
 
 
-def get_ip_permission(group_id: str, port: int):
+def get_ip_permission(port: int):
     return {
         'IpProtocol': 'tcp',
         'FromPort': port,
         'ToPort': port,
         'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
-        # 'UserIdGroupPairs': [{
-        #     'GroupId': group_id
-        # }]
     }
 
 
@@ -200,13 +188,12 @@ def allocate_ip_addresses(region_subnets: dict, cluster_size: int, node_ips: dic
             ec2 = boto3.client('ec2', region_name=region)
 
             for ip in generate_private_ip_addresses(ec2, subnets, cluster_size):
-                address = {'PrivateIp': ip}
-                address['_defaultIp'] = ip
+                address = {'PrivateIp': ip, '_defaultIp': ip}
                 node_ips[region].append(address)
                 act.progress()
 
 
-def get_subnets(prefix_filter: str, availability_zone: str, regions: list) -> dict:
+def get_subnets(prefix_filter: str, availability_zone: str, vpc_id: str, regions: list) -> dict:
     '''
     Returns a dict of per-region lists of subnets, which names start
     with the specified prefix (it should be either 'dmz-' or
@@ -218,6 +205,8 @@ def get_subnets(prefix_filter: str, availability_zone: str, regions: list) -> di
         resp = ec2.describe_subnets()
 
         for subnet in sorted(resp['Subnets'], key=lambda subnet: subnet['AvailabilityZone']):
+            if subnet['VpcId'] != vpc_id:
+                continue
             for tag in subnet['Tags']:
                 if tag['Key'] == 'Name' and tag['Value'].startswith(prefix_filter):
                     if availability_zone:
@@ -474,39 +463,22 @@ def launch_instance(region: str, ip: dict, ami: object, subnet: dict, security_g
 
 
 def launch_normal_nodes(options: dict):
-    # TODO: parallelize by region?
     for region, ips in options['node_ips'].items():
         subnets = options['subnets'][region]
         for i, ip in enumerate(ips):
-            if i == options['cluster_size']:
-                info("Done. Node(s) is created.")
-                break
-
             launch_instance(region, ip,
                             ami=options['taupage_amis'][region],
                             subnet= subnets[i % len(subnets)],
                             security_group_id=options['security_groups'][region]['GroupId'],
                             options=options)
+            if i+1 >= options['cluster_size']:
+                info("Done. Node(s) is created.")
+                break
             info("Sleeping for one minute before launching next node..")
             time.sleep(60)
 
 
-def print_failure_message():
-    sys.stderr.write('''
-You were trying to deploy Bubuku, but the process has failed :-(
-
-One of the reasons might be that some of Private IP addresses we were
-going to use to launch the EC2 instances were taken by some other
-instances in the middle of the process.  If that is the case, simply
-retrying the operation might resolve the problem (you still might need
-to clean up after this attempt before retrying).
-
-Please review the error message to see if that is the case, then
-either correct the error or retry.
-
-''')
-
-
+# TODO pass stack config dict here
 def run(regions: list,
         vpc_id: str,
         odd_sg_id: str,
@@ -522,20 +494,20 @@ def run(regions: list,
         environment: list):
 
     if not cluster_name:
-        raise click.UsageError('You must specify the cluster name')
+        raise Exception('You must specify the cluster name')
 
     cluster_name_re = '^[a-z][a-z0-9-]*[a-z0-9]$'
     if not re.match(cluster_name_re, cluster_name):
-        raise click.UsageError('Cluster name must only contain lowercase latin letters, digits and dashes (it also must start with a letter and cannot end with a dash), in other words it must be matched by the following regular expression: {}'.format(cluster_name_re))
+        raise Exception('Cluster name must only contain lowercase latin letters, digits and dashes (it also must start with a letter and cannot end with a dash), in other words it must be matched by the following regular expression: {}'.format(cluster_name_re))
 
     if not regions:
-        raise click.UsageError('Please specify at least one region')
+        raise Exception('Please specify at least one region')
 
     artifact_name = 'bubuku-appliance'
     docker_image = 'registry.opensource.zalan.do/aruha/{}:{}'.format(artifact_name, image_version)
     url = 'https://registry.opensource.zalan.do/teams/aruha/artifacts/{}/tags'.format(artifact_name)
     if not next(tag for tag in requests.get(url).json() if tag['name'] == image_version):
-        raise click.UsageError('Docker image was not found')
+        raise Exception('Docker image was not found')
 
     if environment:
         environment = dict(map(lambda x: x.split("="), environment))
@@ -554,17 +526,10 @@ def run(regions: list,
 
     try:
         taupage_amis = find_taupage_amis(regions)
-
-        subnets = get_subnets('internal-', availability_zone, regions)
-
+        subnets = get_subnets('internal-', availability_zone, vpc_id, regions)
         allocate_ip_addresses(subnets, cluster_size, node_ips)
-
-        # check if want to add node to the same cluster
-
         setup_security_groups(cluster_name, node_ips, vpc_id, odd_sg_id, security_groups)
-
         user_data = generate_taupage_user_data(locals())
-
         instance_profile = create_instance_profile(cluster_name)
 
         #
@@ -578,11 +543,17 @@ def run(regions: list,
         launch_normal_nodes(locals())
 
     except:
-        print_failure_message()
-
-        for region, sg in security_groups.items():
-            ec2 = boto3.client('ec2', region)
-            info('Cleaning up security group: {}'.format(sg['GroupId']))
-            ec2.delete_security_group(GroupId=sg['GroupId'])
-
+        sys.stderr.write('''
+            You were trying to deploy Bubuku, but the process has failed :-(
+            
+            One of the reasons might be that some of Private IP addresses we were
+            going to use to launch the EC2 instances were taken by some other
+            instances in the middle of the process.  If that is the case, simply
+            retrying the operation might resolve the problem (you still might need
+            to clean up after this attempt before retrying).
+            
+            Please review the error message to see if that is the case, then
+            either correct the error or retry.
+            
+        ''')
         raise

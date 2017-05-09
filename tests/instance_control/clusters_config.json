@@ -1,0 +1,26 @@
+[
+  {
+    "cluster_name": "bubuku",
+    "regions": ["eu-central-1"],
+    "vpc_id": "vpc-12345678",
+    "odd_sg_id": "sg-12345678",
+    "cluster_size": 1,
+    "instance_type": "m4.large",
+    "volume_type": "st1",
+    "volume_size": 500,
+    "scalyr_key": "key-1234",
+    "image_version": "bubuku-appliance",
+    "environment": [
+      "ZOOKEEPER_STACK_NAME=live",
+      "HEALTH_PORT=8888",
+      "BUBUKU_MODE=amazon",
+      "zookeeper_prefix=/live",
+      "buku_features=restart_on_exhibitor,graceful_terminate,use_ip_address",
+      "jmx_port=8004",
+      "kafka_heap_opts=-Xmx6G -Xms6G",
+      "startup_timeout_type=linear",
+      "startup_timeout_initial=300",
+      "startup_timeout_step=60"
+    ]
+  }
+]
