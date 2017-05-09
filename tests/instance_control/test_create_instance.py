@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
 
-import time
-import boto3
-from botocore.exceptions import ClientError
 import collections
-import yaml
-import requests
-import string
-import re
-from subprocess import check_call, call
-import tempfile
-import os
-import sys
 import copy
+import re
+import sys
+import time
+
+import boto3
 import netaddr
-import base64
-import random
+import requests
+import yaml
+from botocore.exceptions import ClientError
 
 
-def setup_security_groups(cluster_name: str, node_ips: dict, vpc_id: str, odd_sg_id: str, result: dict) -> dict:
+def setup_security_groups(cluster_name: str, node_ips: dict, vpc_id: str, result: dict) -> dict:
     for region, ips in node_ips.items():
         print('Configuring Security Group in {}..'.format(region))
         ec2 = boto3.client('ec2', region)
-        existing_sg = ec2.describe_security_groups(Filters=[{'Name': 'group-name', 'Values':[cluster_name]}])
+        existing_sg = ec2.describe_security_groups(Filters=[{'Name': 'group-name', 'Values': [cluster_name]}])
         if existing_sg['SecurityGroups']:
             result[region] = existing_sg['SecurityGroups'][0]
             return
@@ -34,23 +29,12 @@ def setup_security_groups(cluster_name: str, node_ips: dict, vpc_id: str, odd_sg
                                        Description='Bubuku Security Group')
         result[region] = sg
         ec2.create_tags(Resources=[sg['GroupId']], Tags=[{'Key': 'Name', 'Value': sg_name}])
-        ip_permissions = []
-        try:
-            resp = ec2.describe_security_groups(GroupIds=[odd_sg_id])
-            odd_sg = resp['SecurityGroups'][0]
-
-            ip_permissions.append(get_ip_permission(22))
-            ip_permissions.append(get_ip_permission(8004))
-            ip_permissions.append(get_ip_permission(8080))
-            ip_permissions.append(get_ip_permission(8778))
-            ip_permissions.append(get_ip_permission(9100))
-            ip_permissions.append(get_ip_permission(9092))
-
-        except ClientError as ce:
-            print(ce)
-            raise Exception("Could not find Odd bastion host in region {}, skipping Security Group rule.".format(region))
-
-        ec2.authorize_security_group_ingress(GroupId=sg['GroupId'], IpPermissions=ip_permissions)
+        ec2.authorize_security_group_ingress(GroupId=sg['GroupId'], IpPermissions=[get_ip_permission(22),
+                                                                                   get_ip_permission(8004),
+                                                                                   get_ip_permission(8080),
+                                                                                   get_ip_permission(8778),
+                                                                                   get_ip_permission(9100),
+                                                                                   get_ip_permission(9092)])
 
 
 def get_ip_permission(port: int):
@@ -68,79 +52,27 @@ def find_taupage_amis(regions: list) -> dict:
     '''
     result = {}
     for region in regions:
-        with Action('Finding latest Taupage AMI in {}..'.format(region)):
-            ec2 = boto3.resource('ec2', region)
-            filters = [{'Name': 'name', 'Values': ['*Taupage-AMI-*']},
-                       {'Name': 'is-public', 'Values': ['false']},
-                       {'Name': 'state', 'Values': ['available']},
-                       {'Name': 'root-device-type', 'Values': ['ebs']}]
-            images = list(ec2.images.filter(Filters=filters))
-            if not images:
-                raise Exception('No Taupage AMI found')
-            most_recent_image = sorted(images, key=lambda i: i.name)[-1]
-            result[region] = most_recent_image
-        info(most_recent_image.name)
+        print('Finding latest Taupage AMI in {}..'.format(region))
+        ec2 = boto3.resource('ec2', region)
+        filters = [{'Name': 'name', 'Values': ['*Taupage-AMI-*']},
+                   {'Name': 'is-public', 'Values': ['false']},
+                   {'Name': 'state', 'Values': ['available']},
+                   {'Name': 'root-device-type', 'Values': ['ebs']}]
+        images = list(ec2.images.filter(Filters=filters))
+        if not images:
+            raise Exception('No Taupage AMI found')
+        most_recent_image = sorted(images, key=lambda i: i.name)[-1]
+        result[region] = most_recent_image
     return result
 
 
-def get_latest_docker_image_version(artifact_name):
-    url = 'https://registry.opensource.zalan.do/teams/stups/artifacts/{}/tags'.format(artifact_name)
-    return requests.get(url).json()[-1]['name']
-
-
-def generate_certificate(cluster_name: str):
-    check = call(["which", "keytool"])
-    if check:
-        print("Keytool is not in searchpath")
-        return
-
-    d = tempfile.mkdtemp()
-    try:
-        keystore = os.path.join(d, 'keystore')
-        cmd = ["keytool", "-genkeypair",
-               "-alias", "planb",
-               "-keyalg", "RSA",
-               "-validity", "36000",
-               "-keystore", keystore,
-               "-dname", "c=DE, st=Berlin, l=Berlin, o=Zalando SE, cn=zalando.net",
-               "-storepass", cluster_name,
-               "-keypass", cluster_name]
-        check_call(cmd)
-        cert = os.path.join(d, 'cert')
-        export = ["keytool", "-export",
-                  "-alias", "planb",
-                  "-keystore", keystore,
-                  "-rfc",
-                  "-file", cert,
-                  "-storepass", cluster_name]
-        check_call(export)
-        truststore = os.path.join(d, 'truststore')
-        importcmd = ["keytool", "-import",
-                     "-noprompt",
-                     "-alias", "planb",
-                     "-file", cert,
-                     "-keystore", truststore,
-                     "-storepass", cluster_name]
-        check_call(importcmd)
-
-        with open(keystore, 'rb') as fd:
-            keystore_data = fd.read()
-        with open(truststore, 'rb') as fd:
-            truststore_data = fd.read()
-    finally:
-        pass
-    return keystore_data, truststore_data
-
-
 class IpAddressPoolDepletedException(Exception):
-
     def __init__(self, cidr_block: str):
         msg = "Pool of unused IP addresses depleted in subnet: {}".format(cidr_block)
         super(IpAddressPoolDepletedException, self).__init__(msg)
 
 
 def generate_private_ip_addresses(ec2: object, subnets: list, cluster_size: int):
-
     def try_next_address(ips, subnet):
         try:
             return str(next(ips))
@@ -184,20 +116,19 @@ def allocate_ip_addresses(region_subnets: dict, cluster_size: int, node_ips: dic
     reservations, and optionally allocate Elastic IPs.
     '''
     for region, subnets in region_subnets.items():
-        with Action('Allocating IP addresses in {}..'.format(region)) as act:
-            ec2 = boto3.client('ec2', region_name=region)
+        print('Allocating IP addresses in {}..'.format(region))
+        ec2 = boto3.client('ec2', region_name=region)
 
-            for ip in generate_private_ip_addresses(ec2, subnets, cluster_size):
-                address = {'PrivateIp': ip, '_defaultIp': ip}
-                node_ips[region].append(address)
-                act.progress()
+        for ip in generate_private_ip_addresses(ec2, subnets, cluster_size):
+            address = {'PrivateIp': ip, '_defaultIp': ip}
+            node_ips[region].append(address)
 
 
 def get_subnets(prefix_filter: str, availability_zone: str, vpc_id: str, regions: list) -> dict:
     '''
     Returns a dict of per-region lists of subnets, which names start
     with the specified prefix (it should be either 'dmz-' or
-    'internal-'), sorted by the Availability Zone.
+    'internal-'), sorted by the Availability Zone and filtered by vpc id
     '''
     subnets = collections.defaultdict(list)
     for region in regions:
@@ -223,10 +154,6 @@ def generate_taupage_user_data(options: dict) -> str:
     Generate Taupage user data to start a Bubuku node
     http://docs.stups.io/en/latest/components/taupage.html
     '''
-
-    keystore_base64 = base64.b64encode(options['keystore'])
-    truststore_base64 = base64.b64encode(options['truststore'])
-
     data = {'runtime': 'Docker',
             'source': options['docker_image'],
             'application_id': options['cluster_name'],
@@ -247,9 +174,7 @@ def generate_taupage_user_data(options: dict) -> str:
                 'KAFKA_HEAP_OPTS': options['environment']['kafka_heap_opts'],
                 'STARTUP_TIMEOUT_TYPE': options['environment']['startup_timeout_type'],
                 'STARTUP_TIMEOUT_INITIAL': options['environment']['startup_timeout_initial'],
-                'STARTUP_TIMEOUT_STEP': options['environment']['startup_timeout_step'],
-                'KEYSTORE': keystore_base64,
-                'TRUSTSTORE': truststore_base64,
+                'STARTUP_TIMEOUT_STEP': options['environment']['startup_timeout_step']
             },
             'volumes': {
                 'ebs': {
@@ -285,7 +210,7 @@ def create_instance_profile(cluster_name: str):
         profile = iam.get_instance_profile(InstanceProfileName=profile_name)
         return profile['InstanceProfile']
     except ClientError:
-        info("Instance profile does not exists, creating ...")
+        print("Instance profile does not exists, creating ...")
         pass
 
     profile = iam.create_instance_profile(InstanceProfileName=profile_name)
@@ -361,7 +286,7 @@ def create_tagged_volume(ec2: object, options: dict, zone: str, name: str):
         "AvailabilityZone": zone,
         "VolumeType": options['volume_type'],
         "Size": options['volume_size'],
-        "Encrypted": False,}
+        "Encrypted": False, }
     vol = ec2.create_volume(**ebs_data)
 
     tags = [{'Key': 'Name',
@@ -372,94 +297,92 @@ def create_tagged_volume(ec2: object, options: dict, zone: str, name: str):
 
 
 def launch_instance(region: str, ip: dict, ami: object, subnet: dict, security_group_id: str, options: dict):
+    print('Launching node {} in {}..'.format(ip['_defaultIp'], region))
+    ec2 = boto3.client('ec2', region_name=region)
 
-    with Action('Launching node {} in {}..'.format(ip['_defaultIp'], region)) as act:
-        ec2 = boto3.client('ec2', region_name=region)
+    #
+    # Override any ephemeral volumes with NoDevice mapping,
+    # otherwise auto-recovery alarm cannot be actually enabled.
+    #
+    block_devices = []
+    for bd in ami.block_device_mappings:
+        if 'Ebs' in bd:
+            #
+            # This has to be our root EBS.
+            #
+            # If the Encrypted flag is present, we have to delete
+            # it even if it matches the actual snapshot setting,
+            # otherwise amazon will complain rather loudly.
+            #
+            # Take a deep copy before deleting the key:
+            #
+            bd = copy.deepcopy(bd)
 
-        #
-        # Override any ephemeral volumes with NoDevice mapping,
-        # otherwise auto-recovery alarm cannot be actually enabled.
-        #
-        block_devices = []
-        for bd in ami.block_device_mappings:
-            if 'Ebs' in bd:
-                #
-                # This has to be our root EBS.
-                #
-                # If the Encrypted flag is present, we have to delete
-                # it even if it matches the actual snapshot setting,
-                # otherwise amazon will complain rather loudly.
-                #
-                # Take a deep copy before deleting the key:
-                #
-                bd = copy.deepcopy(bd)
+            root_ebs = bd['Ebs']
+            if 'Encrypted' in root_ebs:
+                del (root_ebs['Encrypted'])
 
-                root_ebs = bd['Ebs']
-                if 'Encrypted' in root_ebs:
-                    del(root_ebs['Encrypted'])
+            block_devices.append(bd)
+        else:
+            # ignore any ephemeral volumes (aka. instance storage)
+            block_devices.append({'DeviceName': bd['DeviceName'],
+                                  'NoDevice': ''})
 
-                block_devices.append(bd)
-            else:
-                # ignore any ephemeral volumes (aka. instance storage)
-                block_devices.append({'DeviceName': bd['DeviceName'],
-                                      'NoDevice': ''})
+    volume_name = 'kafka-logs-ebs'
+    if options['create_ebs']:
+        create_tagged_volume(ec2, options, subnet['AvailabilityZone'], volume_name)
 
-        volume_name = 'kafka-logs-ebs' #'{}-{}'.format(options['cluster_name'], ip['PrivateIp'])
-        if options['create_ebs']:
-            create_tagged_volume(ec2, options, subnet['AvailabilityZone'], volume_name)
+    user_data = options['user_data']
+    user_data['volumes']['ebs']['/dev/xvdk'] = volume_name
+    taupage_user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(user_data))
 
-        user_data = options['user_data']
-        user_data['volumes']['ebs']['/dev/xvdk'] = volume_name
-        taupage_user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(user_data))
+    resp = ec2.run_instances(
+        ImageId=ami.id,
+        MinCount=1,
+        MaxCount=1,
+        SecurityGroupIds=[security_group_id],
+        UserData=taupage_user_data,
+        InstanceType=options['instance_type'],
+        SubnetId=subnet['SubnetId'],
+        PrivateIpAddress=ip['PrivateIp'],
+        BlockDeviceMappings=block_devices,
+        IamInstanceProfile={'Arn': options['instance_profile']['Arn']},
+        DisableApiTermination=False)
 
-        resp = ec2.run_instances(
-            ImageId=ami.id,
-            MinCount=1,
-            MaxCount=1,
-            SecurityGroupIds=[security_group_id],
-            UserData=taupage_user_data,
-            InstanceType=options['instance_type'],
-            SubnetId=subnet['SubnetId'],
-            PrivateIpAddress=ip['PrivateIp'],
-            BlockDeviceMappings=block_devices,
-            IamInstanceProfile={'Arn': options['instance_profile']['Arn']},
-            DisableApiTermination=False) #not(options['no_termination_protection']))
+    instance = resp['Instances'][0]
+    instance_id = instance['InstanceId']
 
-        instance = resp['Instances'][0]
-        instance_id = instance['InstanceId']
+    ec2.create_tags(Resources=[instance_id],
+                    Tags=[{'Key': 'Name', 'Value': options['cluster_name']}])
 
-        ec2.create_tags(Resources=[instance_id],
-                        Tags=[{'Key': 'Name', 'Value': options['cluster_name']}])
+    # wait for instance to initialize before we can assign a
+    # public IP address to it or tag the attached volume
+    while True:
+        resp = ec2.describe_instances(InstanceIds=[instance_id])
+        instance = resp['Reservations'][0]['Instances'][0]
+        if instance['State']['Name'] != 'pending':
+            break
+        time.sleep(5)
 
-        # wait for instance to initialize before we can assign a
-        # public IP address to it or tag the attached volume
-        while True:
-            resp = ec2.describe_instances(InstanceIds=[instance_id])
-            instance = resp['Reservations'][0]['Instances'][0]
-            if instance['State']['Name'] != 'pending':
-                break
-            time.sleep(5)
-            act.progress()
+    # add an auto-recovery alarm for this instance
+    cw = boto3.client('cloudwatch', region_name=region)
+    alarm_actions = ['arn:aws:automate:{}:ec2:recover'.format(region)]
+    if options['alarm_topics']:
+        alarm_actions.append(options['alarm_topics'][region])
 
-        # add an auto-recovery alarm for this instance
-        cw = boto3.client('cloudwatch', region_name=region)
-        alarm_actions = ['arn:aws:automate:{}:ec2:recover'.format(region)]
-        if options['alarm_topics']:
-            alarm_actions.append(options['alarm_topics'][region])
-
-        cw.put_metric_alarm(AlarmName='{}-{}-auto-recover'.format(options['cluster_name'], instance_id),
-                            AlarmActions=alarm_actions,
-                            MetricName='StatusCheckFailed_System',
-                            Namespace='AWS/EC2',
-                            Statistic='Minimum',
-                            Dimensions=[{
-                                'Name': 'InstanceId',
-                                'Value': instance_id
-                            }],
-                            Period=60,  # 1 minute
-                            EvaluationPeriods=2,
-                            Threshold=0,
-                            ComparisonOperator='GreaterThanThreshold')
+    cw.put_metric_alarm(AlarmName='{}-{}-auto-recover'.format(options['cluster_name'], instance_id),
+                        AlarmActions=alarm_actions,
+                        MetricName='StatusCheckFailed_System',
+                        Namespace='AWS/EC2',
+                        Statistic='Minimum',
+                        Dimensions=[{
+                            'Name': 'InstanceId',
+                            'Value': instance_id
+                        }],
+                        Period=60,  # 1 minute
+                        EvaluationPeriods=2,
+                        Threshold=0,
+                        ComparisonOperator='GreaterThanThreshold')
 
 
 def launch_normal_nodes(options: dict):
@@ -468,37 +391,39 @@ def launch_normal_nodes(options: dict):
         for i, ip in enumerate(ips):
             launch_instance(region, ip,
                             ami=options['taupage_amis'][region],
-                            subnet= subnets[i % len(subnets)],
+                            subnet=subnets[i % len(subnets)],
                             security_group_id=options['security_groups'][region]['GroupId'],
                             options=options)
-            if i+1 >= options['cluster_size']:
-                info("Done. Node(s) is created.")
+            if i + 1 >= options['cluster_size']:
+                print("Done. Node(s) is created.")
                 break
-            info("Sleeping for one minute before launching next node..")
+            print("Sleeping for one minute before launching next node..")
             time.sleep(60)
 
 
-# TODO pass stack config dict here
-def run(regions: list,
-        vpc_id: str,
-        odd_sg_id: str,
-        availability_zone: str,
-        create_ebs: bool,
-        cluster_name: str,
-        cluster_size: int,
-        instance_type: str,
-        volume_type: str,
-        volume_size: int,
-        scalyr_key: str,
-        image_version: str,
-        environment: list):
+def create_instance_with(cluster_config: dict):
+    regions=cluster_config['regions'],
+    vpc_id=cluster_config['vpc_id'],
+    availability_zone=cluster_config['availability_zone'],
+    create_ebs=cluster_config['create_ebs'],
+    cluster_name=cluster_config['cluster_name'],
+    cluster_size=cluster_config['cluster_size'],
+    instance_type=cluster_config['instance_type'],
+    volume_type=cluster_config['volume_type'],
+    volume_size=cluster_config['volume_size'],
+    scalyr_key=cluster_config['scalyr_key'],
+    image_version=cluster_config['image_version'],
+    environment=cluster_config['environment']
 
     if not cluster_name:
         raise Exception('You must specify the cluster name')
 
     cluster_name_re = '^[a-z][a-z0-9-]*[a-z0-9]$'
     if not re.match(cluster_name_re, cluster_name):
-        raise Exception('Cluster name must only contain lowercase latin letters, digits and dashes (it also must start with a letter and cannot end with a dash), in other words it must be matched by the following regular expression: {}'.format(cluster_name_re))
+        raise Exception(
+            'Cluster name must only contain lowercase latin letters, digits and dashes '
+            '(it also must start with a letter and cannot end with a dash), in other words '
+            'it must be matched by the following regular expression: {}'.format(cluster_name_re))
 
     if not regions:
         raise Exception('Please specify at least one region')
@@ -509,13 +434,9 @@ def run(regions: list,
     if not next(tag for tag in requests.get(url).json() if tag['name'] == image_version):
         raise Exception('Docker image was not found')
 
-    if environment:
-        environment = dict(map(lambda x: x.split("="), environment))
-
-        for k,v in environment.items():
-            print("Adding optional env var: {}={}".format(k, v))
-
-    keystore, truststore = generate_certificate(cluster_name)
+    print("Environment variables: ")
+    for k, v in environment.items():
+        print("{}={}".format(k, v))
 
     # List of IP addresses by region
     node_ips = collections.defaultdict(list)
@@ -528,7 +449,7 @@ def run(regions: list,
         taupage_amis = find_taupage_amis(regions)
         subnets = get_subnets('internal-', availability_zone, vpc_id, regions)
         allocate_ip_addresses(subnets, cluster_size, node_ips)
-        setup_security_groups(cluster_name, node_ips, vpc_id, odd_sg_id, security_groups)
+        setup_security_groups(cluster_name, node_ips, vpc_id, security_groups)
         user_data = generate_taupage_user_data(locals())
         instance_profile = create_instance_profile(cluster_name)
 
