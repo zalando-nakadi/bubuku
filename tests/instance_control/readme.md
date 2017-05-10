@@ -1,8 +1,9 @@
 ## Usage
 
 ```
-export PYTHONPATH=$HOME/bubuku/tests
-export CONFIG_PATH=$HOME/clusters_config.json
+export PYTHONPATH=$PROJECTS/bubuku/tests
+export CONFIG_PATH=$PROJECTS/clusters_config.json
+cd $PROJECTS/bubuku/tests/instance_control
 ```
 
 ### Create
