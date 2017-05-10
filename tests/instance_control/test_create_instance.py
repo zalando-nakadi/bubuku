@@ -402,17 +402,17 @@ def launch_normal_nodes(options: dict):
 
 
 def create_instance_with(cluster_config: dict):
-    regions=cluster_config['regions'],
-    vpc_id=cluster_config['vpc_id'],
-    availability_zone=cluster_config['availability_zone'],
-    create_ebs=cluster_config['create_ebs'],
-    cluster_name=cluster_config['cluster_name'],
-    cluster_size=cluster_config['cluster_size'],
-    instance_type=cluster_config['instance_type'],
-    volume_type=cluster_config['volume_type'],
-    volume_size=cluster_config['volume_size'],
-    scalyr_key=cluster_config['scalyr_key'],
-    image_version=cluster_config['image_version'],
+    regions=cluster_config['regions']
+    vpc_id=cluster_config['vpc_id']
+    availability_zone=cluster_config['availability_zone']
+    create_ebs=cluster_config['create_ebs']
+    cluster_name=cluster_config['cluster_name']
+    cluster_size=cluster_config['cluster_size']
+    instance_type=cluster_config['instance_type']
+    volume_type=cluster_config['volume_type']
+    volume_size=cluster_config['volume_size']
+    scalyr_key=cluster_config['scalyr_key']
+    image_version=cluster_config['image_version']
     environment=cluster_config['environment']
 
     if not cluster_name:
