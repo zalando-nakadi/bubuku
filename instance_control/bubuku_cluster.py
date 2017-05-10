@@ -4,7 +4,7 @@ from subprocess import call
 
 import boto3
 import click
-from instance_control import test_create_instance
+from instance_control import create_instance
 
 
 @click.group()
@@ -90,7 +90,7 @@ def upgrade(cluster_name: str, image_version: str, cluster_config: str,
     cluster_config['availability_zone'] = volume.availability_zone
     cluster_config['create_ebs'] = False
 
-    test_create_instance.create_instance_with(cluster_config)
+    create_instance.create_instance_with(cluster_config)
     wait_volumes_attached(ec2_client, ec2_resource)
 
 
@@ -109,7 +109,7 @@ def attach(cluster_name: str, volume_id: str, cluster_config: str):
     cluster_config['availability_zone'] = volume.availability_zone
     print('Launching instance in availability zone: ', cluster_config['availability_zone'])
 
-    test_create_instance.create_instance_with(cluster_config)
+    create_instance.create_instance_with(cluster_config)
     wait_volumes_attached(ec2_client, ec2_resource)
 
 
@@ -128,7 +128,7 @@ def create(cluster_name: str, cluster_size: int, availability_zone: str, image_v
     cluster_config['create_ebs'] = True
     cluster_config['availability_zone'] = availability_zone
 
-    test_create_instance.create_instance_with(cluster_config)
+    create_instance.create_instance_with(cluster_config)
     ec2_client = boto3.client('ec2', region_name=cluster_config['regions'][0])
     ec2_resource = boto3.resource('ec2', region_name=cluster_config['regions'][0])
     wait_volumes_attached(ec2_client, ec2_resource)
@@ -186,7 +186,7 @@ def get(cluster_name: str, cluster_config: str):
 def prepare(cluster_name: str, cluster_config_path: str):
     with open(cluster_config_path) as data_file:
         cluster_configs = json.load(data_file)
-    cluster_config = next(cluster for cluster in cluster_configs if cluster['cluster_name'] == cluster_name)
+    cluster_config = next((cluster for cluster in cluster_configs if cluster['cluster_name'] == cluster_name), None)
     if cluster_config:
         call(["zaws", "login", cluster_config['account']])
         return cluster_config

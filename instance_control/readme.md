@@ -1,15 +1,17 @@
 ## Usage
 
+The script helps to manage upgrades of Bubuku(Kafka) without terminating EBS volume.
+
 ```
-export PYTHONPATH=$PROJECTS/bubuku/tests
+export PYTHONPATH=$PROJECTS/bubuku
 export CONFIG_PATH=$PROJECTS/clusters_config.json
-cd $PROJECTS/bubuku/tests/instance_control
+cd $PROJECTS/bubuku/instance_control
 ```
 
 ### Create
 
 ```
-python3 test_ebs_cli.py create \
+python3 bubuku_cluster.py create \
                 --cluster-name bubuku-1 \
                 --cluster-size 1 \
                 --cluster-config $CONFIG_PATH
@@ -18,7 +20,7 @@ python3 test_ebs_cli.py create \
 ### Terminate
 
 ```
-python3 test_ebs_cli.py terminate \
+python3 bubuku_cluster.py terminate \
                 --cluster-name bubuku-1 \
                 --cluster-config $CONFIG_PATH \
                 --ip 10.246.2.11 \
@@ -29,7 +31,7 @@ python3 test_ebs_cli.py terminate \
 ### Attach
 
 ```
-python3 test_ebs_cli.py attach \
+python3 bubuku_cluster.py attach \
                 --cluster-name bubuku-1 \
                 --volume-id vol-0e995bfffc31384c2 \
                 --cluster-config $CONFIG_PATH
@@ -38,7 +40,7 @@ python3 test_ebs_cli.py attach \
 ### Upgrade
 
 ```
-python3 test_ebs_cli.py upgrade \
+python3 bubuku_cluster.py upgrade \
                 --cluster-name bubuku-1 \
                 --cluster-config $CONFIG_PATH \
                 --ip 10.246.2.11 \
@@ -49,7 +51,7 @@ python3 test_ebs_cli.py upgrade \
 ### Get
 
 ```
-python3 test_ebs_cli.py get \
+python3 bubuku_cluster.py get \
                 --cluster-name bubuku-1 \
                 --cluster-config $CONFIG_PATH
 ```
