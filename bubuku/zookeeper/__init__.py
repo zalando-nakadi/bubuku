@@ -98,7 +98,7 @@ class _ZookeeperProxy(object):
             self.conn_str = ','.join(['{}:{}'.format(h, port) for h in hosts]) + self.prefix
             if self.client is None:
                 self.client = KazooClient(hosts=self.conn_str,
-                                          command_retry={'deadline': 10, 'max_delay': 1, 'max_tries': -1},
+                                          command_retry={'deadline': 120, 'max_delay': 1, 'max_tries': -1},
                                           connection_retry={'max_delay': 1, 'max_tries': -1})
                 self.client.add_listener(self.session_listener)
             else:
