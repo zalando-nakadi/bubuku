@@ -1,3 +1,7 @@
+X-Zalando-Team: "aruha"
+X-Zalando-Type: code
+
+
 approvals:
   groups:
     zalando:
@@ -5,5 +9,3 @@ approvals:
       from:
         orgs:
           - zalando
-X-Zalando-Team: "aruha"
-X-Zalando-Type: code
