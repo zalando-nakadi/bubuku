@@ -1,8 +1,7 @@
-[
-  {
+{
+  "bubuku-1": {
     "account": "aruha-test",
-    "cluster_name": "bubuku-1",
-    "regions": ["eu-central-1"],
+    "region": "eu-central-1",
     "vpc_id": "vpc-12345678",
     "cluster_size": 1,
     "instance_type": "m4.large",
@@ -12,7 +11,7 @@
     "image_version": "bubuku-appliance",
     "environment": {
       "ZOOKEEPER_STACK_NAME": "exhibitor-staging",
-      "HEALTH_PORT": "8888",
+      "HEALTH_PORT": 8888,
       "BUBUKU_MODE": "amazon",
       "zookeeper_prefix": "/staging",
       "buku_features": "restart_on_exhibitor,graceful_terminate,use_ip_address",
@@ -23,4 +22,4 @@
       "startup_timeout_step": 60
     }
   }
-]
+}
