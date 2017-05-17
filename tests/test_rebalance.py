@@ -1,15 +1,12 @@
 import functools
-import pytest
 import unittest
-from time import sleep
 from unittest.mock import MagicMock
 
-import requests
 from kazoo.exceptions import NoNodeError
 
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.rebalance.check import RebalanceOnBrokerListCheck
-from bubuku.zookeeper import BukuExhibitor, AddressListProvider, _ZookeeperProxy
+from bubuku.zookeeper import BukuExhibitor
 
 
 def _create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuExhibitor):
@@ -31,7 +28,13 @@ def _create_zk_for_topics(topic_data, broker_ids=None) -> (list, BukuExhibitor):
         topic_data[(topic, str(partition))] = [str(x) for x in replicas]
         return True
 
+    def _reassign_many(items):
+        for item in items:
+            _reassign(*item)
+        return True
+
     buku_proxy.reallocate_partition = _reassign
+    buku_proxy.reallocate_partitions = _reassign_many
     return sorted(list(set(functools.reduce(lambda x, y: x + y, topic_data.values(), [])))), buku_proxy
 
 
@@ -52,12 +55,14 @@ def _verify_balanced(broker_ids, distribution):
 
     assert (max_total - min_total) <= 1
 
+
 def _verify_empty_brokers(broker_ids, distribution):
     for brokers in distribution.values():
         for broker in brokers:
             if broker in broker_ids:
                 assert False
     assert True
+
 
 class TestRebalance(unittest.TestCase):
     def test_rebalance_can_run(self):
@@ -123,7 +128,7 @@ class TestRebalance(unittest.TestCase):
             ('t2', '2'): ['5', '6'],
         }
         brokers, zk = _create_zk_for_topics(distribution)
-        o = OptimizedRebalanceChange(zk, brokers, ['2','3'], [])
+        o = OptimizedRebalanceChange(zk, brokers, ['2', '3'], [])
         while o.run([]):
             pass
 
@@ -141,7 +146,7 @@ class TestRebalance(unittest.TestCase):
             ('t2', '2'): ['5', '6'],
         }
         brokers, zk = _create_zk_for_topics(distribution)
-        o = OptimizedRebalanceChange(zk, brokers, ['2','3'], ['t1'])
+        o = OptimizedRebalanceChange(zk, brokers, ['2', '3'], ['t1'])
         while o.run([]):
             pass
 
