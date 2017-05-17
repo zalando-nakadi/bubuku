@@ -115,7 +115,8 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _SORT_ACTIONS = 'sort_actions'
     _BALANCE = 'balance'
 
-    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list):
+    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
+                 step_size: int = 1):
         self.zk = zk
         self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
@@ -124,6 +125,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.source_distribution = None
         self.action_queue = []
         self.state = OptimizedRebalanceChange._LOAD_STATE
+        self.step_size = step_size
 
     def __str__(self):
         return 'OptimizedRebalance state={}, queue_size={}'.format(
@@ -158,12 +160,15 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         return True
 
     def _balance(self):
-        if not self.action_queue:
+        items = []
+        while self.action_queue and len(items) < self.step_size:
+            items.append(self.action_queue.popitem())  # key, partition tuple
+        if not items:
             return True
-        key, replicas = self.action_queue.popitem()
-        topic, partition = key
-        if not self.zk.reallocate_partition(topic, partition, replicas):
-            self.action_queue[key] = replicas
+        data_to_rebalance = [(key[0], key[1], replicas) for key, replicas in items]
+        if not self.zk.reallocate_partitions(data_to_rebalance):
+            for key, replicas in items:
+                self.action_queue[key] = replicas
         return False
 
     def _rebalance_replicas(self):

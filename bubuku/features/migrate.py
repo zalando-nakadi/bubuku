@@ -7,11 +7,12 @@ _LOG = logging.getLogger('bubuku.features.migrate')
 
 
 class MigrationChange(BaseRebalanceChange):
-    def __init__(self, zk: BukuExhibitor, from_: list, to: list, shrink: bool):
+    def __init__(self, zk: BukuExhibitor, from_: list, to: list, shrink: bool, step_size: int = 1):
         self.zk = zk
         self.migration = {int(from_[i]): int(to[i]) for i in range(0, len(from_))}
         self.shrink = shrink
         self.data_to_migrate = None
+        self.step_size = step_size
 
     def run(self, current_actions) -> bool:
         if self.should_be_paused(current_actions):
@@ -33,15 +34,19 @@ class MigrationChange(BaseRebalanceChange):
             _LOG.info('Load {} partitions'.format(len(self.data_to_migrate)))
             return True
 
-        while self.data_to_migrate:
+        items_to_migrate = []
+        while self.data_to_migrate and len(items_to_migrate) < self.step_size:
             topic, partition, replicas = self.data_to_migrate.pop()
             replaced_replicas = self._replace_replicas(replicas)
             if replaced_replicas == replicas:
                 continue
-            if not self.zk.reallocate_partition(topic, partition, replaced_replicas):
+            items_to_migrate.append((topic, partition, replicas, replaced_replicas))
+        if not items_to_migrate:
+            return False
+        if not self.zk.reallocate_partitions([(t, p, rr) for t, p, _, rr in items_to_migrate]):
+            for topic, partition, replicas, _ in items_to_migrate:
                 self.data_to_migrate.append((topic, partition, replicas))
-            return True
-        return False
+        return True
 
     def __str__(self):
         return 'Migration links {}, shrink: {}, data_to_move: {}'.format(

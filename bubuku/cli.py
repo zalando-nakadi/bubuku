@@ -85,7 +85,9 @@ def restart_broker(broker: str):
 @click.option('--empty_brokers', type=click.STRING,
               help="Comma-separated list of brokers to empty. All partitions will be moved to other brokers")
 @click.option('--exclude_topics', type=click.STRING, help="Comma-separated list of topics to exclude from rebalance")
-def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str):
+@click.option('--step', type=click.INT, show_default=True,
+              help="Step size for rebalance, i.e. how many parallel moves do at a time")
+def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, step: int = 1):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
@@ -93,7 +95,7 @@ def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str):
         __check_all_broker_ids_exist(empty_brokers_list, zookeeper)
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
         RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, empty_brokers_list,
-                                                      exclude_topics_list)
+                                                      exclude_topics_list, step)
 
 
 @cli.command('migrate', help='Replace one broker with another for all partitions')
@@ -104,11 +106,14 @@ def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str):
 @click.option('--shrink', is_flag=True, default=False, show_default=True,
               help='Whether or not to shrink replaced broker ids form partition assignment')
 @click.option('--broker', type=click.STRING, help='Optional broker id to execute check on')
-def migrate_broker(from_: str, to: str, shrink: bool, broker: str):
+@click.option('--step', type=click.INT, show_default=True,
+              help="Step size for rebalance, i.e. how many parallel moves do at a time")
+def migrate_broker(from_: str, to: str, shrink: bool, broker: str, step: int = 1):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
-        RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink, broker_id)
+        RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink, broker_id,
+                                                      step)
 
 
 @cli.command('swap_fat_slim', help='Move one partition from fat broker to slim one')
@@ -177,7 +182,8 @@ def delete_actions(action: str, broker: str):
 
     for broker_id, address in _list_broker_addresses(config, env_provider, broker):
         try:
-            response = requests.delete('http://{}:{}/api/controller/queue/{}'.format(address, config.health_port, action))
+            response = requests.delete(
+                'http://{}:{}/api/controller/queue/{}'.format(address, config.health_port, action))
         except Exception as e:
             print('Failed to query information on {} ({})'.format(broker_id, address))
             _LOG.error('Failed to query information on {} ({})'.format(broker_id, address), exc_info=e)
@@ -219,6 +225,7 @@ def show_stats():
                 'Used kb': disk.get('used_kb')
             })
         _print_table(table)
+
 
 if __name__ == '__main__':
     cli()

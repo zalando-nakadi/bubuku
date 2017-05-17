@@ -33,9 +33,10 @@ class RemoteCommandExecutorCheck(Check):
                 return OptimizedRebalanceChange(self.zk,
                                                 self.zk.get_broker_ids(),
                                                 data['empty_brokers'],
-                                                data['exclude_topics'])
+                                                data['exclude_topics'],
+                                                int(data.get('step', 1)))
             elif data['name'] == 'migrate':
-                return MigrationChange(self.zk, data['from'], data['to'], data['shrink'])
+                return MigrationChange(self.zk, data['from'], data['to'], data['shrink'], int(data.get('step', '1')))
             elif data['name'] == 'fatboyslim':
                 return SwapPartitionsChange(self.zk,
                                             lambda x: load_swap_data(x, self.api_port, int(data['threshold_kb'])))
@@ -56,10 +57,13 @@ class RemoteCommandExecutorCheck(Check):
                 broker_id=broker_id)
 
     @staticmethod
-    def register_rebalance(zk: BukuExhibitor, broker_id: str, empty_brokers: list, exclude_topics: list):
+    def register_rebalance(zk: BukuExhibitor, broker_id: str, empty_brokers: list, exclude_topics: list, step: int):
+        if step <= 0:
+            raise Exception('Step size for parallel rebalance should be greater then 0')
         action = {'name': 'rebalance',
                   'empty_brokers': empty_brokers,
-                  'exclude_topics': exclude_topics}
+                  'exclude_topics': exclude_topics,
+                  'step': int(step)}
         with zk.lock():
             if broker_id:
                 zk.register_action(action, broker_id=broker_id)
@@ -67,7 +71,8 @@ class RemoteCommandExecutorCheck(Check):
                 zk.register_action(action)
 
     @staticmethod
-    def register_migration(zk: BukuExhibitor, brokers_from: list, brokers_to: list, shrink: bool, broker_id: str):
+    def register_migration(zk: BukuExhibitor, brokers_from: list, brokers_to: list, shrink: bool, broker_id: str,
+                           step: int):
         if len(brokers_from) != len(brokers_to):
             raise Exception('Brokers list {} and {} must have the same size'.format(brokers_from, brokers_to))
         if any(b in brokers_from for b in brokers_to) or any(b in brokers_to for b in brokers_from):
@@ -85,9 +90,12 @@ class RemoteCommandExecutorCheck(Check):
         if broker_id and str(broker_id) not in active_ids:
             raise Exception('Broker id to run change on ({}) is not in active list {}'.format(
                 broker_id, active_ids))
+        if step <= 0:
+            raise Exception('Step size for parallel rebalance should be greater then 0')
 
         with zk.lock():
-            action = {'name': 'migrate', 'from': brokers_from, 'to': brokers_to, 'shrink': bool(shrink)}
+            action = {'name': 'migrate', 'from': brokers_from, 'to': brokers_to, 'shrink': bool(shrink),
+                      step: int(step)}
             if broker_id:
                 zk.register_action(action, str(broker_id))
             else:
