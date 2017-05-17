@@ -1,5 +1,7 @@
 import logging
 
+import boto3
+
 _LOG = logging.getLogger('bubuku.cluster.aws.taupage')
 
 
@@ -8,6 +10,7 @@ def find_amis(region: str) -> dict:
     Find latest Taupage AMI for the region
     '''
     _LOG.info('Finding latest Taupage AMI in %s..', region)
+
     ec2 = boto3.resource('ec2', region)
     filters = [{'Name': 'name', 'Values': ['*Taupage-AMI-*']},
                {'Name': 'is-public', 'Values': ['false']},
@@ -17,6 +20,9 @@ def find_amis(region: str) -> dict:
     if not images:
         raise Exception('No Taupage AMI found')
     most_recent_image = sorted(images, key=lambda i: i.name)[-1]
+
+    _LOG.info('The latest AMI is %s', most_recent_image)
+
     return most_recent_image
 
 
@@ -25,6 +31,8 @@ def generate_user_data(cluster_config: dict) -> str:
     Generate Taupage user data to start a Bubuku node
     http://docs.stups.io/en/latest/components/taupage.html
     '''
+    _LOG.info('Generating Taupage user data')
+
     environment = cluster_config['environment']
     data = {'runtime': 'Docker',
             'source': cluster_config['docker_image'],
@@ -34,7 +42,8 @@ def generate_user_data(cluster_config: dict) -> str:
             'ports': {'9092': '9092',
                       '8004': '8004',
                       '8080': '8080',
-                      '8778': '8778'},
+                      '8778': '8778',
+                      environment['health_port']: environment['health_port']},
             'enhanced_cloudwatch_metrics': True,
             'application_logrotate_size': '100M',
             'application_logrotate_rotate': 4,
@@ -65,5 +74,13 @@ def generate_user_data(cluster_config: dict) -> str:
             },
             'scalyr_account_key': cluster_config['scalyr_key']
             }
+
+    _LOG.info('Generated data:')
+    for k, v in data.items():
+        if k == 'environment':
+            for ek, ev in environment.items():
+                _LOG.info('%s=%s', ek, ev)
+        else:
+            _LOG.info('%s=%s', k, v)
 
     return data

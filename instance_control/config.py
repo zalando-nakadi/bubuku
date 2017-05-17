@@ -5,9 +5,11 @@ import logging
 import requests
 
 _LOG = logging.getLogger('bubuku.cluster.config')
+KAFKA_LOGS_EBS = 'kafka-logs-ebs'
 
 
 def read_cluster_config(cluster_name: str, cluster_config_path: str):
+    _LOG.info('Reading config %s from %s', cluster_name, cluster_config_path)
     with open(cluster_config_path) as data_file:
         cluster_configs = json.load(data_file)
     cluster_config = cluster_configs[cluster_name]
@@ -18,6 +20,7 @@ def read_cluster_config(cluster_name: str, cluster_config_path: str):
 
 
 def validate_config(cluster_name: str, cluster_config: dict):
+    _LOG.info("Validating configuration for %s", cluster_name)
     cluster_name_re = '^[a-z][a-z0-9-]*[a-z0-9]$'
     if not re.match(cluster_name_re, cluster_name):
         raise Exception(
@@ -33,8 +36,12 @@ def validate_config(cluster_name: str, cluster_config: dict):
     if not next((tag for tag in requests.get(url).json() if tag['name'] == cluster_config['image_version']), None):
         raise Exception('Docker image was not found')
 
-    _LOG.info("Environment variables: ")
-    for k, v in cluster_config['environment'].items():
-        _LOG.info('%s=%s', k, v)
+    _LOG.info("Using cluster config: %s", cluster_name)
+    for k, v in cluster_config.items():
+        if k == 'environment':
+            for ek, ev in cluster_config['environment'].items():
+                _LOG.info('%s=%s', ek, ev)
+        else:
+            _LOG.info('%s=%s', k, v)
 
     cluster_config['cluster_name'] = cluster_name

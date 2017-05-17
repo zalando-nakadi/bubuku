@@ -1,13 +1,17 @@
 from subprocess import call
 
 import boto3
+import logging
 from instance_control import config
 from instance_control import volume
 
 from instance_control.aws import ec2_node
 
+_LOG = logging.getLogger('bubuku.cluster.command.attach')
+
 
 def run(cluster_name: str, cluster_size: int, availability_zone: str, image_version: str, cluster_config: str):
+    _LOG.info('Creating node in cluster %s', cluster_name)
     cluster_config = config.read_cluster_config(cluster_name, cluster_config)
     if cluster_size:
         cluster_config['cluster_size'] = cluster_size

@@ -1,6 +1,7 @@
 import logging
 
 import boto3
+import netaddr
 
 _LOG = logging.getLogger('bubuku.cluster.aws.subnet')
 
@@ -13,7 +14,7 @@ def get_subnets(prefix_filter: str, cluster_config: dict) -> list:
     '''
     vpc_id = cluster_config['vpc_id']
     availability_zone = cluster_config['availability_zone']
-    _LOG.info('Getting subnets for vpc_id: %s, availability_zone: %s', vpc_id, availability_zone)
+    _LOG.info('Getting subnets for vpc_id: %s and availability_zone: %s', vpc_id, availability_zone)
 
     ec2 = boto3.client('ec2', cluster_config['region'])
     resp = ec2.describe_subnets()
@@ -29,7 +30,7 @@ def get_subnets(prefix_filter: str, cluster_config: dict) -> list:
                         subnets.append(subnet)
                 else:
                     subnets.append(subnet)
-    _LOG.info('Subnets: %s ', subnets)
+    _LOG.info('Got subnets %s ', subnets)
     return subnets
 
 
@@ -74,15 +75,16 @@ def allocate_ip_addresses(cluster_config: dict) -> list:
     ec2 = boto3.client('ec2', region_name=cluster_config['region'])
     while i < cluster_config['cluster_size']:
         idx = i % len(subnets)
-
         ip = try_next_address(network_ips[idx], subnets[idx])
-
         resp = ec2.describe_instances(Filters=[{
             'Name': 'private-ip-address',
             'Values': [ip]
         }])
         if not resp['Reservations']:
             i += 1
+            _LOG.info('Got ip address %s ', ip)
             node_ips.append({'PrivateIp': ip, '_defaultIp': ip})
+
+    _LOG.info('IP Addresses are allocated')
 
     return node_ips

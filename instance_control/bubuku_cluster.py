@@ -4,8 +4,6 @@ import click
 
 from instance_control.command import upgrade, get, terminate, create, attach
 
-_LOG = logging.getLogger('bubuku.cluster')
-
 
 @click.group()
 def cli():

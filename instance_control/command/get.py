@@ -4,10 +4,11 @@ from subprocess import call
 import boto3
 from instance_control import config
 
-_LOG = logging.getLogger('bubuku.cluster.get')
+_LOG = logging.getLogger('bubuku.cluster.command.get')
 
 
 def run(cluster_name: str, cluster_config: str):
+    _LOG.info('Getting cluster state %s', cluster_name)
     cluster_config = config.read_cluster_config(cluster_name, cluster_config)
     config.validate_config(cluster_name, cluster_config)
     call(["zaws", "login", cluster_config['account']])
@@ -26,7 +27,7 @@ def run(cluster_name: str, cluster_config: str):
             instance.block_device_mappings[0]['Ebs']['VolumeId'])
 
     if len(instances) == 0:
-        _LOG.info('Nothing to print')
+        _LOG.info('Cluster has no running instances')
         return
 
     _LOG.info('ip' + ' ' * max_ip + ' id' + ' ' * max_id + ' volume' + ' ' * max_ebs)
