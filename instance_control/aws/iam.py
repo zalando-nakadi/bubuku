@@ -1,5 +1,7 @@
 import boto3
 import logging
+
+import time
 from botocore.exceptions import ClientError
 
 _LOG = logging.getLogger('bubuku.cluster.aws.iam')
@@ -93,5 +95,14 @@ def create_or_get_instance_profile(cluster_config: dict):
     iam.add_role_to_instance_profile(InstanceProfileName=profile_name, RoleName=role_name)
 
     _LOG.info("IAM profile %s is created", profile_name)
+
+    #
+    # FIXME: using an instance profile right after creating one
+    # can result in 'not found' error, because of eventual
+    # consistency.  For now fix with a sleep, should rather
+    # examine exception and retry after some delay.
+    #
+    _LOG.info('Waiting 30 secs after IAM profile creation to be sure it is available')
+    time.sleep(30)
 
     return profile['InstanceProfile']

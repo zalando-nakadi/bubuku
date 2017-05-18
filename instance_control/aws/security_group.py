@@ -12,7 +12,7 @@ def create_or_ger_security_group(cluster_config: dict) -> dict:
         Filters=[{'Name': 'group-name', 'Values': [cluster_config['cluster_name']]}])
     if security_groups['SecurityGroups']:
         sg = security_groups['SecurityGroups'][0]
-        _LOG.info('Security group for %s exists, will use it %s', cluster_config['cluster_name'], sg)
+        _LOG.info('Security group for %s exists, will use it %s', cluster_config['cluster_name'], sg['GroupId'])
         return sg
 
     _LOG.info("Security group does not exists, creating ...")

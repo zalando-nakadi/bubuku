@@ -1,30 +1,27 @@
-from subprocess import call
-
-import boto3
 import logging
 
+import boto3
 from instance_control import config
 from instance_control import node
 from instance_control import piu
 
+from instance_control.command import Command
+
 _LOG = logging.getLogger('bubuku.cluster.command.terminate')
 
 
-def run(cluster_name: str, cluster_config: str, ip: str, user: str, odd: str):
-    _LOG.info('Terminating node %s in cluster %s', ip, cluster_name)
-    cluster_config = config.read_cluster_config(cluster_name, cluster_config)
-    config.validate_config(cluster_name, cluster_config)
-    call(["zaws", "login", cluster_config['account']])
+class TerminateCommand(Command):
+    def __init__(self, cluster_name: str, cluster_config_path: str, ip: str, user: str, odd: str):
+        super().__init__(cluster_name, cluster_config_path)
+        self.ip = ip
+        self.user = user
+        self.odd = odd
 
-    ec2_resource = boto3.resource('ec2', region_name=cluster_config['region'])
+    def init(self):
+        config.validate_config(self.cluster_name, self.cluster_config)
 
-    instances = ec2_resource.instances.filter(Filters=[
-        {'Name': 'instance-state-name', 'Values': ['running']},
-        {'Name': 'network-interface.addresses.private-ip-address', 'Values': [ip]}])
-    # instance = next(i for i in instances if i.private_ip_address == ip)
-    _LOG.info('Found %s by ip %s', instances[0], ip)
-
-    if not instances[0]:
-        raise Exception('Instance by ip %s not found in cluster %s', ip, cluster_name)
-    piu.stop_taupage(ip, user, odd)
-    node.terminate(cluster_name, instances[0])
+    def start(self):
+        ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])
+        instance = node.get_instance_by_ip(ec2_resource, self.cluster_name, self.ip)
+        piu.stop_taupage(self.ip, self.user, self.odd)
+        node.terminate(self.cluster_name, instance)

@@ -1,7 +1,7 @@
 import logging
 import time
 
-from bubuku import config
+from instance_control import config
 
 _LOG = logging.getLogger('bubuku.cluster.volume')
 
@@ -28,5 +28,13 @@ def clear_tag(v):
         _LOG.info('Volume %s is attached. Clearing tag:Name', v)
         v.create_tags(Tags=[{'Key': 'Name', 'Value': ''}])
         _LOG.info('Completed clearing tag:Name for %s', v)
-    return False
+        return False
     return True
+
+
+def check_volume_available(v):
+    v.load()
+    if v.state != 'available':
+        _LOG.info('Volume %s is attached. Clearing tag:Name', v)
+        raise Exception('Volume {} is not available for attaching. State: {}'.format(v.VolumeId, v.state))
+

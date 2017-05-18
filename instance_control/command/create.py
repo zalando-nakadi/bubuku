@@ -1,28 +1,37 @@
-from subprocess import call
+import logging
 
 import boto3
-import logging
 from instance_control import config
 from instance_control import volume
 
 from instance_control.aws import ec2_node
+from instance_control.command import Command
 
 _LOG = logging.getLogger('bubuku.cluster.command.attach')
 
 
-def run(cluster_name: str, cluster_size: int, availability_zone: str, image_version: str, cluster_config: str):
-    _LOG.info('Creating node in cluster %s', cluster_name)
-    cluster_config = config.read_cluster_config(cluster_name, cluster_config)
-    if cluster_size:
-        cluster_config['cluster_size'] = cluster_size
-    if image_version:
-        cluster_config['image_version'] = image_version
-    cluster_config['create_ebs'] = True
-    cluster_config['availability_zone'] = availability_zone
-    config.validate_config(cluster_name, cluster_config)
-    call(["zaws", "login", cluster_config['account']])
+class CreateCommand(Command):
+    def __init__(self, cluster_name: str,
+                 cluster_config_path: str,
+                 cluster_size: int,
+                 availability_zone: str,
+                 image_version: str):
+        super().__init__(cluster_name, cluster_config_path)
+        self.cluster_size = cluster_size
+        self.availability_zone = availability_zone
+        self.image_version = image_version
 
-    ec2_node.create(cluster_config)
-    ec2_client = boto3.client('ec2', region_name=cluster_config['region'])
-    ec2_resource = boto3.resource('ec2', region_name=cluster_config['region'])
-    volume.wait_volumes_attached(ec2_client, ec2_resource)
+    def init(self):
+        if self.cluster_size:
+            self.cluster_config['cluster_size'] = self.cluster_size
+        if self.image_version:
+            self.cluster_config['image_version'] = self.image_version
+        self.cluster_config['create_ebs'] = True
+        self.cluster_config['availability_zone'] = self.availability_zone
+        config.validate_config(self.cluster_name, self.cluster_config)
+
+    def start(self):
+        ec2_node.create(self.cluster_config)
+        ec2_client = boto3.client('ec2', region_name=self.cluster_config['region'])
+        ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])
+        volume.wait_volumes_attached(ec2_client, ec2_resource)

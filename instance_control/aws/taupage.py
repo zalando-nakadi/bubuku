@@ -78,8 +78,10 @@ def generate_user_data(cluster_config: dict) -> str:
     _LOG.info('Generated data:')
     for k, v in data.items():
         if k == 'environment':
+            _LOG.info('--- environment variables')
             for ek, ev in environment.items():
                 _LOG.info('%s=%s', ek, ev)
+            _LOG.info('--- environment variables')
         else:
             _LOG.info('%s=%s', k, v)
 

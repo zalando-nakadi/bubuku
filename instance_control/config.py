@@ -39,9 +39,10 @@ def validate_config(cluster_name: str, cluster_config: dict):
     _LOG.info("Using cluster config: %s", cluster_name)
     for k, v in cluster_config.items():
         if k == 'environment':
+            _LOG.info('Environment variables:')
             for ek, ev in cluster_config['environment'].items():
-                _LOG.info('%s=%s', ek, ev)
+                _LOG.info('      %s = %s', ek, ev)
         else:
-            _LOG.info('%s=%s', k, v)
+            _LOG.info('   %s = %s', k, v)
 
     cluster_config['cluster_name'] = cluster_name

@@ -6,7 +6,7 @@ import time
 
 import boto3
 import yaml
-from bubuku import config
+from instance_control import config
 
 from instance_control.aws import security_group, iam, subnet, metric
 from instance_control.aws import taupage
@@ -22,9 +22,9 @@ def _create_tagged_volume(ec2_client: object, cluster_config: dict, zone: str, n
         "Size": cluster_config['volume_size'],
         "Encrypted": False, }
     vol = ec2_client.create_volume(**ebs_data)
-    _LOG.info('%s is successfully created', vol)
+    _LOG.info('%s is successfully created', vol['VolumeId'])
 
-    _LOG.info('Tagging %s with Taupage:erase-on-boot, to format only once', vol)
+    _LOG.info('Tagging %s with Taupage:erase-on-boot, to format only once', vol['VolumeId'])
     tags = [{'Key': 'Name',
              'Value': name},
             {'Key': 'Taupage:erase-on-boot',
@@ -135,15 +135,6 @@ def create(cluster_config: dict):
         cluster_config['security_group'] = security_group.create_or_ger_security_group(cluster_config)
         cluster_config['user_data'] = taupage.generate_user_data(cluster_config)
         cluster_config['instance_profile'] = iam.create_or_get_instance_profile(cluster_config)
-
-        #
-        # FIXME: using an instance profile right after creating one
-        # can result in 'not found' error, because of eventual
-        # consistency.  For now fix with a sleep, should rather
-        # examine exception and retry after some delay.
-        #
-        _LOG.info('Waiting 30 secs after IAM profile creation to be sure it is available')
-        time.sleep(30)
 
         _launch_nodes(cluster_config)
 
