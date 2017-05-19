@@ -51,9 +51,15 @@ def _create_rfc1918_address_hash(ip: str) -> (str, str):
 class BrokerIDByIp(BrokerIdGenerator):
     def __init__(self, zk: BukuExhibitor, ip: str, kafka_props: KafkaProperties):
         self.zk = zk
-        self.broker_id, max_id = _create_rfc1918_address_hash(ip)
+        self.broker_id = _read_broker_id_from_meta_properties(kafka_props)
+        if self.broker_id is None:
+            self.broker_id, max_id = _create_rfc1918_address_hash(ip)
+            _LOG.info('Built broker id {} from ip: {}'.format(self.broker_id, ip))
+        else:
+            max_id = str(256 * 256 * 256 * 4 + 1)
+            _LOG.info('Using existing broker id {}'.format(self.broker_id))
         kafka_props.set_property('reserved.broker.max.id', max_id)
-        _LOG.info('Built broker id {} from ip: {}'.format(self.broker_id, ip))
+
         if self.broker_id is None:
             raise NotImplementedError('Broker id from ip address supported only for rfc1918 private addresses')
 
@@ -68,29 +74,33 @@ class BrokerIDByIp(BrokerIdGenerator):
 
 
 class BrokerIdAutoAssign(BrokerIdGenerator):
-    def __init__(self, zk: BukuExhibitor, kafka_properties: KafkaProperties):
+    def __init__(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
         super().__init__()
         self.zk = zk
-        self.kafka_properties = kafka_properties
+        self.kafka_props = kafka_props
         self.broker_id = None
 
     def get_broker_id(self):
         return None
 
     def detect_broker_id(self):
-        meta_path = '{}/meta.properties'.format(self.kafka_properties.get_property('log.dirs'))
-        while not os.path.isfile(meta_path):
-            return None
-        with open(meta_path) as f:
-            lines = f.readlines()
-            for line in lines:
-                match = re.search('broker\.id=(\d+)', line)
-                if match:
-                    return match.group(1)
-        return None
+        return _read_broker_id_from_meta_properties(self.kafka_props)
 
     def is_registered(self):
         broker_id = self.detect_broker_id()
         if broker_id:
             return self.zk.is_broker_registered(broker_id)
         return False
+
+
+def _read_broker_id_from_meta_properties(kafka_props: KafkaProperties):
+    meta_path = '{}/meta.properties'.format(kafka_props.get_property('log.dirs'))
+    while not os.path.isfile(meta_path):
+        return None
+    with open(meta_path) as f:
+        lines = f.readlines()
+        for line in lines:
+            match = re.search('broker\.id=(\d+)', line)
+            if match:
+                return match.group(1)
+    return None
