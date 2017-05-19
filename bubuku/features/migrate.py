@@ -7,12 +7,12 @@ _LOG = logging.getLogger('bubuku.features.migrate')
 
 
 class MigrationChange(BaseRebalanceChange):
-    def __init__(self, zk: BukuExhibitor, from_: list, to: list, shrink: bool, step_size: int = 1):
+    def __init__(self, zk: BukuExhibitor, from_: list, to: list, shrink: bool, parallelism: int = 1):
         self.zk = zk
         self.migration = {int(from_[i]): int(to[i]) for i in range(0, len(from_))}
         self.shrink = shrink
         self.data_to_migrate = None
-        self.step_size = step_size
+        self.parallelism = parallelism
 
     def run(self, current_actions) -> bool:
         if self.should_be_paused(current_actions):
@@ -35,7 +35,7 @@ class MigrationChange(BaseRebalanceChange):
             return True
 
         items_to_migrate = []
-        while self.data_to_migrate and len(items_to_migrate) < self.step_size:
+        while self.data_to_migrate and len(items_to_migrate) < self.parallelism:
             topic, partition, replicas = self.data_to_migrate.pop()
             replaced_replicas = self._replace_replicas(replicas)
             if replaced_replicas == replicas:
@@ -49,10 +49,12 @@ class MigrationChange(BaseRebalanceChange):
         return True
 
     def __str__(self):
-        return 'Migration links {}, shrink: {}, data_to_move: {}'.format(
+        return 'Migration links {}, shrink: {}, data_to_move: {}, parallelism: {}'.format(
             self.migration,
             self.shrink,
-            len(self.data_to_migrate) if self.data_to_migrate is not None else 'Unknown')
+            len(self.data_to_migrate) if self.data_to_migrate is not None else 'Unknown',
+            self.parallelism,
+        )
 
     def _replace_replicas(self, replicas):
         replacement = [self.migration[k] for k in replicas if k in self.migration]

@@ -116,7 +116,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _BALANCE = 'balance'
 
     def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
-                 step_size: int = 1):
+                 parallelism: int = 1):
         self.zk = zk
         self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
@@ -125,11 +125,11 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.source_distribution = None
         self.action_queue = []
         self.state = OptimizedRebalanceChange._LOAD_STATE
-        self.step_size = step_size
+        self.parallelism = parallelism
 
     def __str__(self):
-        return 'OptimizedRebalance state={}, queue_size={}'.format(
-            self.state, len(self.action_queue) if self.action_queue is not None else None)
+        return 'OptimizedRebalance state={}, queue_size={}, parallelism={}'.format(
+            self.state, len(self.action_queue) if self.action_queue is not None else None, self.parallelism)
 
     def run(self, current_actions) -> bool:
         # Stop rebalance if someone is restarting
@@ -161,7 +161,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
 
     def _balance(self):
         items = []
-        while self.action_queue and len(items) < self.step_size:
+        while self.action_queue and len(items) < self.parallelism:
             items.append(self.action_queue.popitem())  # key, partition tuple
         if not items:
             return True
