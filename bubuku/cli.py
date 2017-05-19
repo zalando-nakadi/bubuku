@@ -107,7 +107,7 @@ def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, p
               help='Whether or not to shrink replaced broker ids form partition assignment')
 @click.option('--broker', type=click.STRING, help='Optional broker id to execute check on')
 @click.option('--parallelism', type=click.INT, show_default=True,
-              help="Amount of partitions to move in a single rebalance step")
+              help="Amount of partitions to move in a single migration step")
 def migrate_broker(from_: str, to: str, shrink: bool, broker: str, parallelism: int = 1):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
