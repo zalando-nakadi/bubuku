@@ -12,7 +12,6 @@ cd $PROJECTS/bubuku/instance_control
 
 ```
 python3 bubuku_cluster.py create \
-                --cluster-name bubuku-1 \
                 --cluster-size 1 \
                 --cluster-config $CONFIG_PATH
 ```
@@ -21,7 +20,6 @@ python3 bubuku_cluster.py create \
 
 ```
 python3 bubuku_cluster.py terminate \
-                --cluster-name bubuku-1 \
                 --cluster-config $CONFIG_PATH \
                 --ip 10.246.2.11 \
                 --user adyachkov \
@@ -32,7 +30,6 @@ python3 bubuku_cluster.py terminate \
 
 ```
 python3 bubuku_cluster.py attach \
-                --cluster-name bubuku-1 \
                 --volume-id vol-0e995bfffc31384c2 \
                 --cluster-config $CONFIG_PATH
 ```
@@ -41,7 +38,6 @@ python3 bubuku_cluster.py attach \
 
 ```
 python3 bubuku_cluster.py upgrade \
-                --cluster-name bubuku-1 \
                 --cluster-config $CONFIG_PATH \
                 --ip 10.246.2.11 \
                 --user adyachkov \
@@ -52,6 +48,5 @@ python3 bubuku_cluster.py upgrade \
 
 ```
 python3 bubuku_cluster.py get \
-                --cluster-name bubuku-1 \
                 --cluster-config $CONFIG_PATH
 ```
