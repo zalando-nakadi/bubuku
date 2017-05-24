@@ -11,8 +11,8 @@ KAFKA_LOGS_EBS = 'kafka-logs-ebs'
 def read_cluster_config(cluster_name: str, cluster_config_path: str):
     _LOG.info('Reading config %s from %s', cluster_name, cluster_config_path)
     with open(cluster_config_path) as data_file:
-        cluster_configs = json.load(data_file)
-    cluster_config = cluster_configs[cluster_name]
+        cluster_config_object = json.load(data_file)
+    cluster_config = cluster_config_object.get(cluster_name)
     if cluster_config:
         return cluster_config
     else:
@@ -37,12 +37,5 @@ def validate_config(cluster_name: str, cluster_config: dict):
         raise Exception('Docker image was not found')
 
     _LOG.info("Using cluster config: %s", cluster_name)
-    for k, v in cluster_config.items():
-        if k == 'environment':
-            _LOG.info('Environment variables:')
-            for ek, ev in cluster_config['environment'].items():
-                _LOG.info('      %s = %s', ek, ev)
-        else:
-            _LOG.info('   %s = %s', k, v)
-
+    _LOG.info(json.dumps(cluster_config, indent=4))
     cluster_config['cluster_name'] = cluster_name

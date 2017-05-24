@@ -10,13 +10,14 @@ class Command(object):
         self.cluster_name = cluster_name
         self.cluster_config = config.read_cluster_config(cluster_name, cluster_config_path)
 
-    def init(self):
-        raise NotImplementedError('Not implemented yet')
+    def alter_config(self):
+        pass
 
-    def start(self):
+    def execute(self):
         raise NotImplementedError('Not implemented yet')
 
     def run(self):
-        self.init()
+        self.alter_config()
+        config.validate_config(self.cluster_name, self.cluster_config)
         call(["zaws", "login", self.cluster_config['account']])
-        self.start()
+        self.execute()

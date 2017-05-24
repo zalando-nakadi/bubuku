@@ -17,10 +17,7 @@ class TerminateCommand(Command):
         self.user = user
         self.odd = odd
 
-    def init(self):
-        config.validate_config(self.cluster_name, self.cluster_config)
-
-    def start(self):
+    def execute(self):
         ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])
         instance = node.get_instance_by_ip(ec2_resource, self.cluster_name, self.ip)
         piu.stop_taupage(self.ip, self.user, self.odd)

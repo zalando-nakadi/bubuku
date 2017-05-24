@@ -21,16 +21,15 @@ class CreateCommand(Command):
         self.availability_zone = availability_zone
         self.image_version = image_version
 
-    def init(self):
+    def alter_config(self):
         if self.cluster_size:
             self.cluster_config['cluster_size'] = self.cluster_size
         if self.image_version:
             self.cluster_config['image_version'] = self.image_version
         self.cluster_config['create_ebs'] = True
         self.cluster_config['availability_zone'] = self.availability_zone
-        config.validate_config(self.cluster_name, self.cluster_config)
 
-    def start(self):
+    def execute(self):
         ec2_node.create(self.cluster_config)
         ec2_client = boto3.client('ec2', region_name=self.cluster_config['region'])
         ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])

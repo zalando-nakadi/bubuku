@@ -16,11 +16,11 @@ def cli():
     pass
 
 
-@cli.command('upgrade', help='Stop Kafka gracefully, detach esb volume, terminate the instance and launch a new one')
+@cli.command('upgrade', help='Stop Kafka gracefully, detach EBS volume, terminate the instance and launch a new one')
 @click.option('--cluster-name', required=True)
 @click.option('--image-version', help='Docker image version to use. By default the version from config is used. '
-                                      'If provided then verrides image version from config')
-@click.option('--cluster-config', default='clusters_config.json')
+                                      'If provided then overrides image version from config')
+@click.option('--cluster-config', default='cluster_config.json')
 @click.option('--ip', required=True)
 @click.option('--user', required=True)
 @click.option('--odd', required=True)
@@ -32,7 +32,7 @@ def upgrade(cluster_name: str, image_version: str, cluster_config: str, ip: str,
 @cli.command('attach', help='Launch instance and attach it to the existing EBS volume')
 @click.option('--cluster-name', required=True)
 @click.option('--volume-id', required=True)
-@click.option('--cluster-config', default='clusters_config.json')
+@click.option('--cluster-config', default='cluster_config.json')
 def attach(cluster_name: str, volume_id: str, cluster_config: str):
     _LOG.info('Calling command to launch instance and attach volume %s to it in cluster %s', volume_id, cluster_name)
     AttachCommand(cluster_name, cluster_config, volume_id).run()
@@ -44,7 +44,7 @@ def attach(cluster_name: str, volume_id: str, cluster_config: str):
 @click.option('--availability-zone', default=None)
 @click.option('--image-version', help='Docker image version to use. By default the version from config is used. '
                                       'If provided then verrides image version from config')
-@click.option('--cluster-config', default='clusters_config.json')
+@click.option('--cluster-config', default='cluster_config.json')
 def create(cluster_name: str, cluster_size: int, availability_zone: str, image_version: str, cluster_config: str):
     _LOG.info('Calling command to create node in cluster %s', cluster_name)
     CreateCommand(cluster_name, cluster_config, cluster_size, availability_zone, image_version).run()
@@ -52,7 +52,7 @@ def create(cluster_name: str, cluster_size: int, availability_zone: str, image_v
 
 @cli.command('terminate', help='Terminate instance')
 @click.option('--cluster-name', required=True)
-@click.option('--cluster-config', default='clusters_config.json')
+@click.option('--cluster-config', default='cluster_config.json')
 @click.option('--ip', required=True)
 @click.option('--user', required=True)
 @click.option('--odd', required=True)
@@ -63,7 +63,7 @@ def terminate(cluster_name: str, cluster_config: str, ip: str, user: str, odd: s
 
 @cli.command('get', help='Cluster nodes overview: ip, instance id and volume id')
 @click.option('--cluster-name', required=True)
-@click.option('--cluster-config', default='clusters_config.json')
+@click.option('--cluster-config', default='cluster_config.json')
 def get(cluster_name: str, cluster_config: str):
     _LOG.info('Getting cluster state %s', cluster_name)
     GetCommand(cluster_name, cluster_config).run()

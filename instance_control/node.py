@@ -15,11 +15,10 @@ def terminate(cluster_name: str, instance):
     while True:
         instance.load()
         if instance.state['Name'] == 'terminated':
-            _LOG.info('%s is terminated', instance)
+            _LOG.info('%s is successfully terminated', instance)
             return
         _LOG.info('Instance state is %s. Waiting 10 secs more ...', instance.state['Name'])
         time.sleep(10)
-    _LOG.info('%s is successfully terminated', instance)
 
 
 def _delete_alarm(cluster_name: str, instance):

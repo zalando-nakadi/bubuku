@@ -21,25 +21,24 @@ class UpgradeCommand(Command):
         self.user = user
         self.odd = odd
 
-    def init(self):
+    def alter_config(self):
         if self.image_version:
             self.cluster_config['image_version'] = self.image_version
-        config.validate_config(self.cluster_name, self.cluster_config)
 
-    def start(self):
+    def execute(self):
         ec2_client = boto3.client('ec2', region_name=self.cluster_config['region'])
         ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])
 
         instance = node.get_instance_by_ip(ec2_resource, self.cluster_name, self.ip)
-        # check_current_image_version(instance, self.cluster_config['image_version'])
-
-        piu.stop_taupage(self.ip, self.user, self.odd)
+        check_current_image_version(instance, self.cluster_config['image_version'])
 
         _LOG.info('Searching for instance %s volumes', instance.instance_id)
         volumes = ec2_client.describe_instance_attribute(InstanceId=instance.instance_id,
                                                          Attribute='blockDeviceMapping')
         data_volume = next(v for v in volumes['BlockDeviceMappings'] if v['DeviceName'] == '/dev/xvdk')
         data_volume_id = data_volume['Ebs']['VolumeId']
+
+        piu.stop_taupage(self.ip, self.user, self.odd)
 
         _LOG.info('Creating tag:Name=%s for %s', config.KAFKA_LOGS_EBS, data_volume_id)
         vol = ec2_resource.Volume(data_volume_id)
@@ -50,8 +49,10 @@ class UpgradeCommand(Command):
         node.terminate(self.cluster_name, instance)
         self.cluster_config['availability_zone'] = vol.availability_zone
         self.cluster_config['create_ebs'] = False
+        self.cluster_config['cluster_size'] = 1
 
         ec2_node.create(self.cluster_config)
+        # volumes are going to be attached by taupage
         volume.wait_volumes_attached(ec2_client, ec2_resource)
 
 

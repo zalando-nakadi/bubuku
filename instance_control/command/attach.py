@@ -15,10 +15,7 @@ class AttachCommand(Command):
         super().__init__(cluster_name, cluster_config_path)
         self.volume_id = volume_id
 
-    def init(self):
-        config.validate_config(self.cluster_name, self.cluster_config)
-
-    def start(self):
+    def execute(self):
         ec2_client = boto3.client('ec2', region_name=self.cluster_config['region'])
         ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])
         vol = ec2_resource.Volume(self.volume_id)
