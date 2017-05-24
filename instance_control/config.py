@@ -1,28 +1,23 @@
 import json
+import logging
 import re
 
-import logging
 import requests
 
 _LOG = logging.getLogger('bubuku.cluster.config')
 KAFKA_LOGS_EBS = 'kafka-logs-ebs'
 
 
-def read_cluster_config(cluster_name: str, cluster_config_path: str):
-    _LOG.info('Reading config %s from %s', cluster_name, cluster_config_path)
+def read_cluster_config(cluster_config_path: str):
+    _LOG.info('Reading config from %s', cluster_config_path)
     with open(cluster_config_path) as data_file:
-        cluster_config_object = json.load(data_file)
-    cluster_config = cluster_config_object.get(cluster_name)
-    if cluster_config:
-        return cluster_config
-    else:
-        raise Exception("No cluster config found for {} in {}".format(cluster_name, cluster_config_path))
+        return json.load(data_file)
 
 
-def validate_config(cluster_name: str, cluster_config: dict):
-    _LOG.info("Validating configuration for %s", cluster_name)
+def validate_config(cluster_config: dict):
+    _LOG.info("Validating configuration for %s", cluster_config['cluster_name'])
     cluster_name_re = '^[a-z][a-z0-9-]*[a-z0-9]$'
-    if not re.match(cluster_name_re, cluster_name):
+    if not re.match(cluster_name_re, cluster_config['cluster_name']):
         raise Exception(
             'Cluster name must only contain lowercase latin letters, digits and dashes '
             '(it also must start with a letter and cannot end with a dash), in other words '
@@ -36,6 +31,4 @@ def validate_config(cluster_name: str, cluster_config: dict):
     if not next((tag for tag in requests.get(url).json() if tag['name'] == cluster_config['image_version']), None):
         raise Exception('Docker image was not found')
 
-    _LOG.info("Using cluster config: %s", cluster_name)
     _LOG.info(json.dumps(cluster_config, indent=4))
-    cluster_config['cluster_name'] = cluster_name

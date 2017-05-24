@@ -11,12 +11,11 @@ _LOG = logging.getLogger('bubuku.cluster.command.attach')
 
 
 class CreateCommand(Command):
-    def __init__(self, cluster_name: str,
-                 cluster_config_path: str,
+    def __init__(self, cluster_config_path: str,
                  cluster_size: int,
                  availability_zone: str,
                  image_version: str):
-        super().__init__(cluster_name, cluster_config_path)
+        super().__init__(cluster_config_path)
         self.cluster_size = cluster_size
         self.availability_zone = availability_zone
         self.image_version = image_version

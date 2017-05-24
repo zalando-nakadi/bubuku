@@ -79,8 +79,8 @@ def create_or_get_instance_profile(cluster_config: dict):
         ]
     }"""
 
-    _LOG.info("Creating iam policy %s", policy_datavolume)
-    iam.put_role_policy(IAM=role_name,
+    _LOG.info("Creating IAM policy %s", policy_datavolume)
+    iam.put_role_policy(RoleName=role_name,
                         PolicyName=policy_datavolume,
                         PolicyDocument=policy_datavolume_document)
     _LOG.info("Creating IAM policy %s", policy_metadata)

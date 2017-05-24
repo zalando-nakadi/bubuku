@@ -11,8 +11,8 @@ _LOG = logging.getLogger('bubuku.cluster.command.attach')
 
 
 class AttachCommand(Command):
-    def __init__(self, cluster_name: str, cluster_config_path: str, volume_id: str):
-        super().__init__(cluster_name, cluster_config_path)
+    def __init__(self, cluster_config_path: str, volume_id: str):
+        super().__init__(cluster_config_path)
         self.volume_id = volume_id
 
     def execute(self):
