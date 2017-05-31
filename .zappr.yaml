@@ -7,5 +7,5 @@ approvals:
       minimum: 2
       from:
         orgs:
-          - "zalando"
-          - "zalando-incubator"
+          - zalando
+          
