@@ -20,7 +20,13 @@ class TestMigrate(unittest.TestCase):
             result.update({(t, p): r})
             return True
 
+        def _reallocate_partitions(items):
+            for item in items:
+                _reallocate_partition(*item)
+            return True
+
         zk.reallocate_partition = _reallocate_partition
+        zk.reallocate_partitions = _reallocate_partitions
         zk.get_broker_ids = lambda: [1, 2, 3, 4, 5, 6]
 
         change = MigrationChange(zk, [1, 2, 3], [4, 5, 6], False)
