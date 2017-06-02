@@ -7,7 +7,7 @@ import boto3
 import requests
 
 from bubuku.config import Config, KafkaProperties
-from bubuku.id_generator import BrokerIDByIp, BrokerIdAutoAssign
+from bubuku.id_generator import BrokerIdAutoAssign
 from bubuku.zookeeper import BukuExhibitor, AddressListProvider
 from bubuku.zookeeper.exhibitor import ExhibitorAddressProvider
 
@@ -73,7 +73,7 @@ class AmazonEnvProvider(EnvProvider):
         return ExhibitorAddressProvider(partial(self._load_instance_ips, self.config.zk_stack_name))
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
-        return BrokerIDByIp(zk, self.get_id(), kafka_props)
+        return BrokerIdAutoAssign(zk, kafka_props)
 
 
 class _LocalAddressProvider(AddressListProvider):
