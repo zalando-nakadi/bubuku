@@ -42,7 +42,9 @@ class BrokerIdAutoAssign(BrokerIdGenerator):
         self.broker_id = None
 
     def get_broker_id(self):
-        return None
+        if not  self.broker_id:
+            self.broker_id = self.detect_broker_id()
+        return self.broker_id
 
     def detect_broker_id(self):
         meta_path = '{}/meta.properties'.format(self.kafka_properties.get_property('log.dirs'))
