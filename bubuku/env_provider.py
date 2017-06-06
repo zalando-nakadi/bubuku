@@ -54,7 +54,7 @@ class AmazonEnvProvider(EnvProvider):
     def _load_instance_ips(self, lb_name: str):
         region = self._get_document()['region']
 
-        private_ips = []
+        public_ips = []
 
         elb = boto3.client('elb', region_name=region)
         ec2 = boto3.client('ec2', region_name=region)
@@ -63,11 +63,11 @@ class AmazonEnvProvider(EnvProvider):
 
         for instance in response['InstanceStates']:
             if instance['State'] == 'InService':
-                private_ips.append(ec2.describe_instances(
-                    InstanceIds=[instance['InstanceId']])['Reservations'][0]['Instances'][0]['PrivateIpAddress'])
+                public_ips.append(ec2.describe_instances(
+                    InstanceIds=[instance['InstanceId']])['Reservations'][0]['Instances'][0]['PublicIpAddress'])
 
-        _LOG.info("Ip addresses for {} are: {}".format(lb_name, private_ips))
-        return private_ips
+        _LOG.info("Ip addresses for {} are: {}".format(lb_name, public_ips))
+        return public_ips
 
     def get_address_provider(self):
         return ExhibitorAddressProvider(partial(self._load_instance_ips, self.config.zk_stack_name))
