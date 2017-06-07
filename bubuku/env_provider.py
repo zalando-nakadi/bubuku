@@ -63,8 +63,11 @@ class AmazonEnvProvider(EnvProvider):
 
         for instance in response['InstanceStates']:
             if instance['State'] == 'InService':
-                public_ips.append(ec2.describe_instances(
-                    InstanceIds=[instance['InstanceId']])['Reservations'][0]['Instances'][0]['PublicIpAddress'])
+                ip = ec2.describe_instances(
+                    InstanceIds=[instance['InstanceId']])['Reservations'][0]['Instances'][0]['PublicIpAddress']
+                if not ip:
+                    raise Exception('Public ip address is not allocated for %s'.format(instance))
+                public_ips.append(ip)
 
         _LOG.info("Ip addresses for {} are: {}".format(lb_name, public_ips))
         return public_ips
