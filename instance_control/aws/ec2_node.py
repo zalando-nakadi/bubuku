@@ -6,8 +6,8 @@ import time
 
 import boto3
 import yaml
-from instance_control import config
 
+from instance_control import config
 from instance_control.aws import security_group, iam, subnet, metric
 from instance_control.aws import taupage
 
@@ -83,7 +83,8 @@ def _launch_instance(region: str, ip: dict, ami: object, subnet: dict, security_
         PrivateIpAddress=ip['PrivateIp'],
         BlockDeviceMappings=block_devices,
         IamInstanceProfile={'Arn': cluster_config['instance_profile']['Arn']},
-        DisableApiTermination=False)
+        DisableApiTermination=False,
+        EbsOptimized=True)
 
     instance = resp['Instances'][0]
     instance_id = instance['InstanceId']
