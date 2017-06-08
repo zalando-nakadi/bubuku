@@ -23,11 +23,11 @@ class GetCommand(Command):
 
         max_ip = max([len(instance.private_ip_address) for instance in instances])
         max_id = max([len(instance.instance_id) for instance in instances])
-        max_ebs = max([len(instance.block_device_mappings[0]['Ebs']['VolumeId']) for instance in instances])
 
-        pattern = '{0:' + str(max_ip) + '}   {1:' + str(max_id) + '}   {2:' + str(max_ebs) + '}'
+        pattern = '{0:' + str(max_ip) + '}   {1:' + str(max_id) + '}   {2}'
         print(pattern.format('ip', 'id', 'volume'))
         for instance in instances:
             print(pattern.format(instance.private_ip_address,
                                  instance.instance_id,
-                                 instance.block_device_mappings[0]['Ebs']['VolumeId']))
+                                 [x['Ebs']['VolumeId'] for x in instance.block_device_mappings if
+                                  x['DeviceName'] == '/dev/xvdk'][0]))

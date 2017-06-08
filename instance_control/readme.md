@@ -6,12 +6,13 @@ The script helps to manage upgrades of Bubuku(Kafka) without terminating EBS vol
 export PYTHONPATH=$PROJECTS/bubuku
 export CONFIG_PATH=$PROJECTS/clusters_config.json
 cd $PROJECTS/bubuku/instance_control
+chmod u+x bubuku_cluster.py
 ```
 
 ### Create
 
 ```
-python3 bubuku_cluster.py create \
+bubuku_cluster.py create \
                 --cluster-size 1 \
                 --cluster-config $CONFIG_PATH
 ```
@@ -19,7 +20,7 @@ python3 bubuku_cluster.py create \
 ### Terminate
 
 ```
-python3 bubuku_cluster.py terminate \
+bubuku_cluster.py terminate \
                 --cluster-config $CONFIG_PATH \
                 --ip 10.246.2.11 \
                 --user adyachkov \
@@ -29,7 +30,7 @@ python3 bubuku_cluster.py terminate \
 ### Attach
 
 ```
-python3 bubuku_cluster.py attach \
+bubuku_cluster.py attach \
                 --volume-id vol-0e995bfffc31384c2 \
                 --cluster-config $CONFIG_PATH
 ```
@@ -37,7 +38,7 @@ python3 bubuku_cluster.py attach \
 ### Upgrade
 
 ```
-python3 bubuku_cluster.py upgrade \
+bubuku_cluster.py upgrade \
                 --cluster-config $CONFIG_PATH \
                 --ip 10.246.2.11 \
                 --user adyachkov \
@@ -47,6 +48,6 @@ python3 bubuku_cluster.py upgrade \
 ### Get
 
 ```
-python3 bubuku_cluster.py get \
+bubuku_cluster.py get \
                 --cluster-config $CONFIG_PATH
 ```
