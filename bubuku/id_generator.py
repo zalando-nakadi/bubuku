@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import re
+from time import time, sleep
 
 import os
 
@@ -38,3 +39,15 @@ class BrokerIdGenerator(object):
         if broker_id:
             return self.zk.is_broker_registered(broker_id)
         return False
+
+    def wait_for_broker_id_absence(self):
+        while self.is_registered():
+            sleep(1)
+
+    def wait_for_broker_id_presence(self, timeout) -> bool:
+        start = time()
+        while not self.is_registered():
+            if (time() - start) > timeout:
+                return False
+        sleep(1)
+        return True
