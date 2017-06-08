@@ -49,5 +49,5 @@ class BrokerIdGenerator(object):
         while not self.is_registered():
             if (time() - start) > timeout:
                 return False
-        sleep(1)
+            sleep(1)
         return True
