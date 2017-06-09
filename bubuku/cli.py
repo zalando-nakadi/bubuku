@@ -227,21 +227,20 @@ def show_stats():
         _print_table(table)
 
 
-@cli.group(name='validate', help='Work with running actions')
+@cli.group(name='validate', help='Validates internal structures of kafka/zk')
 def validate():
     pass
 
 
-@validate.command('replication', help='Validates internal structures of kafka/zk')
-@click.option('--factor', type=click.INT, default=3, show_default=True,
-              help='Checks zk structure for correct replica list')
-def validate_replication():
+@validate.command('replication', help='Checks zk structure for correct replica list')
+@click.option('--factor', type=click.INT, default=3, show_default=True, help='Replication factor')
+def validate_replication(factor: int):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
-        brokers = zookeeper.get_broker_ids()
+        brokers = {int(x) for x in zookeeper.get_broker_ids()}
         table = []
         for topic_name, partition, state in zookeeper.load_partition_states():
-            if state['isr'] not in brokers:
+            if len(state['isr']) != factor or not set(state['isr']).issubset(brokers):
                 table.append({
                     'Topic': topic_name,
                     'State': state
