@@ -119,13 +119,6 @@ class BrokerManager(object):
             if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_broker_ids()):
                 raise LeaderElectionInProgress()
 
-            broker_id = self.id_manager.get_broker_id()
-            _LOG.info('Using broker_id {} for kafka'.format(broker_id))
-            if broker_id is not None:
-                self.kafka_properties.set_property('broker.id', broker_id)
-            else:
-                self.kafka_properties.delete_property('broker.id')
-
             _LOG.info('Using ZK address: {}'.format(zookeeper_address))
             self.kafka_properties.set_property('zookeeper.connect', zookeeper_address)
 
