@@ -227,5 +227,31 @@ def show_stats():
         _print_table(table)
 
 
+@cli.group(name='validate', help='Work with running actions')
+def validate():
+    pass
+
+
+@validate.command('replication', help='Validates internal structures of kafka/zk')
+@click.option('--factor', type=click.INT, default=3, show_default=True,
+              help='Checks zk structure for correct replica list')
+def validate_replication():
+    config, env_provider = __prepare_configs()
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        brokers = zookeeper.get_broker_ids()
+        table = []
+        for topic_name, partition, state in zookeeper.load_partition_states():
+            if state['isr'] not in brokers:
+                table.append({
+                    'Topic': topic_name,
+                    'State': state
+                })
+        if table:
+            _LOG.info('Invalid topics:')
+            _print_table(table)
+        else:
+            _LOG.info('All replica lists look valid')
+
+
 if __name__ == '__main__':
     cli()
