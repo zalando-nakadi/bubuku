@@ -23,8 +23,8 @@ def create_or_ger_security_group(cluster_config: dict) -> dict:
     ec2.create_tags(Resources=[sg['GroupId']], Tags=[{'Key': 'Name', 'Value': sg_name}])
     ec2.authorize_security_group_ingress(GroupId=sg['GroupId'],
                                          IpPermissions=[get_ip_permission(22), get_ip_permission(8004),
-                                                        get_ip_permission(8080), get_ip_permission(8778),
-                                                        get_ip_permission(9100), get_ip_permission(9092),
+                                                        get_ip_permission(8778), get_ip_permission(9100),
+                                                        get_ip_permission(9092),
                                                         get_ip_permission(
                                                             cluster_config['environment']['health_port'])])
     _LOG.info("Security group got ingress for ports: 22, 8004, 8080, 8778, 9100, %s",
