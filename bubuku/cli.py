@@ -232,7 +232,8 @@ def validate():
     pass
 
 
-@validate.command('replication', help='Checks zk structure for correct replica list')
+@validate.command('replication', help='Returns all partitions whose ISR size differs from the replication factor or '
+                                      'have not registered broker ids')
 @click.option('--factor', type=click.INT, default=3, show_default=True, help='Replication factor')
 def validate_replication(factor: int):
     config, env_provider = __prepare_configs()
