@@ -4,7 +4,8 @@
 import logging
 
 from bubuku import health
-from bubuku.broker import BrokerManager, KafkaProcessHolder, StartupTimeout
+from bubuku.broker import BrokerManager, StartupTimeout
+from bubuku.process import KafkaProcess
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.controller import Controller
 from bubuku.env_provider import EnvProvider
@@ -41,7 +42,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
 
-def run_daemon_loop(config: Config, process_holder: KafkaProcessHolder, cmd_helper: CmdHelper, restart_on_init: bool):
+def run_daemon_loop(config: Config, process_holder: KafkaProcess, cmd_helper: CmdHelper, restart_on_init: bool):
     _LOG.info("Using configuration: {}".format(config))
     kafka_props = KafkaProperties(config.kafka_settings_template,
                                   '{}/config/server.properties'.format(config.kafka_dir))
@@ -56,7 +57,7 @@ def run_daemon_loop(config: Config, process_holder: KafkaProcessHolder, cmd_help
         broker_id_manager = env_provider.create_broker_id_manager(zookeeper, kafka_props)
 
         _LOG.info("Building broker manager")
-        broker = BrokerManager(process_holder, config.kafka_dir, zookeeper, broker_id_manager, kafka_props,
+        broker = BrokerManager(process_holder, zookeeper, broker_id_manager, kafka_props,
                                startup_timeout)
 
         _LOG.info("Creating controller")
@@ -77,7 +78,7 @@ def main():
 
     config = load_config()
     _LOG.info("Using configuration: {}".format(config))
-    process_holder = KafkaProcessHolder()
+    process_holder = KafkaProcess(config.kafka_dir)
     _LOG.info('Starting health server')
     cmd_helper = CmdHelper()
     health.start_server(config.health_port, cmd_helper)

@@ -108,7 +108,7 @@ class _ZookeeperProxy(object):
 
     def terminate(self):
         if self.client:
-            self.client.stop()
+            self.client.stop_and_wait()
 
     def session_listener(self, state):
         pass
