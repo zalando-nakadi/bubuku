@@ -243,6 +243,7 @@ def validate_replication(factor: int):
         for topic_name, partition, state in zookeeper.load_partition_states():
             if len(state['isr']) != factor or not set(state['isr']).issubset(brokers):
                 table.append({
+                    'Partition': partition,
                     'Topic': topic_name,
                     'State': state
                 })
@@ -250,7 +251,7 @@ def validate_replication(factor: int):
             _LOG.info('Invalid topics:')
             _print_table(table)
         else:
-            _LOG.info('All replica lists look valid')
+            print('All replica lists look valid')
 
 
 if __name__ == '__main__':
