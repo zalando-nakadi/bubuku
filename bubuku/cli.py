@@ -37,7 +37,7 @@ def __get_opt_broker_id(broker_id: str, config: Config, zk: BukuExhibitor, env_p
     if not broker_id:
         kafka_properties = KafkaProperties(config.kafka_settings_template, '/tmp/tmp.props'.format(config.kafka_dir))
         broker_id_manager = env_provider.create_broker_id_manager(zk, kafka_properties)
-        broker_id = broker_id_manager.detect_broker_id()
+        broker_id = broker_id_manager.get_broker_id()
         _LOG.info('Will use broker_id {}'.format(broker_id))
     running_brokers = zk.get_broker_ids()
     if broker_id not in running_brokers:

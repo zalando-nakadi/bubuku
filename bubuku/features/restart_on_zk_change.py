@@ -79,7 +79,7 @@ class CheckExhibitorAddressChanged(Check):
                     _LOG.warning('ZK address changed again, from {} to {}'.format(new_conn_str, current_conn_str))
                     return True
                 if current_conn_str == self.broker.get_zk_connect_string():
-                    _LOG.warning('Broker already have latest version of zk address: '.format(current_conn_str))
+                    _LOG.warning('Broker already have latest version of zk address: {}'.format(current_conn_str))
                     return True
                 return False
 
