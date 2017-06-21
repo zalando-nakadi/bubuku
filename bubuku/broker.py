@@ -143,7 +143,7 @@ class BrokerManager(object):
                     self.timeout.on_timeout_fail()
                     break
                 sleep(1)
-            if not self.id_manager.is_registered():
+            if not self.process.is_running() or not self.id_manager.is_registered():
                 _LOG.error(
                     'Failed to wait for broker to start up, probably will kill, next timeout is'.format(self.timeout))
 
