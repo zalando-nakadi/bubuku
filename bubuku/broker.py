@@ -178,8 +178,8 @@ class BrokerManager(object):
                                 topic, partition, json.dumps(state), active_broker_ids))
                         return False
                     else:
-                        _LOG.warning('Shit happens! No single isr available for {}, {}, state: {}, '
-                                     'skipping check for that'.format(topic, partition, json.dumps(state)))
+                        _LOG.warning('No single isr available for {}, {}, state: {}, skipping check for that'.format(
+                            topic, partition, json.dumps(state)))
                 if dead_broker_ids and leader in dead_broker_ids:
                     _LOG.warning('Leadership is not transferred for {} {}, {} (dead list: {})'.format(
                         topic, partition, json.dumps(state), dead_broker_ids))

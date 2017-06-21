@@ -78,19 +78,19 @@ def main():
 
     config = load_config()
     _LOG.info("Using configuration: {}".format(config))
-    process_holder = KafkaProcess(config.kafka_dir)
+    process = KafkaProcess(config.kafka_dir)
     _LOG.info('Starting health server')
     cmd_helper = CmdHelper()
     health.start_server(config.health_port, cmd_helper)
     restart_on_init = False
     while True:
         try:
-            run_daemon_loop(config, process_holder, cmd_helper, restart_on_init)
+            run_daemon_loop(config, process, cmd_helper, restart_on_init)
             break
         except Exception as ex:
             _LOG.error("WOW! Almost died! Will try to restart from the begin. "
                        "After initialization will be complete, will try to restart", exc_info=ex)
-            if process_holder.get():
+            if process.is_running():
                 restart_on_init = False
 
 
