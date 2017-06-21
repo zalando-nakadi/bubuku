@@ -134,24 +134,6 @@ class BrokerManager(object):
                     'Failed to wait for broker to start up, probably will kill, next timeout is'.format(
                         self.timeout.get_timeout()))
 
-    def get_disjoined_isr_topic_partitions(self):
-        """
-        Gets list of (topic,partition) for which this broker should be in isr list, but for some reason it is not there 
-        :return: list of tuples (topic:str, partition:int)
-        """
-        broker_id = int(self.id_manager.get_broker_id())
-        checked_topic_partitoins = [
-            (topic, partition) for topic, partition, broker_ids in self.exhibitor.load_partition_assignment()
-            if broker_id in broker_ids
-        ]
-        unjoined_topic_partitions = []
-        for topic, partition, state in self.exhibitor.load_partition_states():
-            if (topic, partition) not in checked_topic_partitoins:
-                continue
-            if broker_id not in state.get('isr', []):
-                unjoined_topic_partitions.append((topic, partition))
-        return unjoined_topic_partitions
-
     def _is_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
         _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
             active_broker_ids, dead_broker_ids))
