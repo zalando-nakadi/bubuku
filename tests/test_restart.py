@@ -30,10 +30,5 @@ class RestartTest(unittest.TestCase):
 
         started = []
         broker.start_kafka_process = lambda x: started.append(x)
-        broker.get_disjoined_isr_topic_partitions = lambda: [('test', 0)]
-        assert change.run([])  # actual start
-        for i in range(1, 10):
-            assert change.run([])
-        broker.get_disjoined_isr_topic_partitions = lambda: []
         assert not change.run([])
         assert started and 'xxx' == started[0]
