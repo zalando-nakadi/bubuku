@@ -14,7 +14,7 @@ class KafkaProcess(object):
     def is_running(self) -> bool:
         if self.process:
             self.process.poll()
-            return self.process.returncode is not None
+            return self.process.returncode is None
         return False
 
     def stop_and_wait(self):
