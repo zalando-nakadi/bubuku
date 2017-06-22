@@ -89,7 +89,8 @@ class BrokerManager(object):
         return self.id_manager.is_registered()
 
     def stop_kafka_process(self):
-        self.process.stop_and_wait()
+        if self.process.is_running():
+            self.process.stop_and_wait()
         self._wait_for_zk_absence()
 
     def _is_clean_election(self):
