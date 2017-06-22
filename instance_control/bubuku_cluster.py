@@ -25,8 +25,9 @@ def cli():
 @click.option('--ip', required=True)
 @click.option('--user', required=True)
 @click.option('--odd', required=True)
-def upgrade(image_version: str, cluster_config: str, ip: str, user: str, odd: str):
-    UpgradeCommand(cluster_config, image_version, ip, user, odd).run()
+@click.option('--force', type=bool, default=False)
+def upgrade(image_version: str, cluster_config: str, ip: str, user: str, odd: str, force: bool):
+    UpgradeCommand(cluster_config, image_version, ip, user, odd, force).run()
 
 
 @cli.command('attach', help='Launch instance and attach it to the existing EBS volume')

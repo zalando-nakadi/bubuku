@@ -14,12 +14,13 @@ _LOG = logging.getLogger('bubuku.cluster.command.upgrade')
 
 
 class UpgradeCommand(Command):
-    def __init__(self, cluster_config_path: str, image_version: str, ip: str, user: str, odd: str):
+    def __init__(self, cluster_config_path: str, image_version: str, ip: str, user: str, odd: str, force: bool):
         super().__init__(cluster_config_path)
         self.image_version = image_version
         self.ip = ip
         self.user = user
         self.odd = odd
+        self.force = force
 
     def alter_config(self):
         if self.image_version:
@@ -30,7 +31,8 @@ class UpgradeCommand(Command):
         ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])
 
         instance = node.get_instance_by_ip(ec2_resource, self.cluster_config['cluster_name'], self.ip)
-        check_current_image_version(instance, self.cluster_config['image_version'])
+        if not self.force:
+            check_current_image_version(instance, self.cluster_config['image_version'])
 
         _LOG.info('Searching for instance %s volumes', instance.instance_id)
         volumes = ec2_client.describe_instance_attribute(InstanceId=instance.instance_id,
