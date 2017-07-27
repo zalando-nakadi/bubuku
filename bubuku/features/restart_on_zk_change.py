@@ -8,7 +8,6 @@ _LOG = logging.getLogger('bubuku.features.restart_on_zk')
 
 _STAGE_STOP = 'stop'
 _STAGE_START = 'start'
-_STAGE_WAIT_FOR_ISR = 'wait_for_isr'
 
 
 class RestartBrokerChange(Change):
@@ -39,16 +38,6 @@ class RestartBrokerChange(Change):
                 self.broker.start_kafka_process(zk_conn_str)
             except Exception as e:
                 _LOG.error('Failed to start kafka process against {}'.format(zk_conn_str), exc_info=e)
-                return True
-            self.stage = _STAGE_WAIT_FOR_ISR
-            return True
-        elif self.stage == _STAGE_WAIT_FOR_ISR:
-            if not self.broker.is_running_and_registered():
-                _LOG.warning("Broker is considered to be dead right after restart, won't wait for isr")
-                return False
-            unjoined = self.broker.get_disjoined_isr_topic_partitions()
-            if unjoined:
-                _LOG.info("Still waiting to join to isr list for topic partitions: {}".format(unjoined))
                 return True
             return False
         else:
