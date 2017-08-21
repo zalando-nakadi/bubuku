@@ -34,6 +34,8 @@ export ZOOKEEPER_STACK_NAME=my_zookeeper
 export ZOOKEEPER_PREFIX=/test 
 export BROKER_ID_POLICY=ip
 
+blah
+
 # Restart kafka on current node
 bubuku-cli restart
 # Restart kafka on some other node (broker id must be known)
