@@ -36,7 +36,7 @@ def generate_user_data(cluster_config: dict) -> str:
     environment = cluster_config['environment']
     data = {'runtime': 'Docker',
             'source': cluster_config['docker_image'],
-            'application_id': cluster_config['cluster_name'],
+            'application_id': cluster_config['application_id'],
             'application_version': cluster_config['image_version'],
             'networking': 'host',
             'ports': {'9092': '9092',

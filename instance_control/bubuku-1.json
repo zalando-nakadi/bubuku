@@ -1,5 +1,6 @@
 {
   "cluster_name": "bubuku-1",
+  "application_id": "bubuku-appliance",
   "account": "aruha-test",
   "region": "eu-central-1",
   "vpc_id": "vpc-12345678",
