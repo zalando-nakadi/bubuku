@@ -40,10 +40,11 @@ class IpAddressPoolDepletedException(Exception):
         super(IpAddressPoolDepletedException, self).__init__(msg)
 
 
-def allocate_ip_addresses(cluster_config: dict) -> list:
+def allocate_ip_addresses(cluster_config: dict, address_count: int) -> list:
     '''
     Allocate unused private IP addresses by checking the current
     reservations
+    Return list of tuples (subnet, ip)
     '''
     _LOG.info('Allocating IP addresses ...')
 
@@ -71,11 +72,12 @@ def allocate_ip_addresses(cluster_config: dict) -> list:
             try_next_address(ips, subnets[idx])
 
     i = 0
-    node_ips = []
+    result_ips = []
     ec2 = boto3.client('ec2', region_name=cluster_config['region'])
-    while i < cluster_config['cluster_size']:
+    while i < address_count:
         idx = i % len(subnets)
-        ip = try_next_address(network_ips[idx], subnets[idx])
+        subnet = subnets[idx]
+        ip = try_next_address(network_ips[idx], subnet)
         resp = ec2.describe_instances(Filters=[{
             'Name': 'private-ip-address',
             'Values': [ip]
@@ -83,8 +85,8 @@ def allocate_ip_addresses(cluster_config: dict) -> list:
         if not resp['Reservations']:
             i += 1
             _LOG.info('Got ip address %s ', ip)
-            node_ips.append({'PrivateIp': ip, '_defaultIp': ip})
+            result_ips.append((subnet, ip))
 
     _LOG.info('IP Addresses are allocated')
 
-    return node_ips
+    return result_ips

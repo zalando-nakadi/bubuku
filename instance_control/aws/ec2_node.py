@@ -32,8 +32,8 @@ def _create_tagged_volume(ec2_client: object, cluster_config: dict, zone: str, n
     ec2_client.create_tags(Resources=[vol['VolumeId']], Tags=tags)
 
 
-def _launch_instance(region: str, ip: dict, ami: object, subnet: dict, security_group_id: str, cluster_config: dict):
-    _LOG.info('Launching node %s in %s', ip['_defaultIp'], subnet['AvailabilityZone'])
+def _launch_instance(region: str, ip: dict, ami: object, subnet_: dict, security_group_id: str, cluster_config: dict):
+    _LOG.info('Launching node %s in %s', ip, subnet_['AvailabilityZone'])
     ec2_client = boto3.client('ec2', region_name=region)
 
     #
@@ -66,7 +66,7 @@ def _launch_instance(region: str, ip: dict, ami: object, subnet: dict, security_
                                   'NoDevice': ''})
 
     if cluster_config['create_ebs']:
-        _create_tagged_volume(ec2_client, cluster_config, subnet['AvailabilityZone'], config.KAFKA_LOGS_EBS)
+        _create_tagged_volume(ec2_client, cluster_config, subnet_['AvailabilityZone'], config.KAFKA_LOGS_EBS)
 
     user_data = cluster_config['user_data']
     user_data['volumes']['ebs']['/dev/xvdk'] = config.KAFKA_LOGS_EBS
@@ -80,7 +80,7 @@ def _launch_instance(region: str, ip: dict, ami: object, subnet: dict, security_
         UserData=taupage_user_data,
         InstanceType=cluster_config['instance_type'],
         SubnetId=subnet['SubnetId'],
-        PrivateIpAddress=ip['PrivateIp'],
+        PrivateIpAddress=ip,
         BlockDeviceMappings=block_devices,
         IamInstanceProfile={'Arn': cluster_config['instance_profile']['Arn']},
         DisableApiTermination=False,
@@ -107,24 +107,20 @@ def _launch_instance(region: str, ip: dict, ami: object, subnet: dict, security_
     metric.create_auto_recovery_alarm(cluster_config, instance_id)
 
 
-def _launch_nodes(cluster_config: dict):
-    i = 0
-    for ip in cluster_config['node_ips']:
-        subnets = cluster_config['subnets']
-        _launch_instance(cluster_config['region'], ip,
-                         ami=cluster_config['taupage_amis'],
-                         subnet=subnets[i % len(subnets)],
-                         security_group_id=cluster_config['security_group']['GroupId'],
-                         cluster_config=cluster_config)
-        if i + 1 == cluster_config['cluster_size']:
-            _LOG.info("Creation is finished")
-            break
-        i += 1
+def _launch_nodes(cluster_config: dict, node_ips: list):
+    for subnet_, ip in node_ips:
+        _launch_instance(
+            cluster_config['region'],
+            ip,
+            ami=cluster_config['taupage_amis'],
+            subnet=subnet_,
+            security_group_id=cluster_config['security_group']['GroupId'],
+            cluster_config=cluster_config)
         _LOG.info("Sleeping for one minute before launching next node..")
         time.sleep(60)
 
 
-def create(cluster_config: dict):
+def create(cluster_config: dict, instance_count: int):
     artifact_name = 'bubuku-appliance'
     cluster_config['docker_image'] = 'registry.opensource.zalan.do/aruha/{}:{}'.format(artifact_name,
                                                                                        cluster_config['image_version'])
@@ -132,14 +128,16 @@ def create(cluster_config: dict):
     try:
         cluster_config['taupage_amis'] = taupage.find_amis(cluster_config['region'])
         cluster_config['subnets'] = subnet.get_subnets('internal-', cluster_config)
-        cluster_config['node_ips'] = subnet.allocate_ip_addresses(cluster_config)
+
+        node_ips = subnet.allocate_ip_addresses(cluster_config, instance_count)
+
         cluster_config['security_group'] = security_group.create_or_ger_security_group(cluster_config)
         cluster_config['user_data'] = taupage.generate_user_data(cluster_config)
         cluster_config['instance_profile'] = iam.create_or_get_instance_profile(cluster_config)
 
-        _launch_nodes(cluster_config)
+        _launch_nodes(cluster_config, node_ips)
 
-    except:
+    except Exception as e:
         _LOG.error('''
             You were trying to deploy Bubuku, but the process has failed :-(
             
@@ -153,4 +151,4 @@ def create(cluster_config: dict):
             either correct the error or retry.
             
         ''')
-        raise
+        raise e

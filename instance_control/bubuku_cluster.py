@@ -41,9 +41,9 @@ def attach(volume_id: str, cluster_config: str):
 @click.option('--availability-zone', default=None)
 @click.option('--image-version', help='Docker image version to use. By default the version from config is used. '
                                       'If provided then verrides image version from config')
-@click.option('--cluster-config', default='bubuku-1.json')
-def create(cluster_size: int, availability_zone: str, image_version: str, cluster_config: str):
-    CreateCommand(cluster_config, cluster_size, availability_zone, image_version).run()
+@click.option('--count', default=1, type=int, help='Count of instances to create', show_default=True)
+def create(count: int, availability_zone: str, image_version: str, cluster_config: str):
+    CreateCommand(cluster_config, count, availability_zone, image_version).run()
 
 
 @cli.command('terminate', help='Terminate instance')

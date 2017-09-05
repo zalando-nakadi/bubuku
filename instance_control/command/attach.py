@@ -25,7 +25,6 @@ class AttachCommand(Command):
 
         self.cluster_config['create_ebs'] = False
         self.cluster_config['availability_zone'] = vol.availability_zone
-        self.cluster_config['cluster_size'] = 1
 
-        ec2_node.create(self.cluster_config)
+        ec2_node.create(self.cluster_config, 1)
         volume.wait_volumes_attached(ec2_client, ec2_resource)
