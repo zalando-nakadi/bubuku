@@ -2,14 +2,15 @@ import logging
 import time
 
 from instance_control import config
+from instance_control.aws.ec2_node import EC2
 
 _LOG = logging.getLogger('bubuku.cluster.volume')
 
 
-def wait_volumes_attached(ec2_client, ec2_resource):
+def wait_volumes_attached(ec2: EC2):
     _LOG.info('Searching for volumes with tag %s to attach', config.KAFKA_LOGS_EBS)
-    response = ec2_client.describe_volumes(Filters=[{'Name': 'tag:Name', 'Values': [config.KAFKA_LOGS_EBS]}])
-    volumes = [ec2_resource.Volume(v['VolumeId']) for v in response['Volumes']]
+    response = ec2.client.describe_volumes(Filters=[{'Name': 'tag:Name', 'Values': [config.KAFKA_LOGS_EBS]}])
+    volumes = [ec2.resource.Volume(v['VolumeId']) for v in response['Volumes']]
 
     _LOG.info('Waiting for %s to be attached', volumes)
     while True:
@@ -37,4 +38,3 @@ def check_volume_available(v):
     if v.state != 'available':
         _LOG.info('Volume %s is attached. Clearing tag:Name', v)
         raise Exception('Volume {} is not available for attaching. State: {}'.format(v.VolumeId, v.state))
-
