@@ -37,7 +37,7 @@ def attach(volume_id: str, cluster_config: str):
 
 
 @cli.command('create', help='Launch instance with EBS attached')
-@click.option('--cluster-size', type=int)
+@click.option('--cluster-config', default='bubuku-1.json')
 @click.option('--availability-zone', default=None)
 @click.option('--image-version', help='Docker image version to use. By default the version from config is used. '
                                       'If provided then verrides image version from config')
@@ -62,5 +62,5 @@ def get(cluster_config: str):
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=getattr(logging, 'INFO', None))
+    logging.basicConfig(level=logging.INFO)
     cli()

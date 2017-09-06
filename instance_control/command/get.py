@@ -1,7 +1,6 @@
 import logging
 
-import boto3
-
+from instance_control.aws import AWSResources
 from instance_control.command import Command
 
 _LOG = logging.getLogger('bubuku.cluster.command.get')
@@ -12,8 +11,8 @@ class GetCommand(Command):
         super().__init__(cluster_config_path)
 
     def execute(self):
-        ec2_resource = boto3.resource('ec2', region_name=self.cluster_config['region'])
-        instances = list(ec2_resource.instances.filter(Filters=[
+        aws_ = AWSResources(region=self.cluster_config['region'])
+        instances = list(aws_.ec2_resource.instances.filter(Filters=[
             {'Name': 'instance-state-name', 'Values': ['running', 'pending']},
             {'Name': 'tag:Name', 'Values': [self.cluster_config['cluster_name']]}]))
 

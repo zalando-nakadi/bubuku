@@ -4,47 +4,22 @@ import copy
 import logging
 import time
 
-import boto3
 import yaml
-from botocore.config import Config
 
 from instance_control import config
-from instance_control.aws import security_group, iam, subnet, metric
+from instance_control.aws import security_group, iam, subnet, metric, AWSResources
 from instance_control.aws import taupage
 
 _LOG = logging.getLogger('bubuku.cluster.aws.ec2_node')
 
 
 class EC2(object):
-    def __init__(self, region, retries=100):
-        self.session = boto3.Session()
-        self.retries = retries
-        self.region = region
-        boto3.set_stream_logger('boto3', logging.INFO)
-        self._client = None
-        self._resource = None
-
-    @property
-    def client(self):
-        if not self._client:
-            self._client = self.session.client(
-                'ec2',
-                region_name=self.region,
-                config=Config(retries={'max_attempts': self.retries}))
-        return self._client
-
-    @property
-    def resource(self):
-        if not self._resource:
-            self._resource = self.session.resource(
-                'ec2',
-                region_name=self.region,
-                config=Config(retries={'max_attempts': self.retries}))
-        return self._resource
+    def __init__(self, aws: AWSResources):
+        self.aws = aws
 
     def _create_tagged_volume(self, cluster_config: dict, zone: str, name: str):
         _LOG.info('Creating EBS volume %s in %s', name, zone)
-        vol = self.client.create_volume(
+        vol = self.aws.ec2_client.create_volume(
             AvailabilityZone=zone,
             VolumeType=cluster_config['volume_type'],
             Size=cluster_config['volume_size'],
@@ -62,7 +37,7 @@ class EC2(object):
                 'Value': 'True'
             }
         ]
-        self.client.create_tags(Resources=[vol['VolumeId']], Tags=tags)
+        self.aws.ec2_client.create_tags(Resources=[vol['VolumeId']], Tags=tags)
 
     def _launch_instance(self, ip: str, subnet_: dict, ami: object, security_group_id: str, cluster_config: dict):
         _LOG.info('Launching node %s in %s', ip, subnet_['AvailabilityZone'])
@@ -105,7 +80,7 @@ class EC2(object):
         user_data['volumes']['ebs']['/dev/xvdk'] = config.KAFKA_LOGS_EBS
         taupage_user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(user_data))
 
-        resp = self.client.run_instances(
+        resp = self.aws.ec2_client.run_instances(
             ImageId=ami.id,
             MinCount=1,
             MaxCount=1,
@@ -121,7 +96,7 @@ class EC2(object):
 
         instance_id = resp['Instances'][0]['InstanceId']
         _LOG.info('Instance %s launched, waiting for it to initialize', instance_id)
-        self.client.create_tags(
+        self.aws.ec2_client.create_tags(
             Resources=[instance_id],
             Tags=[{'Key': 'Name', 'Value': cluster_config['cluster_name']}])
 
@@ -141,13 +116,15 @@ class EC2(object):
         while starting_instances:
             _LOG.info("Waiting for instances to start: {}".format(starting_instances))
             time.sleep(5)
-            resp = self.client.describe_instances(InstanceIds=starting_instances)
-            started = [i['InstanceId'] for i in resp['Reservations']['Instances'] if i['State']['Name'] != 'pending']
+            resp = self.aws.ec2_client.describe_instances(InstanceIds=starting_instances)
+            started = []
+            for r in resp['Reservations']:
+                started += [i['InstanceId'] for i in r['Instances'] if i['State']['Name'] != 'pending']
             if started:
-                _LOG.info('Instances {} started', started)
+                _LOG.info('Instances {} started'.format(started))
             for instance_id in started:
                 starting_instances.remove(instance_id)
-                metric.create_auto_recovery_alarm(cluster_config, instance_id)
+                metric.create_auto_recovery_alarm(self.aws, cluster_config['cluster_name'], instance_id)
 
     def create(self, cluster_config: dict, instance_count: int):
         artifact_name = 'bubuku-appliance'
@@ -155,14 +132,14 @@ class EC2(object):
             artifact_name, cluster_config['image_version'])
         _LOG.info('Preparing AWS configuration for ec2 instance creation')
         try:
-            cluster_config['taupage_amis'] = taupage.find_amis(cluster_config['region'])
-            cluster_config['subnets'] = subnet.get_subnets('internal-', cluster_config)
+            cluster_config['taupage_amis'] = taupage.find_amis(self.aws.ec2_resource, cluster_config['region'])
+            cluster_config['subnets'] = subnet.get_subnets(self.aws.ec2_client, 'internal-', cluster_config)
 
-            node_ips = subnet.allocate_ip_addresses(cluster_config, instance_count)
+            node_ips = subnet.allocate_ip_addresses(self.aws, cluster_config, instance_count)
 
-            cluster_config['security_group'] = security_group.create_or_ger_security_group(cluster_config)
+            cluster_config['security_group'] = security_group.create_or_ger_security_group(self.aws, cluster_config)
             cluster_config['user_data'] = taupage.generate_user_data(cluster_config)
-            cluster_config['instance_profile'] = iam.create_or_get_instance_profile(cluster_config)
+            cluster_config['instance_profile'] = iam.create_or_get_instance_profile(self.aws, cluster_config)
 
             self._launch_nodes(cluster_config, node_ips)
 

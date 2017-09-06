@@ -1,6 +1,7 @@
 import logging
 
 from instance_control import volume
+from instance_control.aws import AWSResources
 from instance_control.aws.ec2_node import EC2
 from instance_control.command import Command
 
@@ -24,7 +25,8 @@ class CreateCommand(Command):
         self.cluster_config['availability_zone'] = self.availability_zone
 
     def execute(self):
-        ec2 = EC2(region=self.cluster_config['region'])
+        aws_ = AWSResources(region=self.cluster_config['region'])
+        ec2 = EC2(aws_)
 
         ec2.create(self.cluster_config, self.count)
-        volume.wait_volumes_attached(ec2)
+        volume.wait_volumes_attached(aws_)
