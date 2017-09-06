@@ -117,12 +117,12 @@ class EC2(object):
             _LOG.info("Waiting for instances to start: {}".format(starting_instances))
             time.sleep(5)
             resp = self.aws.ec2_client.describe_instances(InstanceIds=starting_instances)
-            started = []
+            started_instances = []
             for r in resp['Reservations']:
-                started += [i['InstanceId'] for i in r['Instances'] if i['State']['Name'] != 'pending']
-            if started:
-                _LOG.info('Instances {} started'.format(started))
-            for instance_id in started:
+                started_instances += [i['InstanceId'] for i in r['Instances'] if i['State']['Name'] != 'pending']
+            if started_instances:
+                _LOG.info('Instances {} started'.format(started_instances))
+            for instance_id in started_instances:
                 starting_instances.remove(instance_id)
                 metric.create_auto_recovery_alarm(self.aws, cluster_config['cluster_name'], instance_id)
 
