@@ -45,7 +45,7 @@ class UpgradeCommand(Command):
 
         aws_.ec2_client.detach_volume(VolumeId=data_volume_id, Force=False)
 
-        node.terminate(self.cluster_config['cluster_name'], instance)
+        node.terminate(aws_, self.cluster_config['cluster_name'], instance)
         self.cluster_config['availability_zone'] = vol.availability_zone
         self.cluster_config['create_ebs'] = False
 
@@ -53,7 +53,7 @@ class UpgradeCommand(Command):
 
         ec2.create(self.cluster_config, 1)
         # volumes are going to be attached by taupage
-        volume.wait_volumes_attached(ec2)
+        volume.wait_volumes_attached(aws_)
 
 
 def check_current_image_version(instance, provided_image_version):
