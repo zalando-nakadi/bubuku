@@ -54,8 +54,8 @@ def generate_user_data(cluster_config: dict) -> str:
                 'KAFKA_HEAP_OPTS': environment['kafka_heap_opts'],
                 'HEALTH_PORT': environment['health_port'],
                 'STARTUP_TIMEOUT_TYPE': environment['startup_timeout_type'],
-                'STARTUP_TIMEOUT_INITIAL': environment['startup_timeout_initial'],
-                'STARTUP_TIMEOUT_STEP': environment['startup_timeout_step']
+                'STARTUP_TIMEOUT_INITIAL': environment.get('startup_timeout_initial', ),
+                'STARTUP_TIMEOUT_STEP': environment.get('startup_timeout_step')
             },
             'volumes': {
                 'ebs': {
