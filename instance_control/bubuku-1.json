@@ -4,7 +4,6 @@
   "account": "aruha-test",
   "region": "eu-central-1",
   "vpc_id": "vpc-12345678",
-  "cluster_size": 1,
   "instance_type": "m4.large",
   "volume_type": "st1",
   "volume_size": 500,
