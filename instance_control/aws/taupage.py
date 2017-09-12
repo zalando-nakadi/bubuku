@@ -1,22 +1,19 @@
 import logging
 
-import boto3
-
 _LOG = logging.getLogger('bubuku.cluster.aws.taupage')
 
 
-def find_amis(region: str) -> dict:
+def find_amis(ec2_resource, region: str) -> dict:
     '''
     Find latest Taupage AMI for the region
     '''
     _LOG.info('Finding latest Taupage AMI in %s..', region)
 
-    ec2 = boto3.resource('ec2', region)
     filters = [{'Name': 'name', 'Values': ['*Taupage-AMI-*']},
                {'Name': 'is-public', 'Values': ['false']},
                {'Name': 'state', 'Values': ['available']},
                {'Name': 'root-device-type', 'Values': ['ebs']}]
-    images = list(ec2.images.filter(Filters=filters))
+    images = list(ec2_resource.images.filter(Filters=filters))
     if not images:
         raise Exception('No Taupage AMI found')
     most_recent_image = sorted(images, key=lambda i: i.name)[-1]
@@ -36,7 +33,7 @@ def generate_user_data(cluster_config: dict) -> str:
     environment = cluster_config['environment']
     data = {'runtime': 'Docker',
             'source': cluster_config['docker_image'],
-            'application_id': cluster_config['cluster_name'],
+            'application_id': cluster_config['application_id'],
             'application_version': cluster_config['image_version'],
             'networking': 'host',
             'ports': {'9092': '9092',

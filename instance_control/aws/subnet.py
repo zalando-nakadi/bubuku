@@ -1,12 +1,13 @@
 import logging
 
-import boto3
 import netaddr
+
+from instance_control.aws import AWSResources
 
 _LOG = logging.getLogger('bubuku.cluster.aws.subnet')
 
 
-def get_subnets(prefix_filter: str, cluster_config: dict) -> list:
+def get_subnets(ec2, prefix_filter: str, cluster_config: dict) -> list:
     '''
     Returns lists of subnets, which names start
     with the specified prefix (it should be either 'dmz-' or
@@ -16,7 +17,6 @@ def get_subnets(prefix_filter: str, cluster_config: dict) -> list:
     availability_zone = cluster_config['availability_zone']
     _LOG.info('Getting subnets for vpc_id: %s and availability_zone: %s', vpc_id, availability_zone)
 
-    ec2 = boto3.client('ec2', cluster_config['region'])
     resp = ec2.describe_subnets()
     subnets = []
 
@@ -40,10 +40,11 @@ class IpAddressPoolDepletedException(Exception):
         super(IpAddressPoolDepletedException, self).__init__(msg)
 
 
-def allocate_ip_addresses(cluster_config: dict) -> list:
+def allocate_ip_addresses(aws_: AWSResources, cluster_config: dict, address_count: int) -> list:
     '''
     Allocate unused private IP addresses by checking the current
     reservations
+    Return list of tuples (subnet, ip)
     '''
     _LOG.info('Allocating IP addresses ...')
 
@@ -71,20 +72,20 @@ def allocate_ip_addresses(cluster_config: dict) -> list:
             try_next_address(ips, subnets[idx])
 
     i = 0
-    node_ips = []
-    ec2 = boto3.client('ec2', region_name=cluster_config['region'])
-    while i < cluster_config['cluster_size']:
+    result_ips = []
+    while i < address_count:
         idx = i % len(subnets)
-        ip = try_next_address(network_ips[idx], subnets[idx])
-        resp = ec2.describe_instances(Filters=[{
+        subnet = subnets[idx]
+        ip = try_next_address(network_ips[idx], subnet)
+        resp = aws_.ec2_client.describe_instances(Filters=[{
             'Name': 'private-ip-address',
             'Values': [ip]
         }])
         if not resp['Reservations']:
             i += 1
             _LOG.info('Got ip address %s ', ip)
-            node_ips.append({'PrivateIp': ip, '_defaultIp': ip})
+            result_ips.append((subnet, ip))
 
     _LOG.info('IP Addresses are allocated')
 
-    return node_ips
+    return result_ips

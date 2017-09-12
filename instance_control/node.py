@@ -1,14 +1,14 @@
 import logging
 import time
 
-import boto3
+from instance_control.aws import AWSResources
 
 _LOG = logging.getLogger('bubuku.cluster.node')
 
 
-def terminate(cluster_name: str, instance):
+def terminate(aws_: AWSResources, cluster_name: str, instance):
     _LOG.info('Terminating %s in %s', instance, cluster_name)
-    _delete_alarm(cluster_name, instance)
+    _delete_alarm(aws_, cluster_name, instance)
     instance.terminate()
 
     _LOG.info('Instance state is %s. Waiting ...', instance.state['Name'])
@@ -21,12 +21,10 @@ def terminate(cluster_name: str, instance):
         time.sleep(10)
 
 
-def _delete_alarm(cluster_name: str, instance):
+def _delete_alarm(aws_: AWSResources, cluster_name: str, instance):
     alarm_name = '{}-{}-auto-recover'.format(cluster_name, instance.instance_id)
     _LOG.info('Deleting alarm %s in %s for %s', alarm_name, cluster_name, instance)
-    cw_client = boto3.client('cloudwatch')
-    cw_client.delete_alarms(
-        AlarmNames=[alarm_name])
+    aws_.cloudwatch_client.delete_alarms(AlarmNames=[alarm_name])
 
 
 def get_instance_by_ip(ec2_resource, cluster_name, ip):

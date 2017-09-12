@@ -227,5 +227,32 @@ def show_stats():
         _print_table(table)
 
 
+@cli.group(name='validate', help='Validates internal structures of kafka/zk')
+def validate():
+    pass
+
+
+@validate.command('replication', help='Returns all partitions whose ISR size differs from the replication factor or '
+                                      'have not registered broker ids')
+@click.option('--factor', type=click.INT, default=3, show_default=True, help='Replication factor')
+def validate_replication(factor: int):
+    config, env_provider = __prepare_configs()
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        brokers = {int(x) for x in zookeeper.get_broker_ids()}
+        table = []
+        for topic_name, partition, state in zookeeper.load_partition_states():
+            if len(state['isr']) != factor or not set(state['isr']).issubset(brokers):
+                table.append({
+                    'Partition': partition,
+                    'Topic': topic_name,
+                    'State': state
+                })
+        if table:
+            _LOG.info('Invalid topics:')
+            _print_table(table)
+        else:
+            print('All replica lists look valid')
+
+
 if __name__ == '__main__':
     cli()
