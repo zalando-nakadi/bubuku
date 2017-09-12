@@ -34,7 +34,7 @@ class UpgradeCommand(Command):
 
         _LOG.info('Searching for instance %s volumes', instance.instance_id)
         volumes = aws_.ec2_client.describe_instance_attribute(InstanceId=instance.instance_id,
-                                                         Attribute='blockDeviceMapping')
+                                                              Attribute='blockDeviceMapping')
         data_volume = next(v for v in volumes['BlockDeviceMappings'] if v['DeviceName'] == '/dev/xvdk')
         data_volume_id = data_volume['Ebs']['VolumeId']
 

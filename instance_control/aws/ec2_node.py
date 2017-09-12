@@ -98,7 +98,11 @@ class EC2(object):
         _LOG.info('Instance %s launched, waiting for it to initialize', instance_id)
         self.aws.ec2_client.create_tags(
             Resources=[instance_id],
-            Tags=[{'Key': 'Name', 'Value': cluster_config['cluster_name']}])
+            Tags=[
+                {'Key': 'Name', 'Value': cluster_config['cluster_name']},
+                {'Key': 'StackName', 'Value': cluster_config['cluster_name']}
+            ]
+        )
 
         return instance_id
 
