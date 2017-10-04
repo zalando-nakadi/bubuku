@@ -24,6 +24,9 @@ class EnvProvider(object):
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
         raise NotImplementedError('Not implemented')
 
+    def get_rack(self):
+        raise NotImplementedError('Not implemented')
+
     @staticmethod
     def create_env_provider(config: Config):
         if config.mode == 'amazon':
@@ -39,17 +42,23 @@ class AmazonEnvProvider(EnvProvider):
         self.aws_addr = '169.254.169.254'
         self.config = config
         self.ip_address = None
+        self._document = None
 
     def _get_document(self) -> dict:
-        document = requests.get('http://{}/latest/dynamic/instance-identity/document'.format(self.aws_addr),
-                                timeout=5).json()
-        _LOG.info("Amazon specific information loaded from AWS: {}".format(json.dumps(document, indent=2)))
-        return document
+        if not self._document:
+            self._document = requests.get(
+                'http://{}/latest/dynamic/instance-identity/document'.format(self.aws_addr),
+                timeout=5).json()
+            _LOG.info("Amazon specific information loaded from AWS: {}".format(json.dumps(self._document, indent=2)))
+        return self._document
 
     def get_id(self) -> str:
         if not self.ip_address:
             self.ip_address = self._get_document()['privateIp']
         return self.ip_address
+
+    def get_rack(self):
+        return self._get_document()['availabilityZone']
 
     def _load_instance_ips(self, lb_name: str):
         region = self._get_document()['region']
@@ -89,6 +98,9 @@ class LocalEnvProvider(EnvProvider):
 
     def get_address_provider(self):
         return _LocalAddressProvider()
+
+    def get_rack(self):
+        return None
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
         return BrokerIdGenerator(zk, kafka_props)

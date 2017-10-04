@@ -49,6 +49,9 @@ def run_daemon_loop(config: Config, process_holder: KafkaProcess, cmd_helper: Cm
 
     env_provider = EnvProvider.create_env_provider(config)
     address_provider = env_provider.get_address_provider()
+    rack = env_provider.get_rack()
+    if rack:
+        kafka_props.set_property('broker.rack', rack)
     startup_timeout = StartupTimeout.build(config.timeout)
 
     _LOG.info("Loading exhibitor configuration")
