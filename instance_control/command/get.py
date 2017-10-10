@@ -3,6 +3,7 @@ from typing import List
 
 from instance_control.aws import AWSResources
 from instance_control.command import Command
+from instance_control.command.upgrade import get_image_version
 
 _LOG = logging.getLogger('bubuku.cluster.command.get')
 
@@ -43,11 +44,12 @@ class GetCommand(Command):
         data = []
         for instance in instances:
             data.append({
-                '1_Ip': instance.private_ip_address,
-                '2_Id': instance.instance_id,
-                '3_Volume': [x['Ebs']['VolumeId'] for x in instance.block_device_mappings if
+                '1 Ip': instance.private_ip_address,
+                '2 Id': instance.instance_id,
+                '3 Volume': [x['Ebs']['VolumeId'] for x in instance.block_device_mappings if
                              x['DeviceName'] == '/dev/xvdk'][0],
-                '4_Availability zone': instance.placement['AvailabilityZone']
+                '4 Availability zone': instance.placement['AvailabilityZone'],
+                '5 Image Version': get_image_version(instance)
             })
 
         _print_table(data)
