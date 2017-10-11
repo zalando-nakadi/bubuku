@@ -4,7 +4,7 @@ import threading
 import time
 import uuid
 
-from typing import List
+from typing import List, Tuple
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
@@ -199,7 +199,7 @@ class BukuExhibitor(object):
         """
         return sorted(self.exhibitor.get_children('/brokers/ids'))
 
-    def get_broker_racks(self) -> List(int, str):
+    def get_broker_racks(self) -> List[Tuple[int, str]]:
         """
         Lists the rack of each broker, if it exists
         :return: a tuple (broker_id, rack), where rack can be None
