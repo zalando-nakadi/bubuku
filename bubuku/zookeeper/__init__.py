@@ -4,6 +4,8 @@ import threading
 import time
 import uuid
 
+from typing import List
+
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
 
@@ -196,6 +198,14 @@ class BukuExhibitor(object):
         :return: Sorted list of strings - active broker ids.
         """
         return sorted(self.exhibitor.get_children('/brokers/ids'))
+
+    def get_broker_racks(self) -> List(int, str):
+        """
+        Lists the rack of each broker, if it exists
+        :return: a tuple (broker_id, rack), where rack can be None
+        """
+        brokers = sorted(self.exhibitor.get_children('/brokers/ids', include_data=True), key=lambda x: x[0])
+        return [(id, data.get('rack')) for (id, data) in brokers]
 
     def load_partition_assignment(self, topics=None) -> list:
         """
