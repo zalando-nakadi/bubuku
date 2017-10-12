@@ -29,8 +29,9 @@ class UpgradeCommand(Command):
         aws_ = AWSResources(region=self.cluster_config['region'])
 
         instance = node.get_instance_by_ip(aws_.ec2_resource, self.cluster_config['cluster_name'], self.ip)
-        if not self.force:
-            check_current_image_version(instance, self.cluster_config['image_version'])
+        if not self.force and self.cluster_config['image_version'] == get_image_version(instance):
+            raise Exception("Current running Bubuku version is the same as provided ({}), stopping upgrade".format(
+                self.cluster_config['image_version']))
 
         _LOG.info('Searching for instance %s volumes', instance.instance_id)
         volumes = aws_.ec2_client.describe_instance_attribute(InstanceId=instance.instance_id,
@@ -58,14 +59,16 @@ class UpgradeCommand(Command):
         volume.wait_volumes_attached(aws_)
 
 
-def check_current_image_version(instance, provided_image_version):
-    _LOG.info('Checking running Bubuku version on %s', instance.instance_id)
+def get_image_version(instance):
     response = instance.describe_attribute(Attribute='userData')
     env = base64.b64decode(response['UserData']['Value']).decode('UTF-8')
     variables = env.split("\n")
     for v in variables:
         if v.startswith("application_version"):
-            current_image_version = v.split(": ")[1]
-            _LOG.info('Current running Bubuku version %s', current_image_version)
-            if current_image_version == provided_image_version:
-                raise Exception("Current running Bubuku version is the same as provided, stopping upgrade")
+            return v.split(": ", 1)[1]
+
+
+def check_current_image_version(instance, provided_image_version) -> bool:
+    _LOG.info('Checking running Bubuku version on %s', instance.instance_id)
+    running_version = get_image_version(instance)
+    return running_version == provided_image_version
