@@ -32,11 +32,112 @@ class TestPartitionsSwap(unittest.TestCase):
         ("t3", 2, [333, 222]),
     ]
 
+    test_broker_racks_unaware = [
+        (111, None),
+        (222, None),
+        (333, None),
+    ]
+
+    test_size_stats_nine = {
+        "111": {"disk": {"free_kb": 20000, "used_kb": 20000}, "topics": {
+            "t1": {"1": 3434, "2": 200},
+            "t2": {"1": 1000},
+            "t3": {"1": 300}
+        }},
+        "222": {"disk": {"free_kb": 25000, "used_kb": 15000}, "topics": {
+            "t1": {"2": 200},
+            "t2": {"1": 1000, "2": 100},
+            "t3": {"2": 2000}
+        }},
+        "333": {"disk": {"free_kb": 30000, "used_kb": 10000}, "topics": {
+            "t1": {"1": 3434},
+            "t2": {"2": 100},
+            "t3": {"1": 300, "2": 2000}
+        }},
+        "444": {"disk": {"free_kb": 21000, "used_kb": 19000}, "topics": {
+            "t4": {"1": 3434, "2": 200},
+            "t5": {"1": 1000},
+            "t6": {"1": 300}
+        }},
+        "555": {"disk": {"free_kb": 10000, "used_kb": 30000}, "topics": {
+            "t4": {"2": 200},
+            "t5": {"1": 1000, "2": 100},
+            "t6": {"2": 2000}
+        }},
+        "666": {"disk": {"free_kb": 22000, "used_kb": 18000}, "topics": {
+            "t4": {"1": 3434},
+            "t5": {"2": 100},
+            "t6": {"1": 300, "2": 2000}
+        }},
+        "777": {"disk": {"free_kb": 23000, "used_kb": 17000}, "topics": {
+            "t7": {"1": 3434, "2": 200},
+            "t8": {"1": 1000},
+            "t9": {"1": 300}
+        }},
+        "888": {"disk": {"free_kb": 24000, "used_kb": 16000}, "topics": {
+            "t7": {"2": 200},
+            "t8": {"1": 1000, "2": 100},
+            "t9": {"2": 2000}
+        }},
+        "999": {"disk": {"free_kb": 26000, "used_kb": 14000}, "topics": {
+            "t7": {"1": 3434},
+            "t8": {"2": 100},
+            "t9": {"1": 300, "2": 2000}
+        }}
+    }
+
+    test_assignment_nine = [
+        ("t1", 1, [111, 333]),
+        ("t1", 2, [111, 222]),
+        ("t2", 1, [222, 111]),
+        ("t2", 2, [222, 333]),
+        ("t3", 1, [333, 111]),
+        ("t3", 2, [333, 222]),
+        ("t4", 1, [444, 666]),
+        ("t4", 2, [444, 555]),
+        ("t5", 1, [555, 444]),
+        ("t5", 2, [555, 666]),
+        ("t6", 1, [666, 444]),
+        ("t6", 2, [666, 555]),
+        ("t7", 1, [777, 999]),
+        ("t7", 2, [777, 888]),
+        ("t8", 1, [888, 777]),
+        ("t8", 2, [888, 999]),
+        ("t9", 1, [999, 777]),
+        ("t9", 2, [999, 888]),
+    ]
+
+    test_broker_racks_aware = [
+        (111, "eu-central-1a"),
+        (222, "eu-central-1b"),
+        (333, "eu-central-1c"),
+        (444, "eu-central-1a"),
+        (555, "eu-central-1b"),
+        (666, "eu-central-1c"),
+        (777, "eu-central-1a"),
+        (888, "eu-central-1b"),
+        (999, "eu-central-1c"),
+    ]
+
     def setUp(self):
         self.zk = self.__mock_zk()
         self.broker = self.__mock_broker()
 
     def test_check_requires_swap_partitions_change(self):
+        check_imbalance = CheckBrokersDiskImbalance(self.zk, self.broker, 3000, -1)
+        change = check_imbalance.check()
+
+        assert change
+
+    def test_self_fat_slim_brokers_rack_aware(self):
+        zk = self.__mock_zk_rack()
+
+        fat, slim, gap, stats = load_swap_data(zk, -1, 100)
+        assert fat == "555"
+        assert slim == "222"
+
+    def test_check_requires_swap_partitions_change_rack_aware(self):
+        self.zk = self.__mock_zk_rack()
         check_imbalance = CheckBrokersDiskImbalance(self.zk, self.broker, 3000, -1)
         change = check_imbalance.check()
 
@@ -111,4 +212,13 @@ class TestPartitionsSwap(unittest.TestCase):
         zk.is_rebalancing.return_value = False
         zk.load_partition_assignment.return_value = self.test_assignment
         zk.get_disk_stats.return_value = self.test_size_stats
+        zk.get_broker_racks.return_value = self.test_broker_racks_unaware
+        return zk
+
+    def __mock_zk_rack(self) -> MagicMock:
+        zk = MagicMock()
+        zk.is_rebalancing.return_value = False
+        zk.load_partition_assignment.return_value = self.test_assignment_nine
+        zk.get_disk_stats.return_value = self.test_size_stats_nine
+        zk.get_broker_racks.return_value = self.test_broker_racks_aware
         return zk
