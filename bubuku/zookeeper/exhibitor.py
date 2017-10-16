@@ -31,12 +31,12 @@ class ExhibitorAddressProvider(AddressListProvider):
         for host in exhibitors:
             url = 'http://{}:{}{}'.format(host, 8181, '/exhibitor/v1/cluster/list')
             try:
-                response = requests.get(url, timeout=3.1)
+                response = requests.get(url, timeout=3.1, headers={'Accept': 'application/json'})
                 return response.json()
             except RequestException as e:
-                _LOG.warn('Failed to query zookeeper list information from {}'.format(url), exc_info=e)
+                _LOG.warning('Failed to query zookeeper list information from {}'.format(url), exc_info=e)
             except ConnectionError as e:
-                _LOG.warn('Failed to connect to zookeeper instance {}'.format(url), exc_info=e)
+                _LOG.warning('Failed to connect to zookeeper instance {}'.format(url), exc_info=e)
             except Exception as e:
-                _LOG.warn('Unknown error connecting to zookeeper instance {}'.format(url), exc_info=e)
+                _LOG.warning('Unknown error connecting to zookeeper instance {}'.format(url), exc_info=e)
         return None

@@ -1,9 +1,30 @@
 import logging
+from typing import List
 
 from instance_control.aws import AWSResources
 from instance_control.command import Command
+from instance_control.command.upgrade import get_image_version
 
 _LOG = logging.getLogger('bubuku.cluster.command.get')
+
+
+def _print_table(items: List[dict]):
+    headers = []
+    for i in items:
+        headers.extend(i.keys())
+    headers = sorted(set(headers))
+    lengths = {h: len(h) for h in headers}
+    for d in items:
+        for k, v in d.items():
+            v = str(v)
+            if lengths[k] < len(v):
+                lengths[k] = len(v)
+    format_ = ''
+    for idx in range(0, len(headers)):
+        format_ += '{' + str(idx) + ':' + str(lengths[headers[idx]]) + '} '
+    print(format_.format(*headers))
+    for item in items:
+        print(format_.format(*[item.get(h) for h in headers]))
 
 
 class GetCommand(Command):
@@ -20,13 +41,15 @@ class GetCommand(Command):
             _LOG.info('Cluster has no running instances')
             return
 
-        max_ip = max([len(instance.private_ip_address) for instance in instances])
-        max_id = max([len(instance.instance_id) for instance in instances])
-
-        pattern = '{0:' + str(max_ip) + '}   {1:' + str(max_id) + '}   {2}'
-        print(pattern.format('ip', 'id', 'volume'))
+        data = []
         for instance in instances:
-            print(pattern.format(instance.private_ip_address,
-                                 instance.instance_id,
-                                 [x['Ebs']['VolumeId'] for x in instance.block_device_mappings if
-                                  x['DeviceName'] == '/dev/xvdk'][0]))
+            data.append({
+                '1 Ip': instance.private_ip_address,
+                '2 Id': instance.instance_id,
+                '3 Volume': [x['Ebs']['VolumeId'] for x in instance.block_device_mappings if
+                             x['DeviceName'] == '/dev/xvdk'][0],
+                '4 Availability zone': instance.placement['AvailabilityZone'],
+                '5 Image Version': get_image_version(instance)
+            })
+
+        _print_table(data)
