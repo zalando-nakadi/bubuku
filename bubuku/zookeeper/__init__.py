@@ -202,14 +202,13 @@ class BukuExhibitor(object):
     def get_broker_racks(self) -> Dict[int, str]:
         """
         Lists the rack of each broker, if it exists
-        :return: a tuple (broker_id, rack), where rack can be None
+        :return: a ditionary of tuples (broker_id, rack), where rack can be None
         """
         brokers = sorted(self.exhibitor.get_children('/brokers/ids', include_data=True), key=lambda x: x[0])
         racks = {}
         for id, data in brokers:
             racks[id] = data.get('rack')
         return racks
-#        return [(id, data.get('rack')) for (id, data) in brokers]
 
     def load_partition_assignment(self, topics=None) -> list:
         """

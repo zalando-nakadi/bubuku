@@ -32,11 +32,11 @@ class TestPartitionsSwap(unittest.TestCase):
         ("t3", 2, [333, 222]),
     ]
 
-    test_broker_racks_unaware = [
-        (111, None),
-        (222, None),
-        (333, None),
-    ]
+    test_broker_racks_unaware = {
+        111: None,
+        222: None,
+        333: None
+    }
 
     test_size_stats_nine = {
         "111": {"disk": {"free_kb": 20000, "used_kb": 20000}, "topics": {
@@ -107,17 +107,17 @@ class TestPartitionsSwap(unittest.TestCase):
         ("t9", 2, [999, 888]),
     ]
 
-    test_broker_racks_aware = [
-        (111, "eu-central-1a"),
-        (222, "eu-central-1b"),
-        (333, "eu-central-1c"),
-        (444, "eu-central-1a"),
-        (555, "eu-central-1b"),
-        (666, "eu-central-1c"),
-        (777, "eu-central-1a"),
-        (888, "eu-central-1b"),
-        (999, "eu-central-1c"),
-    ]
+    test_broker_racks_aware = {
+        111: "eu-central-1a",
+        222: "eu-central-1b",
+        333: "eu-central-1c",
+        444: "eu-central-1a",
+        555: "eu-central-1b",
+        666: "eu-central-1c",
+        777: "eu-central-1a",
+        888: "eu-central-1b",
+        999: "eu-central-1c",
+    }
 
     def setUp(self):
         self.zk = self.__mock_zk()
@@ -132,9 +132,9 @@ class TestPartitionsSwap(unittest.TestCase):
     def test_self_fat_slim_brokers_rack_aware(self):
         zk = self.__mock_zk_rack()
 
-        fat, slim, gap, stats = load_swap_data(zk, -1, 100)
-        assert fat == "555"
-        assert slim == "222"
+        slim, fat, gap, stats = load_swap_data(zk, -1, 100)
+        assert fat == 555
+        assert slim == 222
 
     def test_check_requires_swap_partitions_change_rack_aware(self):
         self.zk = self.__mock_zk_rack()
