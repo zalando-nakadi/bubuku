@@ -173,7 +173,7 @@ def load_swap_data(zk: BukuExhibitor, api_port: int, gap: int) -> (str, str, int
 
 def select_fat_slim_brokers(zk: BukuExhibitor, sorted_stats: list):
     racks = zk.get_broker_racks()
-    if len([rack for rack in racks.values() if rack is None]) > 0:
+    if any([rack is None for rack in racks.values()]):
         return sorted_stats[0], sorted_stats[-1]
     for i in range(len(sorted_stats) - 1):
         fat_broker = sorted_stats[i]
