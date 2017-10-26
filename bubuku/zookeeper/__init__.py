@@ -151,10 +151,10 @@ class _ZookeeperProxy(object):
         except NoNodeError:
             pass
 
-    def get_children(self, *params):
+    def get_children(self, *args, **kwargs):
         self.hosts_cache.touch()
         try:
-            return self.client.retry(self.client.get_children, *params)
+            return self.client.retry(self.client.get_children, *args, **kwargs)
         except NoNodeError:
             return []
 
