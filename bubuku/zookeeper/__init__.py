@@ -204,7 +204,7 @@ class BukuExhibitor(object):
         Lists the rack of each broker, if it exists
         :return: a ditionary of tuples (broker_id, rack), where rack can be None
         """
-        return {id_: data.get('rack') for id_, data in self.exhibitor.get_children('/brokers/ids', include_data=True)}
+        return {int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for broker in self.get_broker_ids()}
 
     def load_partition_assignment(self, topics=None) -> list:
         """
