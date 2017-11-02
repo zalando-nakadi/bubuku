@@ -4,6 +4,8 @@ import threading
 import time
 import uuid
 
+from typing import Dict
+
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
 
@@ -149,10 +151,10 @@ class _ZookeeperProxy(object):
         except NoNodeError:
             pass
 
-    def get_children(self, *params):
+    def get_children(self, *args, **kwargs):
         self.hosts_cache.touch()
         try:
-            return self.client.retry(self.client.get_children, *params)
+            return self.client.retry(self.client.get_children, *args, **kwargs)
         except NoNodeError:
             return []
 
@@ -196,6 +198,13 @@ class BukuExhibitor(object):
         :return: Sorted list of strings - active broker ids.
         """
         return sorted(self.exhibitor.get_children('/brokers/ids'))
+
+    def get_broker_racks(self) -> Dict[int, str]:
+        """
+        Lists the rack of each broker, if it exists
+        :return: a ditionary of tuples (broker_id, rack), where rack can be None
+        """
+        return {int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for broker in self.get_broker_ids()}
 
     def load_partition_assignment(self, topics=None) -> list:
         """
