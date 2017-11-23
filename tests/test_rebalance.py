@@ -133,8 +133,8 @@ class TestRebalance(unittest.TestCase):
             ('t2', '2'): ['2', '6'],
             ('t2', '3'): ['4', '2'],
             ('t2', '4'): ['6', '2'],
-            ('t2', '5'): ['4', '6'],
-            ('t2', '6'): ['6', '4'],
+            ('t2', '5'): ['3', '6'],
+            ('t2', '6'): ['6', '3'],
         }
 
         initial_distribution = dict(distribution)
@@ -155,6 +155,42 @@ class TestRebalance(unittest.TestCase):
 
         _verify_balanced(('1', '2', '3', '4', '5', '6'), distribution)
         _verify_rack_aware(initial_distribution, distribution, racks)
+
+
+    def test_rebalance_with_racks_different_nr_partitions_per_rack(self):
+        distribution = {
+            ('t0', '0'): ['3', '1'],
+            ('t0', '1'): ['6', '5'],
+            ('t0', '2'): ['5', '3'],
+            ('t1', '0'): ['5', '6'],
+            ('t1', '1'): ['6', '5'],
+            ('t2', '0'): ['6', '4'],
+            ('t2', '1'): ['2', '6'],
+            ('t2', '2'): ['2', '6'],
+            ('t2', '3'): ['4', '2'],
+            ('t2', '4'): ['6', '5'],
+            ('t2', '5'): ['4', '6'],
+            ('t2', '6'): ['6', '4'],
+        }
+
+        initial_distribution = dict(distribution)
+
+        racks = {
+            1: 'r1',
+            2: 'r1',
+            3: 'r2',
+            4: 'r2',
+            5: 'r3',
+            6: 'r3'
+        }
+
+        brokers, zk = _create_zk_for_topics(distribution, ['1', '2', '3','4','5','6'], racks)
+        o = OptimizedRebalanceChange(zk, brokers, [], [])
+        while o.run([]):
+            pass
+
+        _verify_rack_aware(initial_distribution, distribution, racks)
+
 
     def test_rebalance_empty_one_broker(self):
         distribution = {
@@ -289,23 +325,23 @@ class TestRebalance(unittest.TestCase):
             pass
         _verify_balanced(['1', '2', '4'], distribution)
 
-    # def test_rebalance_with_many_topics(self):
-    #     distribution = {}
-    #     topic_count = 1000
-    #     partition_count = 8
-    #     for i in range(0, topic_count):
-    #         topic = 't{}'.format(i)
-    #         distribution.update({(topic, str(partition)): ['1', '2', '3'] for partition in range(0, partition_count)})
-    #     _, zk = _create_zk_for_topics(distribution, broker_ids=['1', '2', '3', '4', '5'])
-    #
-    #     o = OptimizedRebalanceChange(zk, ['1', '2', '3', '4', '5'], [], [])
-    #     steps = 0
-    #     while o.run([]):
-    #         steps += 1
-    #     _verify_balanced(['1', '2', '3', '4', '5'], distribution)
-    #     # Minimum rebalance steps
-    #     # distribution_count = 30
-    #     # assert steps == int(1 + topic_count * partition_count * (distribution_count - 1) / distribution_count)
+    def test_rebalance_with_many_topics(self):
+        distribution = {}
+        topic_count = 1000
+        partition_count = 8
+        for i in range(0, topic_count):
+            topic = 't{}'.format(i)
+            distribution.update({(topic, str(partition)): ['1', '2', '3'] for partition in range(0, partition_count)})
+        _, zk = _create_zk_for_topics(distribution, broker_ids=['1', '2', '3', '4', '5'])
+
+        o = OptimizedRebalanceChange(zk, ['1', '2', '3', '4', '5'], [], [])
+        steps = 0
+        while o.run([]):
+            steps += 1
+        _verify_balanced(['1', '2', '3', '4', '5'], distribution)
+        # Minimum rebalance steps
+        # distribution_count = 30
+        # assert steps == int(1 + topic_count * partition_count * (distribution_count - 1) / distribution_count)
 
     def test_rebalance_invoked_on_broker_list_change(self):
         zk = MagicMock()

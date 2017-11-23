@@ -37,6 +37,8 @@ class DistributionMap(object):
             for target_broker in brokers:
                 if not target_broker.have_less_leaders():
                     continue
+                if not source_broker._rack_id == target_broker._rack_id:
+                    continue
                 weight_list = []
                 for topic in self._candidates_cardinality[source_broker].keys():
                     delta = self._candidates_cardinality[source_broker][topic] - \
@@ -294,16 +296,19 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
                 else:
                     self.broker_distribution[replica].add_replica(topic_partition)
         active_brokers = [broker for id_, broker in self.broker_distribution.items() if id_ in self.broker_ids]
-        total_leaders = sum(b.get_leader_count() for b in self.broker_distribution.values())
 
-        new_leader_count = distribute(total_leaders, active_brokers, BrokerDescription.get_leader_count)
-        for i in range(0, len(active_brokers)):
-            active_brokers[i].set_leader_expectation(new_leader_count[i])
+        rack_to_brokers = {}
+        for broker, rack in self.broker_racks.items():
+            rack_to_brokers.setdefault(rack, []).append(broker)
 
-        # Here is one trick. Across all the code replica list does not contain leaders.
-        # But in order to balance correctly (max(diff(replica+leaders) <= 1) we should add leaders and substract it
-        # again
-        total_replicas = sum(b.get_replica_count() for b in self.broker_distribution.values()) + sum(new_leader_count)
-        new_replica_count = distribute(total_replicas, active_brokers, BrokerDescription.get_replica_count)
-        for i in range(0, len(active_brokers)):
-            active_brokers[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
+        for rack in rack_to_brokers.keys():
+            active_brokers_in_rack = [active_broker for active_broker in active_brokers if active_broker._rack_id == rack]
+            total_leaders = sum(b.get_leader_count() for b in self.broker_distribution.values()
+                                               if b._rack_id == rack)
+            new_leader_count = distribute(total_leaders, active_brokers_in_rack, BrokerDescription.get_leader_count)
+            total_replicas = sum(b.get_replica_count() for b in self.broker_distribution.values() if b.rack_id == rack) + sum(new_leader_count)
+            new_replica_count =  distribute(total_replicas, active_brokers_in_rack, BrokerDescription.get_replica_count)
+
+            for i in range(0, len(active_brokers_in_rack)):
+                active_brokers_in_rack[i].set_leader_expectation(new_leader_count[i])
+                active_brokers_in_rack[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
