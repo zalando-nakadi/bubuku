@@ -60,12 +60,14 @@ class _TopicPartitions(object):
 class BrokerDescription(object):
     __slots__ = (
         '_broker_id',
+        '_rack_id',
         '_leaders',
         '_replicas',
     )
 
-    def __init__(self, broker_id: int):
+    def __init__(self, broker_id: int, rack_id: str = None):
         self._broker_id = broker_id
+        self._rack_id = rack_id
         self._leaders = _TopicPartitions()
         self._replicas = _TopicPartitions()
 
@@ -73,9 +75,13 @@ class BrokerDescription(object):
     def broker_id(self):
         return self._broker_id
 
+    @property
+    def rack_id(self):
+        return self._rack_id
+
     def __str__(self):
-        return 'BrokerDescription(id={}, leaders={}, replicas={})'.format(
-            self._broker_id, self._leaders, self._replicas)
+        return 'BrokerDescription(id={}, rack={}, leaders={}, replicas={})'.format(
+            self._broker_id, self._rack_id, self._leaders, self._replicas)
 
     def set_leader_expectation(self, leader_count: int):
         self._leaders.set_expectation(leader_count)
@@ -125,6 +131,8 @@ class BrokerDescription(object):
             return False
         # Already a replica for this partition
         if self._replicas.contains(topic_partition):
+            return False
+        if self._rack_id != source_broker._rack_id:
             return False
         self._replicas.add(topic_partition)
         source_broker._replicas.remove(topic_partition)

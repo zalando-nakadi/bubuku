@@ -202,7 +202,7 @@ class BukuExhibitor(object):
     def get_broker_racks(self) -> Dict[int, str]:
         """
         Lists the rack of each broker, if it exists
-        :return: a ditionary of tuples (broker_id, rack), where rack can be None
+        :return: a dictionary of tuples (broker_id, rack), where rack can be None
         """
         return {int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for broker in self.get_broker_ids()}
 

@@ -37,6 +37,8 @@ class DistributionMap(object):
             for target_broker in brokers:
                 if not target_broker.have_less_leaders():
                     continue
+                if not source_broker._rack_id == target_broker._rack_id:
+                    continue
                 weight_list = []
                 for topic in self._candidates_cardinality[source_broker].keys():
                     delta = self._candidates_cardinality[source_broker][topic] - \
@@ -120,6 +122,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.zk = zk
         self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
+        self.broker_racks = zk.get_broker_racks()
         self.exclude_topics = exclude_topics
         self.broker_distribution = None
         self.source_distribution = None
@@ -227,12 +230,13 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
 
     def _rebalance_replicas_template(self, force: bool):
         for broker in self.broker_distribution.values():
+            rack = self.broker_racks[broker.broker_id]
             to_move = broker.get_replica_overload()
             if to_move <= 0:
                 continue
             targets = self._list_active_brokers_with_skip(broker.broker_id)
             if not force:
-                targets = [t for t in targets if t.has_free_replica_slots()]
+                targets = [t for t in targets if t.has_free_replica_slots() and self.broker_racks[t.broker_id] == rack]
             for _ in range(0, to_move):
                 target = False
                 for topic_partition in broker.list_replicas():
@@ -243,7 +247,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
                 if target is None:
                     return False
                 if not force:
-                    targets = [t for t in targets if t.has_free_replica_slots()]
+                    targets = [t for t in targets if t.has_free_replica_slots() and self.broker_racks[t.broker_id] == rack]
         return True
 
     def _rebalance_leaders(self):
@@ -276,7 +280,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         """
         Loads data from zk and prepares to perform rebalance. Fills in leader and replica count expectations.
         """
-        self.broker_distribution = {id_: BrokerDescription(id_) for id_ in self.broker_ids}
+        self.broker_distribution = {id_: BrokerDescription(id_, self.broker_racks[id_]) for id_ in self.broker_ids}
         self.source_distribution = {(topic, partition): replicas for topic, partition, replicas in
                                     self.zk.load_partition_assignment() if topic not in self.exclude_topics}
         for topic_partition, replicas in self.source_distribution.items():
@@ -285,23 +289,26 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             leader = True
             for replica in replicas:
                 if replica not in self.broker_distribution:
-                    self.broker_distribution[replica] = BrokerDescription(replica)
+                    self.broker_distribution[replica] = BrokerDescription(replica, self.broker_racks[replica])
                 if leader:
                     self.broker_distribution[replica].add_leader(topic_partition)
                     leader = False
                 else:
                     self.broker_distribution[replica].add_replica(topic_partition)
         active_brokers = [broker for id_, broker in self.broker_distribution.items() if id_ in self.broker_ids]
-        total_leaders = sum(b.get_leader_count() for b in self.broker_distribution.values())
 
-        new_leader_count = distribute(total_leaders, active_brokers, BrokerDescription.get_leader_count)
-        for i in range(0, len(active_brokers)):
-            active_brokers[i].set_leader_expectation(new_leader_count[i])
+        rack_to_brokers = {}
+        for broker, rack in self.broker_racks.items():
+            rack_to_brokers.setdefault(rack, []).append(broker)
 
-        # Here is one trick. Across all the code replica list does not contain leaders.
-        # But in order to balance correctly (max(diff(replica+leaders) <= 1) we should add leaders and substract it
-        # again
-        total_replicas = sum(b.get_replica_count() for b in self.broker_distribution.values()) + sum(new_leader_count)
-        new_replica_count = distribute(total_replicas, active_brokers, BrokerDescription.get_replica_count)
-        for i in range(0, len(active_brokers)):
-            active_brokers[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
+        for rack in rack_to_brokers.keys():
+            active_brokers_in_rack = [active_broker for active_broker in active_brokers if active_broker._rack_id == rack]
+            total_leaders = sum(b.get_leader_count() for b in self.broker_distribution.values()
+                                               if b._rack_id == rack)
+            new_leader_count = distribute(total_leaders, active_brokers_in_rack, BrokerDescription.get_leader_count)
+            total_replicas = sum(b.get_replica_count() for b in self.broker_distribution.values() if b.rack_id == rack) + sum(new_leader_count)
+            new_replica_count =  distribute(total_replicas, active_brokers_in_rack, BrokerDescription.get_replica_count)
+
+            for i in range(0, len(active_brokers_in_rack)):
+                active_brokers_in_rack[i].set_leader_expectation(new_leader_count[i])
+                active_brokers_in_rack[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])

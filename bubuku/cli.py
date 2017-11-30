@@ -79,7 +79,8 @@ def restart_broker(broker: str):
         RemoteCommandExecutorCheck.register_restart(zookeeper, broker_id)
 
 
-@cli.command('rebalance', help='Run rebalance process on one of brokers')
+@cli.command('rebalance', help='Run rebalance process on one of brokers. If rack-awareness is enabled, replicas will '
+                               'only be move to other brokers in the same rack')
 @click.option('--broker', type=click.STRING,
               help="Broker instance on which to perform rebalance. By default, any free broker will start it")
 @click.option('--empty_brokers', type=click.STRING,
