@@ -19,10 +19,11 @@ chmod u+x bubuku_cluster.py
 ```
 
 ### Create
-The command is used to create a complete new cluster or add new nodes to the existing cluster (--cluster-size defines how many nodes you want to create/add to the cluster for provided config)
+The command is used to create a complete new cluster or add new nodes to the existing cluster (--instance-count defines how many nodes you want to create/add to the cluster for provided config). --availability-zone is optional.
 ```
 bubuku_cluster.py create \
-                --cluster-size 1 \
+                --instance-count 1 \
+                --availability-zone eu-central-1a \
                 --cluster-config $CONFIG_PATH
 ```
 

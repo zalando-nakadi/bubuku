@@ -69,7 +69,8 @@ def generate_user_data(cluster_config: dict) -> str:
                     'options': 'noatime,nodiratime,nobarrier'
                 }
             },
-            'scalyr_account_key': cluster_config['scalyr_key']
+            'scalyr_account_key': cluster_config['scalyr_key'],
+            'scalyr_region': cluster_config.get('scalyr_region')
             }
 
     _LOG.info('Generated data:')
