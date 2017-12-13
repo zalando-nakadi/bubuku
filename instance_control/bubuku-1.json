@@ -8,6 +8,7 @@
   "volume_type": "st1",
   "volume_size": 500,
   "scalyr_key": "key-1234",
+  "scalyr_region": "eu",
   "image_version": "bubuku-appliance",
   "environment": {
     "ZOOKEEPER_STACK_NAME": "exhibitor-staging",
