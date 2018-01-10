@@ -39,7 +39,7 @@ class UpgradeCommand(Command):
         data_volume = next(v for v in volumes['BlockDeviceMappings'] if v['DeviceName'] == '/dev/xvdk')
         data_volume_id = data_volume['Ebs']['VolumeId']
 
-        piu.stop_taupage(self.ip, self.user, self.odd)
+        piu.stop_taupage(self.ip, self.user, self.odd, self.cluster_config['region'])
 
         _LOG.info('Creating tag:Name=%s for %s', config.KAFKA_LOGS_EBS, data_volume_id)
         vol = aws_.ec2_resource.Volume(data_volume_id)

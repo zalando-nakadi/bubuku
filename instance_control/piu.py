@@ -5,9 +5,9 @@ import subprocess
 _LOG = logging.getLogger('bubuku.cluster.piu')
 
 
-def stop_taupage(ip: str, user: str, odd: str):
+def stop_taupage(ip: str, user: str, odd: str, region: str):
     _LOG.info('Stopping taupage container on %s', ip)
-    piu = ["piu", ip, "-O", odd, "\"detaching ebs, terminate and launch instance\""]
+    piu = ["piu", ip, "--region", region, "-O", odd, "\"detaching ebs, terminate and launch instance\""]
     _call(piu)
 
     stop = ["ssh", "-tA", user + '@' + odd, "ssh", "-o", "StrictHostKeyChecking=no", user + '@' + ip,
