@@ -46,7 +46,7 @@ bubuku_cluster.py attach \
 ```
 
 ### Upgrade
-The command terminates an instance, detaches a volume, creates a new volume and attaches the volume to the created instance. 
+The command terminates an instance, detaches a volume, creates a new instance and attaches the volume to the created instance. 
 ```
 bubuku_cluster.py upgrade \
                 --cluster-config $CONFIG_PATH \
