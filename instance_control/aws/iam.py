@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -90,6 +91,22 @@ def create_or_get_instance_profile(aws_: AWSResources, cluster_config: dict):
     aws_.iam_client.put_role_policy(RoleName=role_name,
                                     PolicyName=policy_zmon,
                                     PolicyDocument=policy_zmon_document)
+
+    if "kms_key_id" in cluster_config:
+        policy_kms_document = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "kms:Decrypt",
+                    "Effect": "Allow",
+                    "Resource": [cluster_config["kms_key_id"]]
+                }
+            ]
+        })
+        _LOG.info("Creating IAM policy $s", policy_kms_document)
+        aws_.iam_client.put_role_policy(RoleName=role_name,
+                                        PolicyName='policy-{}-kms'.format(cluster_config['cluster_name']),
+                                        PolicyDocument=policy_kms_document)
 
     aws_.iam_client.add_role_to_instance_profile(InstanceProfileName=profile_name, RoleName=role_name)
 
