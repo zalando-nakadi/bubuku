@@ -103,7 +103,7 @@ def create_or_get_instance_profile(aws_: AWSResources, cluster_config: dict):
                 }
             ]
         })
-        _LOG.info("Creating IAM policy $s", policy_kms_document)
+        _LOG.info("Creating IAM policy %s", policy_kms_document)
         aws_.iam_client.put_role_policy(RoleName=role_name,
                                         PolicyName='policy-{}-kms'.format(cluster_config['cluster_name']),
                                         PolicyDocument=policy_kms_document)
