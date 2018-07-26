@@ -30,9 +30,9 @@ class Partition(object):
             return
         raise Exception('Inconsistency because of poor data structure model2')
 
-    def optimize_leaders(self):
+    def optimize_leaders(self, only_solve_overload=True):
         leader = self.brokers[0]
-        if not leader.is_leaders_overloaded():
+        if only_solve_overload and not leader.is_leaders_overloaded():
             return False
         smallest_load = None
         smallest_load_idx = None
@@ -44,14 +44,21 @@ class Partition(object):
         if smallest_load_idx is None:
             return False
         less_loaded = self.brokers[smallest_load_idx]
+
         if less_loaded.is_leaders_overloaded(1):
             return False
 
+        if leader.leader_count - less_loaded.leader_count < 2:
+            return False
+
         leader.remove_partition(True, self)
-        leader.add_partition(False, self)
+        if not leader.add_partition(False, self):
+            raise Exception('Can not add partition {}'.format(self.get_key()))
 
         less_loaded.remove_partition(False, self)
-        less_loaded.add_partition(True, self)
+        if not less_loaded.add_partition(True, self):
+            raise Exception('Can not add partition {}'.format(self.get_key()))
+
         self.brokers[0] = less_loaded
         self.brokers[smallest_load_idx] = leader
         return True
@@ -84,11 +91,11 @@ class Broker(object):
     def is_leaders_overloaded(self, add=0):
         return (self.leader_count + add) > self.expected_leader_count[1]
 
-    def is_overloaded(self, for_leader):
+    def is_overloaded(self, for_leader, add=0):
         if for_leader:
-            return self.leader_count > self.expected_leader_count[1]
+            return (self.leader_count + add) > self.expected_leader_count[1]
         else:
-            return self.replica_count > self.expected_replica_count[1]
+            return (self.replica_count + add) > self.expected_replica_count[1]
 
     def list_partition_keys(self):
         result = []
@@ -97,9 +104,18 @@ class Broker(object):
                 result.append((pkey, is_leader))
         return result
 
-    def iterate_leaders(self):
+    def is_leader_for(self, pkey):
+        return any(self.partitions.get(pkey, []))
+
+    def copy_partition_keys(self):
+        return [k for k in self.partitions.keys()]
+
+    def iterate(self, leader_only: bool):
         for pkey, leader_array in self.partitions.items():
-            if any(leader_array):
+            if leader_only:
+                if any(leader_array):
+                    yield pkey
+            else:
                 yield pkey
 
     def add_partition(self, leader: bool, partition: Partition):
@@ -119,8 +135,7 @@ class Broker(object):
                 del data[idx]
                 if leader:
                     self.leader_count -= 1
-                else:
-                    self.replica_count -= 1
+                self.replica_count -= 1
                 if not data:
                     del self.partitions[key]
                 return
@@ -132,8 +147,7 @@ class Broker(object):
         self.partitions[key].append(leader)
         if leader:
             self.leader_count += 1
-        else:
-            self.replica_count += 1
+        self.replica_count += 1
 
     def can_accept_partition(self, partition: Partition):
         for b in partition.brokers:
@@ -171,9 +185,11 @@ class FakeBroker(Broker):
 
 
 def transfer_partition(partition, leader: bool, from_: Broker, target_brokers_sorted: List[Broker],
-                       zone_checker: ZoneChecker):
+                       zone_checker: ZoneChecker, polite=False):
     for target in target_brokers_sorted:
         if not zone_checker.is_allowed_move(from_, target, partition):
+            continue
+        if polite and target.is_overloaded(leader, 1):
             continue
         if target.can_accept_partition(partition):
             partition.change_assignment(from_, target, leader)
@@ -182,6 +198,8 @@ def transfer_partition(partition, leader: bool, from_: Broker, target_brokers_so
 
 
 def get_division_result_min_max(nom, denom):
+    if denom == 0:
+        return 0, 0
     return nom // denom, ((nom - 1) // denom) + 1
 
 
@@ -196,7 +214,8 @@ class SimpleRebalancer(BaseRebalanceChange):
     _STATE_OPTIMIZE_LEADERS = 'optimize_leaders'
     _STATE_BALANCE = 'balance'
 
-    def __init__(self, zk: BukuExhibitor, parallelism: int):
+    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
+                 parallelism: int):
         self.state = self._STATE_INIT
         self.zk = zk
         self.fake = FakeBroker()
@@ -204,6 +223,9 @@ class SimpleRebalancer(BaseRebalanceChange):
         self.partitions = {}
         self.rebalance_queue = {}
         self.parallelism = parallelism
+        self.exclude_topics = exclude_topics if exclude_topics else []
+        self.empty_brokers = [str(e) for e in empty_brokers] if empty_brokers else []
+        self.initial_broker_ids = sorted([str(broker_id) for broker_id in broker_ids])
         self.zone_checker = None
 
     def register_partition_change(self, partition: Partition):
@@ -211,32 +233,35 @@ class SimpleRebalancer(BaseRebalanceChange):
 
     def loadDataFromZk(self):
         for broker_id, broker_rack in self.zk.get_broker_racks().items():
-            self.active_brokers[str(broker_id)] = Broker(str(broker_id), str(broker_rack))
+            str_broker_id = str(broker_id)
+            if str_broker_id in self.empty_brokers:
+                continue
+            self.active_brokers[str_broker_id] = Broker(str_broker_id, str(broker_rack))
 
-        for et, partition, broker_ids in self.zk.load_partition_assignment():
-            p = Partition(et, str(partition), [self.active_brokers.get(str(id_), self.fake) for id_ in broker_ids])
+        for topic, partition, broker_ids in self.zk.load_partition_assignment():
+            if topic in self.exclude_topics:
+                continue
+            p = Partition(topic, str(partition), [self.active_brokers.get(str(id_), self.fake) for id_ in broker_ids])
             self.partitions[p.get_key()] = p
 
     def createInitialDistribution(self):
         total_partitions = 0
         total_leaders = 0
+        az_counts = {}
+        for broker in self.active_brokers.values():
+            az_counts[broker.zone] = az_counts.get(broker.zone, 0) + 1
+        self.zone_checker = ZoneChecker([zone for zone in az_counts.keys()])
+
         for partition in self.partitions.values():
             replication_factor = len(partition.brokers)
 
-            # Maybe it is not important, but for me it seems pretty important
-            while replication_factor < 3:
-                partition.brokers.append(self.fake)
-                replication_factor = len(partition.brokers)
-
             to_fake = []
-            zones_found = []
             for broker_idx in range(0, len(partition.brokers)):
                 added = False
                 if partition.brokers[broker_idx].get_id() in self.active_brokers:
                     broker = partition.brokers[broker_idx]
-                    if broker.zone not in zones_found:
+                    if self.zone_checker.is_allowed_move(broker, broker, partition):
                         if broker.add_partition(broker_idx == 0, partition):
-                            zones_found.append(broker.zone)
                             added = True
                 if not added:
                     partition.brokers[broker_idx] = self.fake
@@ -251,15 +276,10 @@ class SimpleRebalancer(BaseRebalanceChange):
                 self.fake.add_partition(leader, partition)
             total_partitions += replication_factor
             total_leaders += 1
-        az_counts = {}
-        for broker in self.active_brokers.values():
-            az_counts[broker.zone] = az_counts.get(broker.zone, 0) + 1
-        self.zone_checker = ZoneChecker([zone for zone in az_counts.keys()])
 
         leaders_min, leaders_max = get_division_result_min_max(total_leaders, len(self.active_brokers))
 
-        per_zone_partitions_min, per_zone_partitions_max = get_division_result_min_max(total_partitions - total_leaders,
-                                                                                       len(az_counts))
+        per_zone_partitions_min, per_zone_partitions_max = get_division_result_min_max(total_partitions, len(az_counts))
 
         for zone, count in az_counts.items():
             per_broker_partitions_min, _ = get_division_result_min_max(per_zone_partitions_min, count)
@@ -267,7 +287,7 @@ class SimpleRebalancer(BaseRebalanceChange):
             for broker in self.active_brokers.values():
                 if broker.zone == zone:
                     broker.set_partitions_estimation(
-                        (per_broker_partitions_min, per_zone_partitions_max),
+                        (per_broker_partitions_min, per_broker_partitions_max),
                         (leaders_min, leaders_max),
                     )
 
@@ -278,7 +298,7 @@ class SimpleRebalancer(BaseRebalanceChange):
         for pkey, is_leader in self.fake.list_partition_keys():
             load = leaders_load if is_leader else replica_load
             partition = self.partitions[pkey]
-            if not transfer_partition(partition, is_leader, self.fake, load, self.zone_checker):
+            if not transfer_partition(partition, is_leader, self.fake, load, self.zone_checker, polite=False):
                 raise Exception('Nowhere to transfer partition {}'.format(pkey))
             self.register_partition_change(partition)
             if is_leader:
@@ -286,7 +306,8 @@ class SimpleRebalancer(BaseRebalanceChange):
             else:
                 replica_load = sorted(replica_load, key=lambda x: x.get_load_factor(True))
 
-    def optimize_distribution(self, is_leader: bool):
+    def optimize_replicas(self):
+        is_leader = False
         current_load = sorted(self.active_brokers.values(), key=lambda x: x.get_load_factor(is_leader))
         moved = True
         while moved:
@@ -294,20 +315,23 @@ class SimpleRebalancer(BaseRebalanceChange):
             if not to_empty.is_overloaded(is_leader):
                 return
             moved = False
-            for pkey, is_leader in to_empty.list_partition_keys():
-                if bool(is_leader) != bool(is_leader):
-                    continue
+            for pkey in to_empty.copy_partition_keys():
                 partition = self.partitions[pkey]
-                if not transfer_partition(partition, is_leader, to_empty, current_load, self.zone_checker):
+                if not transfer_partition(partition, to_empty.is_leader_for(pkey), to_empty, current_load,
+                                          self.zone_checker, polite=True):
                     continue
                 moved = True
                 self.register_partition_change(partition)
-                break
+                if not to_empty.is_overloaded(is_leader):
+                    break
             if moved:
                 current_load = sorted(current_load, key=lambda x: x.get_load_factor(is_leader))
+            self.print_load()
 
-    def optimize_replicas(self):
-        return self.optimize_distribution(False)
+    def print_load(self):
+        print('Current load: {}'.format(['{}/{},{}/{}'.format(b.leader_count, b.expected_leader_count[1],
+                                                              b.replica_count, b.expected_replica_count[1]) for b in
+                                         self.active_brokers.values()]))
 
     def optimize_leaders(self):
         # First step, try to balance leaders for partitions that we are already moving
@@ -317,31 +341,26 @@ class SimpleRebalancer(BaseRebalanceChange):
             for p in self.rebalance_queue.values():
                 if p.optimize_leaders():
                     has_modifications = True
-
-        # Now try to optimize for partitions that we didn't touch
-        has_modifications = True
-        while has_modifications:
-            has_modifications = False
-            brokers_load_sorted = sorted(self.active_brokers.values(), key=lambda x: -x.get_load_factor(True))
-
-            # There is no disbalance anymore
-            if brokers_load_sorted[0].is_leaders_overloaded():
-                break
-
-            for broker in brokers_load_sorted:
-                if has_modifications:
-                    break
-                if not broker.is_leaders_overloaded():
-                    break
-                for pkey in broker.iterate_leaders():
-                    # We already processed partitions in rebalance queue, won't touch it
-                    if pkey in self.rebalance_queue:
-                        continue
-                    partition = self.partitions[pkey]
-                    if partition.optimize_leaders():
-                        self.register_partition_change(partition)
+                    self.print_load()
+            if not has_modifications:
+                for p in self.rebalance_queue.values():
+                    if p.optimize_leaders(only_solve_overload=False):
                         has_modifications = True
-                        break
+                        self.print_load()
+            if not has_modifications:
+                for p in self.partitions.values():
+                    if not p.optimize_leaders():
+                        continue
+                    self.register_partition_change(p)
+                    has_modifications = True
+                    self.print_load()
+            if not has_modifications:
+                for p in self.partitions.values():
+                    if not p.optimize_leaders(only_solve_overload=False):
+                        continue
+                    self.register_partition_change(p)
+                    has_modifications = True
+                    self.print_load()
 
     def perform_rebalance(self):
         to_rebalance = [k for k in self.rebalance_queue.keys()]
@@ -367,9 +386,18 @@ class SimpleRebalancer(BaseRebalanceChange):
         if self.zk.is_rebalancing():
             return True
 
+        new_broker_ids = sorted([str(id_) for id_ in self.zk.get_broker_ids()])
+        if new_broker_ids != self.initial_broker_ids:
+            _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(
+                self.initial_broker_ids, new_broker_ids))
+            return False
+
         if self.state == SimpleRebalancer._STATE_INIT:
             # Load data from zk
             self.loadDataFromZk()
+            if not self.active_brokers:
+                _LOG.info("no active brokers, can not do rebalance")
+                return False
             self.state = SimpleRebalancer._STATE_DISTRIBUTE_AMONG
         elif self.state == SimpleRebalancer._STATE_DISTRIBUTE_AMONG:
             # Sort and distribute to entities
