@@ -12,7 +12,6 @@ from bubuku.features.rebalance.check import RebalanceOnBrokerListCheck
 from bubuku.zookeeper import BukuExhibitor
 
 
-
 def _verify_balanced(broker_ids, distribution, delta=1):
     per_broker_data = {k: {'leaders': 0, 'total': 0} for k in broker_ids}
     for broker_ids in distribution.values():
@@ -33,11 +32,12 @@ def _verify_balanced(broker_ids, distribution, delta=1):
 
 def _verify_rack_aware(initial_distribution, final_distribution, racks):
     for (topic, partition) in initial_distribution.keys():
-        initial_assignment = initial_distribution[(topic, partition)]
         final_assignment = final_distribution[(topic, partition)]
-        initial_racks = _brokers_to_racks(initial_assignment, racks)
         final_racks = _brokers_to_racks(final_assignment, racks)
-        assert (sorted(initial_racks) == sorted(final_racks))
+        if len(racks) > len(final_assignment):
+            assert (len(final_assignment) == len(set(final_racks)))
+        else:
+            assert (len(set(final_assignment)) == len(racks))
 
 
 def _brokers_to_racks(brokers: list, racks: Dict[int, str]):
@@ -90,8 +90,8 @@ class TestBaseRebalance(unittest.TestCase):
             buku_proxy.get_broker_racks.return_value = {k: v for k, v in racks.items() if str(k) in actual_broker_ids} \
                 if racks else {int(broker_id): None for broker_id in brokers}
         else:
-            buku_proxy.get_broker_racks.return_value = racks if racks else {int(broker_id): None for broker_id in brokers}
-
+            buku_proxy.get_broker_racks.return_value = racks if racks else {int(broker_id): None for broker_id in
+                                                                            brokers}
 
         def _load_assignment():
             return [(k[0], int(k[1]), [int(p) for p in v]) for k, v in topic_data.items()]
@@ -115,7 +115,6 @@ class TestBaseRebalance(unittest.TestCase):
         buku_proxy.reallocate_partition = _reassign
         buku_proxy.reallocate_partitions = _reassign_many
         return sorted(list(set(functools.reduce(lambda x, y: x + y, topic_data.values(), [])))), buku_proxy
-
 
     def test_rebalance_can_run(self):
         brokers, zk = self._create_zk_for_topics({})
@@ -188,41 +187,7 @@ class TestBaseRebalance(unittest.TestCase):
         while o.run([]):
             pass
 
-        _verify_balanced(('1', '2', '3', '4', '5', '6'), distribution)
-        _verify_rack_aware(initial_distribution, distribution, racks)
-
-    def test_rebalance_with_racks_different_nr_partitions_per_rack(self):
-        distribution = {
-            ('t0', '0'): ['3', '1'],
-            ('t0', '1'): ['6', '5'],
-            ('t0', '2'): ['5', '3'],
-            ('t1', '0'): ['5', '6'],
-            ('t1', '1'): ['6', '5'],
-            ('t2', '0'): ['6', '4'],
-            ('t2', '1'): ['2', '6'],
-            ('t2', '2'): ['2', '6'],
-            ('t2', '3'): ['4', '2'],
-            ('t2', '4'): ['6', '5'],
-            ('t2', '5'): ['4', '6'],
-            ('t2', '6'): ['6', '4'],
-        }
-
-        initial_distribution = dict(distribution)
-
-        racks = {
-            1: 'r1',
-            2: 'r1',
-            3: 'r2',
-            4: 'r2',
-            5: 'r3',
-            6: 'r3'
-        }
-
-        brokers, zk = self._create_zk_for_topics(distribution, ['1', '2', '3', '4', '5', '6'], racks)
-        o = self.createChange(zk, brokers, [], [])
-        while o.run([]):
-            pass
-
+        _verify_balanced(('1', '2', '3', '4', '5', '6'), distribution, 2)
         _verify_rack_aware(initial_distribution, distribution, racks)
 
     def test_rebalance_empty_one_broker(self):
@@ -350,17 +315,18 @@ class TestBaseRebalance(unittest.TestCase):
         distribution = {}
         topic_count = 1000
         partition_count = 21
-        broker_ids = [str(i) for i in range(1,22)]
+        broker_ids = [str(i) for i in range(1, 22)]
         for i in range(0, topic_count):
             topic = 't{}'.format(i)
             distribution.update({(topic, str(partition)): ['1', '2', '3'] for partition in range(0, partition_count)})
         _, zk = self._create_zk_for_topics(distribution, broker_ids=broker_ids)
 
-        o = self.createChange(zk, broker_ids, [], [])
+        o = self.createChange(zk, broker_ids, [], [], parallelism=1000)
         steps = 0
         while o.run([]):
+            print(str(o))
             steps += 1
-        _verify_balanced(broker_ids, distribution, 3)
+        _verify_balanced(broker_ids, distribution, 1)
 
     def test_leader_partition_limit(self):
         distribution = {
@@ -405,3 +371,38 @@ class SimpleRebalanceTest(TestBaseRebalance):
                                 empty_brokers=empty_brokers,
                                 exclude_topics=exclude_topics,
                                 parallelism=parallelism)
+
+    def test_rebalance_with_racks_different_nr_partitions_per_rack(self):
+        distribution = {
+            ('t0', '0'): ['3', '1'],
+            ('t0', '1'): ['6', '5'],
+            ('t0', '2'): ['5', '3'],
+            ('t1', '0'): ['5', '6'],
+            ('t1', '1'): ['6', '5'],
+            ('t2', '0'): ['6', '4'],
+            ('t2', '1'): ['2', '6'],
+            ('t2', '2'): ['2', '6'],
+            ('t2', '3'): ['4', '2'],
+            ('t2', '4'): ['6', '5'],
+            ('t2', '5'): ['4', '6'],
+            ('t2', '6'): ['6', '4'],
+        }
+
+        initial_distribution = dict(distribution)
+
+        racks = {
+            1: 'r1',
+            2: 'r1',
+            3: 'r2',
+            4: 'r2',
+            5: 'r3',
+            6: 'r3'
+        }
+
+        brokers, zk = self._create_zk_for_topics(distribution, ['1', '2', '3', '4', '5', '6'], racks)
+        o = self.createChange(zk, brokers, [], [])
+        while o.run([]):
+            print(o)
+            pass
+
+        _verify_rack_aware(initial_distribution, distribution, racks)
