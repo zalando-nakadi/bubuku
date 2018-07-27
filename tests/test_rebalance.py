@@ -7,7 +7,7 @@ from kazoo.exceptions import NoNodeError
 
 from bubuku.features.rebalance import BaseRebalanceChange
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
-from bubuku.features.rebalance.change_simple import SimpleRebalancer
+from bubuku.features.rebalance.change_simple import SimpleRebalanceChange
 from bubuku.features.rebalance.check import RebalanceOnBrokerListCheck
 from bubuku.zookeeper import BukuExhibitor
 
@@ -366,11 +366,11 @@ class SimpleRebalanceTest(TestBaseRebalance):
     __test__ = True
 
     def createChange(self, zk, broker_ids, empty_brokers, exclude_topics, parallelism=1):
-        return SimpleRebalancer(zk,
-                                broker_ids=broker_ids,
-                                empty_brokers=empty_brokers,
-                                exclude_topics=exclude_topics,
-                                parallelism=parallelism)
+        return SimpleRebalanceChange(zk,
+                                     broker_ids=broker_ids,
+                                     empty_brokers=empty_brokers,
+                                     exclude_topics=exclude_topics,
+                                     parallelism=parallelism)
 
     def test_rebalance_with_racks_different_nr_partitions_per_rack(self):
         distribution = {

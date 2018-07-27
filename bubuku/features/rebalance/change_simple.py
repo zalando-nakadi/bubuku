@@ -237,7 +237,7 @@ def get_division_result_min_max(nom, denom):
 _LOG = logging.getLogger('simple_rebalance')
 
 
-class SimpleRebalancer(BaseRebalanceChange):
+class SimpleRebalanceChange(BaseRebalanceChange):
     _STATE_INIT = 'init'
     _STATE_DISTRIBUTE_AMONG = 'distribute'
     _STATE_EMPTY_FAKE = 'empty_fake'
@@ -410,30 +410,30 @@ class SimpleRebalancer(BaseRebalanceChange):
                 self.initial_broker_ids, new_broker_ids))
             return False
 
-        if self.state == SimpleRebalancer._STATE_INIT:
+        if self.state == SimpleRebalanceChange._STATE_INIT:
             # Load data from zk
             self.loadDataFromZk()
             if not self.active_brokers:
                 _LOG.info("no active brokers, can not do rebalance")
                 return False
-            self.state = SimpleRebalancer._STATE_DISTRIBUTE_AMONG
-        elif self.state == SimpleRebalancer._STATE_DISTRIBUTE_AMONG:
+            self.state = SimpleRebalanceChange._STATE_DISTRIBUTE_AMONG
+        elif self.state == SimpleRebalanceChange._STATE_DISTRIBUTE_AMONG:
             # Sort and distribute to entities
             self.createInitialDistribution()
-            self.state = SimpleRebalancer._STATE_EMPTY_FAKE
-        elif self.state == SimpleRebalancer._STATE_EMPTY_FAKE:
+            self.state = SimpleRebalanceChange._STATE_EMPTY_FAKE
+        elif self.state == SimpleRebalanceChange._STATE_EMPTY_FAKE:
             # Move data around from non-existent brokers
             self.empty_fake()
-            self.state = SimpleRebalancer._STATE_OPTIMIZE_REPLICAS
-        elif self.state == SimpleRebalancer._STATE_OPTIMIZE_REPLICAS:
+            self.state = SimpleRebalanceChange._STATE_OPTIMIZE_REPLICAS
+        elif self.state == SimpleRebalanceChange._STATE_OPTIMIZE_REPLICAS:
             # Now try to evenly distribute partitions/leaders among brokers
             self.optimize_replicas()
-            self.state = SimpleRebalancer._STATE_OPTIMIZE_LEADERS
-        elif self.state == SimpleRebalancer._STATE_OPTIMIZE_LEADERS:
+            self.state = SimpleRebalanceChange._STATE_OPTIMIZE_LEADERS
+        elif self.state == SimpleRebalanceChange._STATE_OPTIMIZE_LEADERS:
             # Now try to evenly distribute partitions/leaders among brokers
             self.optimize_leaders()
-            self.state = SimpleRebalancer._STATE_BALANCE
-        elif self.state == SimpleRebalancer._STATE_BALANCE:
+            self.state = SimpleRebalanceChange._STATE_BALANCE
+        elif self.state == SimpleRebalanceChange._STATE_BALANCE:
             rebalance_finished = self.perform_rebalance()
             return not rebalance_finished
         else:

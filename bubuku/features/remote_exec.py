@@ -4,6 +4,7 @@ from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
 from bubuku.features.migrate import MigrationChange
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
+from bubuku.features.rebalance.change_simple import SimpleRebalanceChange
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
 from bubuku.features.swap_partitions import SwapPartitionsChange, load_swap_data
 from bubuku.zookeeper import BukuExhibitor
@@ -30,11 +31,18 @@ class RemoteCommandExecutorCheck(Check):
             if data['name'] == 'restart':
                 return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
             elif data['name'] == 'rebalance':
-                return OptimizedRebalanceChange(self.zk,
-                                                self.zk.get_broker_ids(),
-                                                data['empty_brokers'],
-                                                data['exclude_topics'],
-                                                int(data.get('parallelism', 1)))
+                if data.get('bean_packing', False):
+                    return OptimizedRebalanceChange(self.zk,
+                                                    self.zk.get_broker_ids(),
+                                                    data['empty_brokers'],
+                                                    data['exclude_topics'],
+                                                    int(data.get('parallelism', 1)))
+                else:
+                    return SimpleRebalanceChange(self.zk,
+                                                 self.zk.get_broker_ids(),
+                                                 data['empty_brokers'],
+                                                 data['exclude_topics'],
+                                                 int(data.get('parallelism', 1)))
             elif data['name'] == 'migrate':
                 return MigrationChange(self.zk, data['from'], data['to'], data['shrink'],
                                        int(data.get('parallelism', '1')))
@@ -59,13 +67,14 @@ class RemoteCommandExecutorCheck(Check):
 
     @staticmethod
     def register_rebalance(zk: BukuExhibitor, broker_id: str, empty_brokers: list, exclude_topics: list,
-                           parallelism: int):
+                           parallelism: int, bean_packing: bool):
         if parallelism <= 0:
             raise Exception('Parallelism for rebalance should be greater than 0')
         action = {'name': 'rebalance',
                   'empty_brokers': empty_brokers,
                   'exclude_topics': exclude_topics,
-                  'parallelism': int(parallelism)}
+                  'parallelism': int(parallelism),
+                  'bean_packing': bool(bean_packing)}
         with zk.lock():
             if broker_id:
                 zk.register_action(action, broker_id=broker_id)
