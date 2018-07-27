@@ -221,9 +221,6 @@ def transfer_partition(partition, from_: Broker, target_brokers_sorted: List[Bro
         if polite and target.is_overloaded(False, 1):
             continue
         if partition.change_assignment(from_, target):
-            print('Transfered {} from {} to {}, new broker list: {}'.format(partition.get_key(), from_.get_id(),
-                                                                            target.get_id(),
-                                                                            [b.get_id() for b in partition.brokers]))
             return True
     return False
 

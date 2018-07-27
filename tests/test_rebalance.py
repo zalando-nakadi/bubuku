@@ -324,7 +324,6 @@ class TestBaseRebalance(unittest.TestCase):
         o = self.createChange(zk, broker_ids, [], [], parallelism=1000)
         steps = 0
         while o.run([]):
-            print(str(o))
             steps += 1
         _verify_balanced(broker_ids, distribution, 1)
 
@@ -402,7 +401,6 @@ class SimpleRebalanceTest(TestBaseRebalance):
         brokers, zk = self._create_zk_for_topics(distribution, ['1', '2', '3', '4', '5', '6'], racks)
         o = self.createChange(zk, brokers, [], [])
         while o.run([]):
-            print(o)
             pass
 
         _verify_rack_aware(initial_distribution, distribution, racks)
