@@ -31,7 +31,7 @@ class RemoteCommandExecutorCheck(Check):
             if data['name'] == 'restart':
                 return RestartBrokerChange(self.zk, self.broker_manager, lambda: False)
             elif data['name'] == 'rebalance':
-                if data.get('bean_packing', False):
+                if data.get('bin_packing', False):
                     return OptimizedRebalanceChange(self.zk,
                                                     self.zk.get_broker_ids(),
                                                     data['empty_brokers'],
@@ -67,14 +67,14 @@ class RemoteCommandExecutorCheck(Check):
 
     @staticmethod
     def register_rebalance(zk: BukuExhibitor, broker_id: str, empty_brokers: list, exclude_topics: list,
-                           parallelism: int, bean_packing: bool):
+                           parallelism: int, bin_packing: bool):
         if parallelism <= 0:
             raise Exception('Parallelism for rebalance should be greater than 0')
         action = {'name': 'rebalance',
                   'empty_brokers': empty_brokers,
                   'exclude_topics': exclude_topics,
                   'parallelism': int(parallelism),
-                  'bean_packing': bool(bean_packing)}
+                  'bin_packing': bool(bin_packing)}
         with zk.lock():
             if broker_id:
                 zk.register_action(action, broker_id=broker_id)
