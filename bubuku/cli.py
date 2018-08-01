@@ -86,7 +86,7 @@ def restart_broker(broker: str):
 @click.option('--empty_brokers', type=click.STRING,
               help="Comma-separated list of brokers to empty. All partitions will be moved to other brokers")
 @click.option('--exclude_topics', type=click.STRING, help="Comma-separated list of topics to exclude from rebalance")
-@click.option('--beaan-packing', is_flag=True, help="Use bean packing approach instead of one way processing")
+@click.option('--bean-packing', is_flag=True, help="Use bean packing approach instead of one way processing")
 @click.option('--parallelism', type=click.INT, default=1, show_default=True,
               help="Amount of partitions to move in a single rebalance step")
 def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, parallelism: int, bean_packing: bool):
