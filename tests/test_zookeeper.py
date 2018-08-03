@@ -273,7 +273,6 @@ class SlowlyUpdatedCacheTest(unittest.TestCase):
         while len(update_calls) != 2:
             time.sleep(0.1)
             cache.touch()
-            print(cache)
 
         assert math.fabs(update_calls[0] - load_calls[0]) <= 0.15  # 0.1 + 0.1/2
         # Verify that load calls were made one by another
