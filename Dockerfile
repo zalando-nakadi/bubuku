@@ -1,7 +1,7 @@
 FROM registry.opensource.zalan.do/stups/python:3.5-cd28
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
-ENV KAFKA_VERSION="0.9.0.1" SCALA_VERSION="2.11" JOLOKIA_VERSION="1.3.3"
+ENV KAFKA_VERSION="1.1.1" SCALA_VERSION="2.11" JOLOKIA_VERSION="1.3.3"
 ENV KAFKA_DIR="/opt/kafka"
 
 RUN apt-get update && apt-get install wget openjdk-8-jre -y --force-yes && apt-get clean
