@@ -118,7 +118,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _BALANCE = 'balance'
 
     def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
-                 parallelism: int = 1):
+                 throttle: int = 0, ongoing: bool = False, parallelism: int = 1):
         self.zk = zk
         self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
@@ -129,6 +129,8 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.action_queue = []
         self.state = OptimizedRebalanceChange._LOAD_STATE
         self.parallelism = parallelism
+        self.throttle = throttle
+        self.ongoing = ongoing
 
     def __str__(self):
         return 'OptimizedRebalance state={}, queue_size={}, parallelism={}'.format(
@@ -140,7 +142,11 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             _LOG.warning("Rebalance paused, because other blocking events running: {}".format(current_actions))
             return True
         if self.zk.is_rebalancing():
+            if self.ongoing and self.throttle:
+                _LOG.info("Throttling ongoing rebalance with throttle value = {throttle}".format(throttle=self.throttle))
+                self.zk.throttle_ongoing_rebalance(self.throttle)
             return True
+
         new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
         if new_broker_ids != self.all_broker_ids:
             _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(
@@ -169,7 +175,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if not items:
             return True
         data_to_rebalance = [(key[0], key[1], replicas) for key, replicas in items]
-        if not self.zk.reallocate_partitions(data_to_rebalance):
+        if not self.zk.reallocate_partitions(data_to_rebalance, self.throttle):
             for key, replicas in items:
                 self.action_queue[key] = replicas
         return False
@@ -312,3 +318,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             for i in range(0, len(active_brokers_in_rack)):
                 active_brokers_in_rack[i].set_leader_expectation(new_leader_count[i])
                 active_brokers_in_rack[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
+
+    def on_remove(self):
+        if self.throttle:
+            self.zk.remove_throttle_configurations()

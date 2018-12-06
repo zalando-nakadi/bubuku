@@ -89,7 +89,13 @@ def restart_broker(broker: str):
 @click.option('--bin-packing', is_flag=True, help="Use bean packing approach instead of one way processing")
 @click.option('--parallelism', type=click.INT, default=1, show_default=True,
               help="Amount of partitions to move in a single rebalance step")
-def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, parallelism: int, bin_packing: bool):
+@click.option('--throttle', type=click.INT, default=0, help="Upper bound on bandwidth (in bytes/sec) used for "
+                                                            "rebalance")
+@click.option('--ongoing', is_flag=True,
+              help="If throttle is specified and this flag is set, then "
+                   "throttle for existing rebalance is applied/altered")
+def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, parallelism: int, bin_packing: bool,
+                         throttle: int, ongoing: bool = False):
     config, env_provider = __prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
@@ -97,7 +103,7 @@ def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, p
         __check_all_broker_ids_exist(empty_brokers_list, zookeeper)
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
         RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, empty_brokers_list,
-                                                      exclude_topics_list, parallelism, bin_packing)
+                                                      exclude_topics_list, parallelism, bin_packing, throttle, ongoing)
 
 
 @cli.command('migrate', help='Replace one broker with another for all partitions')

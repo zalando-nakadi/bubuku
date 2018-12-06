@@ -237,8 +237,8 @@ class SimpleRebalanceChange(BaseRebalanceChange):
     _STATE_OPTIMIZE_LEADERS = 'optimize_leaders'
     _STATE_BALANCE = 'balance'
 
-    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
-                 parallelism: int):
+    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list, parallelism: int,
+                 throttle: int = 0, ongoing: bool = False):
         self.state = self._STATE_INIT
         self.zk = zk
         self.fake = FakeBroker()
@@ -250,6 +250,8 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         self.empty_brokers = [str(e) for e in empty_brokers] if empty_brokers else []
         self.initial_broker_ids = sorted([str(broker_id) for broker_id in broker_ids])
         self.zone_checker = None
+        self.throttle = throttle
+        self.ongoing = ongoing
 
     def register_partition_change(self, partition: Partition):
         self.rebalance_queue[(partition.topic, partition.partition)] = partition
@@ -382,7 +384,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             (p.topic, int(p.partition), [b.id_ for b in p.brokers])
             for p in to_rebalance
         ]
-        if not self.zk.reallocate_partitions(to_rebalance_data):
+        if not self.zk.reallocate_partitions(to_rebalance_data, self.throttle):
             for partition in to_rebalance:
                 self.register_partition_change(partition)
         return False
@@ -393,6 +395,9 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             _LOG.warning("Rebalance paused, because other blocking events running: {}".format(current_actions))
             return True
         if self.zk.is_rebalancing():
+            if self.ongoing and self.throttle:
+                _LOG.info("Applying throttle value: {throttle} to old rebalance".format(throttle=self.throttle))
+                self.zk.throttle_ongoing_rebalance(self.throttle)
             return True
 
         new_broker_ids = sorted([str(id_) for id_ in self.zk.get_broker_ids()])
@@ -431,6 +436,10 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             _LOG.warning("Stopping rebalance, as state {} is not supported".format(self.state))
             return False
         return True
+
+    def on_remove(self):
+        if self.throttle:
+            self.zk.remove_throttle_configurations()
 
     def __str__(self):
         return 'SimpleRebalance state={}, queue_size={}, parallelism={}'.format(
