@@ -2,7 +2,7 @@ import logging
 
 from bubuku.features.rebalance import BaseRebalanceChange
 from bubuku.features.rebalance.broker import BrokerDescription
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, RebalanceThrottleManager
 
 _LOG = logging.getLogger('bubuku.features.rebalance')
 
@@ -131,6 +131,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.parallelism = parallelism
         self.throttle = throttle
         self.ongoing = ongoing
+        self.throttle_manager = RebalanceThrottleManager(self.zk)
 
     def __str__(self):
         return 'OptimizedRebalance state={}, queue_size={}, parallelism={}'.format(
@@ -144,7 +145,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if self.zk.is_rebalancing():
             if self.ongoing and self.throttle:
                 _LOG.info("Throttling ongoing rebalance with throttle value = {throttle}".format(throttle=self.throttle))
-                self.zk.throttle_ongoing_rebalance(self.throttle)
+                self.throttle_manager.throttle_ongoing_rebalance(self.throttle)
             return True
 
         new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
@@ -175,7 +176,9 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if not items:
             return True
         data_to_rebalance = [(key[0], key[1], replicas) for key, replicas in items]
-        if not self.zk.reallocate_partitions(data_to_rebalance, throttle=self.throttle):
+        if self.throttle:
+            self.throttle_manager.apply_throttle(data_to_rebalance, self.throttle)
+        if not self.zk.reallocate_partitions(data_to_rebalance):
             for key, replicas in items:
                 self.action_queue[key] = replicas
         return False

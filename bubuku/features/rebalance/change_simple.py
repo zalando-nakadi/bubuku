@@ -2,7 +2,7 @@ import logging
 from typing import List
 
 from bubuku.features.rebalance import BaseRebalanceChange
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, RebalanceThrottleManager
 
 FAKE_ZONE = 'fake_zone'
 
@@ -252,6 +252,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         self.zone_checker = None
         self.throttle = throttle
         self.ongoing = ongoing
+        self.throttle_manager = RebalanceThrottleManager(self.zk)
 
     def register_partition_change(self, partition: Partition):
         self.rebalance_queue[(partition.topic, partition.partition)] = partition
@@ -384,7 +385,10 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             (p.topic, int(p.partition), [b.id_ for b in p.brokers])
             for p in to_rebalance
         ]
-        if not self.zk.reallocate_partitions(to_rebalance_data, throttle=self.throttle):
+
+        if self.throttle:
+            self.throttle_manager.apply_throttle(to_rebalance_data, self.throttle)
+        if not self.zk.reallocate_partitions(to_rebalance_data):
             for partition in to_rebalance:
                 self.register_partition_change(partition)
         return False
@@ -397,7 +401,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         if self.zk.is_rebalancing():
             if self.ongoing and self.throttle:
                 _LOG.info("Applying throttle value: {throttle} to old rebalance".format(throttle=self.throttle))
-                self.zk.throttle_ongoing_rebalance(self.throttle)
+                self.throttle_manager.throttle_ongoing_rebalance(self.throttle)
             return True
 
         new_broker_ids = sorted([str(id_) for id_ in self.zk.get_broker_ids()])

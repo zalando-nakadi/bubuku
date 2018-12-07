@@ -168,22 +168,6 @@ class _ZookeeperProxy(object):
                 _LOG.error('Failed to obtain lock for exhibitor, retrying', exc_info=e)
 
 
-class ThrottleConfig(object):
-
-    BROKER_FOLLOWER_THROTTLE_RATE = "follower.replication.throttle.rate"
-    BROKER_LEADER_THROTTLE_RATE = "leader.replication.throttle.rate"
-    TOPIC_LEADER_THROTTLE_REPLICAS = "leader.replication.throttled.replicas"
-    TOPIC_FOLLOWER_THROTTLE_REPLICAS = "follower.replication.throttled.replicas"
-
-    @classmethod
-    def get_broker_throttle_properties(cls):
-        return [cls.BROKER_LEADER_THROTTLE_RATE, cls.BROKER_FOLLOWER_THROTTLE_RATE]
-
-    @classmethod
-    def get_topic_throttle_properties(cls):
-        return [cls.TOPIC_FOLLOWER_THROTTLE_REPLICAS, cls.TOPIC_LEADER_THROTTLE_REPLICAS]
-
-
 class BukuExhibitor(object):
     def __init__(self, exhibitor: _ZookeeperProxy, async=True):
         self.exhibitor = exhibitor
@@ -367,80 +351,7 @@ class BukuExhibitor(object):
         self.exhibitor.create("/config/changes/config_change_",
                               json.dumps(notification_entity).encode('utf-8'), sequence=True)
 
-    def throttle_ongoing_rebalance(self, throttle):
-        """
-        Applies throttle to ongoing rebalance from json in /admin/reassign_partitions
-        :param throttle: Throttle to be applied
-        """
-        rebalance_json, zk_stats = self.exhibitor.get("/admin/reassign_partitions")
-        self.apply_throttle(json.loads(rebalance_json.decode('utf-8')), throttle)
-
-    def apply_throttle(self, data, throttle):
-        """
-        Applies throttle to the brokers and partitions based on reassignment-json-file data.
-        :param data: Dictionary containing the reassignment-json-file data
-        :param throttle: throttle to be applied to the brokers and the topics
-        """
-        self._apply_throttle_to_brokers(*self._add_throttle_replicas_per_topic(data), throttle)
-
-    def _add_throttle_replicas_per_topic(self, data):
-
-        replica_data = defaultdict(lambda: defaultdict(list))
-        partitions = []
-        for entry in data['partitions']:
-            replica_data[entry['topic']][entry['partition']] = entry['replicas']
-            partitions.append((entry['topic'], entry['partition']))
-
-        partition_isrs = self.load_partition_isr(partitions)
-        topic_changes = defaultdict(lambda: defaultdict(list))
-        follower_replicas, leader_replicas = set(), set()
-
-        for topic, partition, isrs in partition_isrs:
-            follower_topic_replicas = ["{}:{}".format(partition, replica) for replica in
-                                       replica_data[topic][partition] if replica not in isrs]
-            leader_topic_replicas = ["{}:{}".format(partition, replica) for replica in isrs]
-            leader_replicas = leader_replicas.union(set(isrs))
-            follower_replicas = follower_replicas.union(
-                set([replica for replica in replica_data[topic][partition] if replica not in isrs]))
-            topic_changes[topic][ThrottleConfig.TOPIC_LEADER_THROTTLE_REPLICAS].extend(leader_topic_replicas)
-            topic_changes[topic][ThrottleConfig.TOPIC_FOLLOWER_THROTTLE_REPLICAS].extend(follower_topic_replicas)
-
-        for topic, throttle_replicas in topic_changes.items():
-            throttle_config_changes = {}
-            for _property in throttle_replicas:
-                throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
-            self.apply_configuration_properties(topic, throttle_config_changes, 'topics')
-
-        return leader_replicas, follower_replicas
-
-    def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas, throttle):
-        for replica in leader_replicas:
-            self.apply_configuration_properties(
-                replica,
-                {
-                    ThrottleConfig.BROKER_LEADER_THROTTLE_RATE: str(throttle)
-                },
-                "brokers"
-            )
-        for replica in follower_replicas:
-            self.apply_configuration_properties(
-                replica,
-                {
-                    ThrottleConfig.BROKER_FOLLOWER_THROTTLE_RATE: str(throttle)
-                },
-                "brokers"
-            )
-
-    def remove_throttle_configurations(self):
-        """
-        Remove the throttle configurations from the broker and the topic configurations
-        """
-        self.remove_configuration_properties(
-            entity_type="brokers", properties=ThrottleConfig.get_broker_throttle_properties())
-        self.remove_configuration_properties(
-            entity_type="topics", properties=ThrottleConfig.get_topic_throttle_properties())
-
-    def reallocate_partitions(self, partitions_data: list, throttle: int = 0) -> bool:
+    def reallocate_partitions(self, partitions_data: list) -> bool:
         j = {
             "version": "1",
             "partitions": [
@@ -451,8 +362,6 @@ class BukuExhibitor(object):
                 } for (topic, partition, replicas) in partitions_data]
         }
         try:
-            if throttle:
-                self.apply_throttle(j, throttle)
             data = json.dumps(j)
             self.exhibitor.create("/admin/reassign_partitions", data.encode('utf-8'))
             _LOG.info("Reallocating {}".format(data))
@@ -550,3 +459,97 @@ class BukuExhibitor(object):
 def load_exhibitor_proxy(address_provider: AddressListProvider, prefix: str) -> BukuExhibitor:
     proxy = _ZookeeperProxy(address_provider, prefix)
     return BukuExhibitor(proxy)
+
+
+class RebalanceThrottleManager(object):
+
+    _BROKER_FOLLOWER_THROTTLE_RATE = "follower.replication.throttle.rate"
+    _BROKER_LEADER_THROTTLE_RATE = "leader.replication.throttle.rate"
+    _TOPIC_LEADER_THROTTLE_REPLICAS = "leader.replication.throttled.replicas"
+    _TOPIC_FOLLOWER_THROTTLE_REPLICAS = "follower.replication.throttled.replicas"
+
+    def __init__(self, zk: BukuExhibitor):
+        self.zk = zk
+
+    def apply_throttle(self, partitions_data, throttle):
+        """
+        Applies throttle to the brokers and partitions based on reassignment-json-file data.
+        :param partitions_data: List of (topic, partition, replicas)
+        :param throttle: throttle to be applied to the brokers and the topics
+        """
+        self._apply_throttle_to_brokers(*self._add_throttle_replicas_per_topic(partitions_data), throttle)
+
+    def _add_throttle_replicas_per_topic(self, partitions_data):
+
+        partition_isrs = self.zk.load_partition_isr(
+            [(topic, partition) for (topic, partition, replicas) in partitions_data])
+        topic_changes = defaultdict(lambda: defaultdict(list))
+        follower_replicas, leader_replicas = set(), set()
+
+        replica_data = {topic: replicas for (topic, partition, replicas) in partitions_data}
+
+        for topic, partition, isrs in partition_isrs:
+            follower_topic_replicas = ["{}:{}".format(partition, replica) for replica in
+                                       replica_data[topic][partition] if replica not in isrs]
+            leader_topic_replicas = ["{}:{}".format(partition, replica) for replica in isrs]
+            leader_replicas = leader_replicas.union(set(isrs))
+            follower_replicas = follower_replicas.union(
+                set([replica for replica in replica_data[topic][partition] if replica not in isrs]))
+            topic_changes[topic][RebalanceThrottleManager._TOPIC_LEADER_THROTTLE_REPLICAS].extend(leader_topic_replicas)
+            topic_changes[topic][RebalanceThrottleManager._TOPIC_LEADER_THROTTLE_REPLICAS].extend(
+                follower_topic_replicas)
+
+        for topic, throttle_replicas in topic_changes.items():
+            throttle_config_changes = {}
+            for _property in throttle_replicas:
+                throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
+            self.zk.apply_configuration_properties(topic, throttle_config_changes, 'topics')
+
+        return leader_replicas, follower_replicas
+
+    def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas, throttle):
+        for replica in leader_replicas:
+            self.zk.apply_configuration_properties(
+                replica,
+                {
+                    RebalanceThrottleManager._BROKER_LEADER_THROTTLE_RATE: str(throttle)
+                },
+                "brokers"
+            )
+        for replica in follower_replicas:
+            self.zk.apply_configuration_properties(
+                replica,
+                {
+                    RebalanceThrottleManager._BROKER_FOLLOWER_THROTTLE_RATE: str(throttle)
+                },
+                "brokers"
+            )
+
+    def remove_throttle_configurations(self):
+        """
+        Remove the throttle configurations from the broker and the topic configurations
+        """
+        self.zk.remove_configuration_properties(
+            entity_type="brokers", properties=RebalanceThrottleManager.get_broker_throttle_properties())
+        self.zk.remove_configuration_properties(
+            entity_type="topics", properties=RebalanceThrottleManager.get_topic_throttle_properties())
+
+    def throttle_ongoing_rebalance(self, throttle):
+        """
+        Applies throttle to ongoing rebalance from json in /admin/reassign_partitions
+        :param throttle: Throttle to be applied
+        """
+        rebalance_json, zk_stats = self.exhibitor.get("/admin/reassign_partitions")
+        data = json.loads(rebalance_json.decode('utf-8')).get('partitions', {})
+        partitions_data = []
+        for entry in data:
+            partitions_data.append((entry['topic'], entry['partition'], entry['replicas']))
+        self.apply_throttle(json.loads(partitions_data, throttle))
+
+    @classmethod
+    def get_broker_throttle_properties(cls):
+        return [cls._BROKER_LEADER_THROTTLE_RATE, cls._BROKER_FOLLOWER_THROTTLE_RATE]
+
+    @classmethod
+    def get_topic_throttle_properties(cls):
+        return [cls._TOPIC_FOLLOWER_THROTTLE_REPLICAS, cls._TOPIC_LEADER_THROTTLE_REPLICAS]

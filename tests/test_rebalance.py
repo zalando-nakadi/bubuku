@@ -107,7 +107,7 @@ class TestBaseRebalance(unittest.TestCase):
             topic_data[(topic, str(partition))] = [str(x) for x in replicas]
             return True
 
-        def _reassign_many(items, throttle=0):
+        def _reassign_many(items):
             for item in items:
                 _reassign(*item)
             return True
