@@ -324,4 +324,4 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
 
     def on_remove(self):
         if self.throttle:
-            self.zk.remove_throttle_configurations()
+            self.throttle_manager.remove_throttle_configurations()

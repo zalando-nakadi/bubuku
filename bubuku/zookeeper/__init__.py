@@ -486,7 +486,7 @@ class RebalanceThrottleManager(object):
         topic_changes = defaultdict(lambda: defaultdict(list))
         follower_replicas, leader_replicas = set(), set()
 
-        replica_data = {topic: replicas for (topic, partition, replicas) in partitions_data}
+        replica_data = {topic: {partition: replicas} for (topic, partition, replicas) in partitions_data}
 
         for topic, partition, isrs in partition_isrs:
             follower_topic_replicas = ["{}:{}".format(partition, replica) for replica in
