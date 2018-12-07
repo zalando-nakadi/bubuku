@@ -312,6 +312,12 @@ class BukuExhibitor(object):
         return self.reallocate_partitions([(topic, partition, replicas)])
 
     def remove_configuration_properties(self, entity_type: str, properties: list, entities=None):
+        """
+        Remove properties from configuration of an entity
+        :param entity_type: Type of the entity_type (brokers/topics)
+        :param properties: List of properties to remove from the configuration
+        :param entities: List of entities to apply the configuration change to
+        """
         zk_config_path = "/config/{}".format(entity_type)
         entities = self.exhibitor.get_children(zk_config_path) if not entities else entities
         to_change_entities = set()
@@ -334,7 +340,8 @@ class BukuExhibitor(object):
         Applies dynamic config changes using zookeeper
         :param entity: id of the entity (broker id or topic name)
         :param changes: dictionary containing property and key values
-        :param entity_type: type of the entity (can be either 'brokers' or 'topics')
+        :param entity_type: type of the entity to which the config change
+        need to be applied ('brokers' or 'topics')
         """
 
         zk_config_path = "/config/{}/{}".format(entity_type, entity)
@@ -361,6 +368,10 @@ class BukuExhibitor(object):
                               json.dumps(notification_entity).encode('utf-8'), sequence=True)
 
     def throttle_ongoing_rebalance(self, throttle):
+        """
+        Applies throttle to ongoing rebalance from json in /admin/reassign_partitions
+        :param throttle: Throttle to be applied
+        """
         rebalance_json, zk_stats = self.exhibitor.get("/admin/reassign_partitions")
         self.apply_throttle(json.loads(rebalance_json.decode('utf-8')), throttle)
 
@@ -421,6 +432,9 @@ class BukuExhibitor(object):
             )
 
     def remove_throttle_configurations(self):
+        """
+        Remove the throttle configurations from the broker and the topic configurations
+        """
         self.remove_configuration_properties(
             entity_type="brokers", properties=ThrottleConfig.get_broker_throttle_properties())
         self.remove_configuration_properties(
