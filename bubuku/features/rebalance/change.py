@@ -144,8 +144,10 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             return True
         if self.zk.is_rebalancing():
             if self.ongoing and self.throttle:
+                # Don't execute the current rebalance, but alter just alter the throttle
                 _LOG.info("Throttling ongoing rebalance with throttle value = {throttle}".format(throttle=self.throttle))
                 self.throttle_manager.throttle_ongoing_rebalance(self.throttle)
+                return False
             return True
 
         new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
