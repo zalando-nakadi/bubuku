@@ -175,7 +175,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if not items:
             return True
         data_to_rebalance = [(key[0], key[1], replicas) for key, replicas in items]
-        if not self.zk.reallocate_partitions(data_to_rebalance, self.throttle):
+        if not self.zk.reallocate_partitions(data_to_rebalance, throttle=self.throttle):
             for key, replicas in items:
                 self.action_queue[key] = replicas
         return False

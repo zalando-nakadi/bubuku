@@ -384,7 +384,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             (p.topic, int(p.partition), [b.id_ for b in p.brokers])
             for p in to_rebalance
         ]
-        if not self.zk.reallocate_partitions(to_rebalance_data, self.throttle):
+        if not self.zk.reallocate_partitions(to_rebalance_data, throttle=self.throttle):
             for partition in to_rebalance:
                 self.register_partition_change(partition)
         return False

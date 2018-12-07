@@ -173,7 +173,7 @@ class ThrottleConfig(object):
     BROKER_FOLLOWER_THROTTLE_RATE = "follower.replication.throttle.rate"
     BROKER_LEADER_THROTTLE_RATE = "leader.replication.throttle.rate"
     TOPIC_LEADER_THROTTLE_REPLICAS = "leader.replication.throttled.replicas"
-    TOPIC_FOLLWER_THROTTLE_REPLICAS = "follower.replication.throttled.replicas"
+    TOPIC_FOLLOWER_THROTTLE_REPLICAS = "follower.replication.throttled.replicas"
 
     @classmethod
     def get_broker_throttle_properties(cls):
@@ -181,7 +181,7 @@ class ThrottleConfig(object):
 
     @classmethod
     def get_topic_throttle_properties(cls):
-        return [cls.TOPIC_FOLLWER_THROTTLE_REPLICAS, cls.TOPIC_LEADER_THROTTLE_REPLICAS]
+        return [cls.TOPIC_FOLLOWER_THROTTLE_REPLICAS, cls.TOPIC_LEADER_THROTTLE_REPLICAS]
 
 
 class BukuExhibitor(object):
@@ -318,10 +318,13 @@ class BukuExhibitor(object):
         for entity in entities:
             config, stats = self.exhibitor.get("/config/{}/{}".format(entity_type, entity))
             config = json.loads(config.decode('utf-8'))
+            to_change = False
             for config_property in properties:
-                    if config_property in config.get('config', {}):
-                        config.get('config').pop(config_property, None)
-                        to_change_entities.add((entity, json.dumps(config).encode('utf-8')))
+                if config_property in config.get('config', {}):
+                    config.get('config').pop(config_property, None)
+                    to_change = True
+                if to_change:
+                    to_change_entities.add((entity, json.dumps(config).encode('utf-8')))
         for entity, updated_config in to_change_entities:
             self.exhibitor.set("/config/{}/{}".format(entity_type, entity), updated_config)
             self._apply_change_notification(entity, entity_type)
@@ -338,7 +341,6 @@ class BukuExhibitor(object):
         try:
             config = json.loads(self.exhibitor.get(zk_config_path)[0].decode('utf-8'))
             updated_config = config
-            updated_config['version'] = config.get('version', 1) + 1
             for config_property, value in changes.items():
                 updated_config.get('config', {})[config_property] = value
             self.exhibitor.set(zk_config_path, json.dumps(updated_config).encode('utf-8'))
@@ -368,10 +370,9 @@ class BukuExhibitor(object):
         :param data: Dictionary containing the reassignment-json-file data
         :param throttle: throttle to be applied to the brokers and the topics
         """
-        self._apply_throttle_to_brokers(data, throttle)
-        self._add_throttle_replicas(data)
+        self._apply_throttle_to_brokers(*self._add_throttle_replicas_per_topic(data), throttle)
 
-    def _add_throttle_replicas(self, data):
+    def _add_throttle_replicas_per_topic(self, data):
 
         replica_data = defaultdict(lambda: defaultdict(list))
         partitions = []
@@ -381,13 +382,17 @@ class BukuExhibitor(object):
 
         partition_isrs = self.load_partition_isr(partitions)
         topic_changes = defaultdict(lambda: defaultdict(list))
+        follower_replicas, leader_replicas = set(), set()
 
         for topic, partition, isrs in partition_isrs:
-            follower_replicas = ["{}:{}".format(partition, replica) for replica in replica_data[topic][partition]
-                                 if replica not in isrs]
-            leader_replicas = ["{}:{}".format(partition, replica) for replica in isrs]
-            topic_changes[topic][ThrottleConfig.TOPIC_LEADER_THROTTLE_REPLICAS].extend(leader_replicas)
-            topic_changes[topic][ThrottleConfig.TOPIC_FOLLWER_THROTTLE_REPLICAS].extend(follower_replicas)
+            follower_topic_replicas = ["{}:{}".format(partition, replica) for replica in
+                                       replica_data[topic][partition] if replica not in isrs]
+            leader_topic_replicas = ["{}:{}".format(partition, replica) for replica in isrs]
+            leader_replicas = leader_replicas.union(set(isrs))
+            follower_replicas = follower_replicas.union(
+                set([replica for replica in replica_data[topic][partition] if replica not in isrs]))
+            topic_changes[topic][ThrottleConfig.TOPIC_LEADER_THROTTLE_REPLICAS].extend(leader_topic_replicas)
+            topic_changes[topic][ThrottleConfig.TOPIC_FOLLOWER_THROTTLE_REPLICAS].extend(follower_topic_replicas)
 
         for topic, throttle_replicas in topic_changes.items():
             throttle_config_changes = {}
@@ -395,16 +400,25 @@ class BukuExhibitor(object):
                 throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
             self.apply_dynamic_config_changes(topic, throttle_config_changes, 'topics')
 
-    def _apply_throttle_to_brokers(self, data, throttle):
-        for entry in data['partitions']:
-            for replica in entry['replicas']:
-                self.apply_dynamic_config_changes(
-                    replica,
-                    {
-                        ThrottleConfig.BROKER_FOLLOWER_THROTTLE_RATE: str(throttle),
-                        ThrottleConfig.BROKER_LEADER_THROTTLE_RATE: str(throttle)
-                    },
-                    'brokers')
+        return leader_replicas, follower_replicas
+
+    def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas, throttle):
+        for replica in leader_replicas:
+            self.apply_dynamic_config_changes(
+                replica,
+                {
+                    ThrottleConfig.BROKER_LEADER_THROTTLE_RATE: str(throttle)
+                },
+                "brokers"
+            )
+        for replica in follower_replicas:
+            self.apply_dynamic_config_changes(
+                replica,
+                {
+                    ThrottleConfig.BROKER_FOLLOWER_THROTTLE_RATE: str(throttle)
+                },
+                "brokers"
+            )
 
     def remove_throttle_configurations(self):
         self.remove_dynamic_configuration(
