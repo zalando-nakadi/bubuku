@@ -311,7 +311,7 @@ class BukuExhibitor(object):
         """
         return self.reallocate_partitions([(topic, partition, replicas)])
 
-    def remove_dynamic_configuration(self, entity_type: str, properties: list, entities=None):
+    def remove_configuration_properties(self, entity_type: str, properties: list, entities=None):
         zk_config_path = "/config/{}".format(entity_type)
         entities = self.exhibitor.get_children(zk_config_path) if not entities else entities
         to_change_entities = set()
@@ -329,7 +329,7 @@ class BukuExhibitor(object):
             self.exhibitor.set("/config/{}/{}".format(entity_type, entity), updated_config)
             self._apply_change_notification(entity, entity_type)
 
-    def apply_dynamic_config_changes(self, entity: str, changes: dict, entity_type: str):
+    def apply_configuration_properties(self, entity: str, changes: dict, entity_type: str):
         """
         Applies dynamic config changes using zookeeper
         :param entity: id of the entity (broker id or topic name)
@@ -398,13 +398,13 @@ class BukuExhibitor(object):
             throttle_config_changes = {}
             for _property in throttle_replicas:
                 throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
-            self.apply_dynamic_config_changes(topic, throttle_config_changes, 'topics')
+            self.apply_configuration_properties(topic, throttle_config_changes, 'topics')
 
         return leader_replicas, follower_replicas
 
     def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas, throttle):
         for replica in leader_replicas:
-            self.apply_dynamic_config_changes(
+            self.apply_configuration_properties(
                 replica,
                 {
                     ThrottleConfig.BROKER_LEADER_THROTTLE_RATE: str(throttle)
@@ -412,7 +412,7 @@ class BukuExhibitor(object):
                 "brokers"
             )
         for replica in follower_replicas:
-            self.apply_dynamic_config_changes(
+            self.apply_configuration_properties(
                 replica,
                 {
                     ThrottleConfig.BROKER_FOLLOWER_THROTTLE_RATE: str(throttle)
@@ -421,9 +421,9 @@ class BukuExhibitor(object):
             )
 
     def remove_throttle_configurations(self):
-        self.remove_dynamic_configuration(
+        self.remove_configuration_properties(
             entity_type="brokers", properties=ThrottleConfig.get_broker_throttle_properties())
-        self.remove_dynamic_configuration(
+        self.remove_configuration_properties(
             entity_type="topics", properties=ThrottleConfig.get_topic_throttle_properties())
 
     def reallocate_partitions(self, partitions_data: list, throttle: int = 0) -> bool:
