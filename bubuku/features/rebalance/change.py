@@ -144,7 +144,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             return True
         if self.zk.is_rebalancing():
             if self.ongoing and self.throttle:
-                # Don't execute the current rebalance, but alter just alter the throttle
+                # Don't execute the current rebalance, but alter the throttle value
                 _LOG.info("Throttling ongoing rebalance with throttle value = {throttle}".format(throttle=self.throttle))
                 self.throttle_manager.throttle_ongoing_rebalance(self.throttle)
                 return False
