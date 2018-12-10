@@ -304,9 +304,17 @@ class BukuExhibitor(object):
         """
         zk_config_path = "/config/{}".format(entity_type)
         entities = self.exhibitor.get_children(zk_config_path) if not entities else entities
+        asyncs = {entity: self.exhibitor.get_async("/config/{}/{}".format(entity_type, entity)) for entity
+                  in entities} if self.async else {}
         to_change_entities = set()
         for entity in entities:
-            config, stats = self.exhibitor.get("/config/{}/{}".format(entity_type, entity))
+            if self.async:
+                try:
+                    config, stats = asyncs.get(entity).get(block=True)
+                except ConnectionLossException:
+                    config, stat = self.exhibitor.get('/config/{}/{}'.format(entity_type, entity))
+            else:
+                config, stats = self.exhibitor.get("/config/{}/{}".format(entity_type, entity))
             config = json.loads(config.decode('utf-8'))
             to_change = False
             for config_property in properties:
@@ -503,14 +511,14 @@ class RebalanceThrottleManager(object):
             throttle_config_changes = {}
             for _property in throttle_replicas:
                 throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
-            self.zk.apply_configuration_properties(topic, throttle_config_changes, 'topics')
+            self.zk.apply_configuration_properties(str(topic), throttle_config_changes, 'topics')
 
         return leader_replicas, follower_replicas
 
     def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas, throttle):
         for replica in leader_replicas:
             self.zk.apply_configuration_properties(
-                replica,
+                str(replica),
                 {
                     RebalanceThrottleManager._BROKER_LEADER_THROTTLE_RATE: str(throttle)
                 },
@@ -518,7 +526,7 @@ class RebalanceThrottleManager(object):
             )
         for replica in follower_replicas:
             self.zk.apply_configuration_properties(
-                replica,
+                str(replica),
                 {
                     RebalanceThrottleManager._BROKER_FOLLOWER_THROTTLE_RATE: str(throttle)
                 },
