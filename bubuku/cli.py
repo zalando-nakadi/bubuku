@@ -7,6 +7,7 @@ from requests import Response
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.env_provider import EnvProvider
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
+from bubuku.features.metric_collector import MetricCollector
 from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.cli')
@@ -77,6 +78,16 @@ def restart_broker(broker: str):
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider)
         RemoteCommandExecutorCheck.register_restart(zookeeper, broker_id)
+
+
+@cli.command('metrics', help='Get some important kafka metrics')
+@click.option('--brokers', type=click.STRING, help="Comma separated list of broker ids from "
+                                                   "which to collect the metrics from")
+def collect_metrics(brokers: str):
+    config, env_provider = __prepare_configs()
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        broker_ids = zookeeper.get_broker_ids() if brokers is None else brokers.split(',')
+        _print_table(MetricCollector(zookeeper).get_metrics_from_brokers(broker_ids))
 
 
 @cli.command('rebalance', help='Run rebalance process on one of brokers. If rack-awareness is enabled, replicas will '
