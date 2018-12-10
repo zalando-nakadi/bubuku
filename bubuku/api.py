@@ -3,7 +3,6 @@ import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from bubuku.features.remote_exec import RemoteCommandExecutorCheck
 from bubuku.utils import get_opt_broker_id, prepare_configs
 from bubuku.zookeeper import load_exhibitor_proxy
 
@@ -16,6 +15,7 @@ class ApiConfig():
     def get_url(ip: str, path: str):
         return '{}:{}{}{}'.format(ip, ApiConfig.PORT, ApiConfig.ENDPOINT, path)
 
+
 _LOG = logging.getLogger('bubuku.api')
 
 
@@ -25,6 +25,7 @@ class _Handler(BaseHTTPRequestHandler):
             config, env_provider = prepare_configs()
             with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zk:
                 broker_id = get_opt_broker_id(None, config, zk, env_provider)
+                from bubuku.features.remote_exec import RemoteCommandExecutorCheck
                 RemoteCommandExecutorCheck.register_stop(zk, broker_id)
                 self._send_response()
 
