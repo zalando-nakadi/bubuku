@@ -321,8 +321,8 @@ class BukuExhibitor(object):
                 if config_property in config.get('config', {}):
                     config.get('config').pop(config_property, None)
                     to_change = True
-                if to_change:
-                    to_change_entities.add((entity, json.dumps(config).encode('utf-8')))
+            if to_change:
+                to_change_entities.add((entity, json.dumps(config).encode('utf-8')))
         for entity, updated_config in to_change_entities:
             self.exhibitor.set("/config/{}/{}".format(entity_type, entity), updated_config)
             self._apply_change_notification(entity, entity_type)
