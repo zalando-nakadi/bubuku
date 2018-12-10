@@ -18,7 +18,7 @@ class ClusterConfig():
 
     def __init__(self, config_loader: ConfigLoader):
         self._user_data = config_loader.load_config()
-        self._env_vars = self.user_data.get('environment')
+        self._env_vars = self._user_data.get('environment')
 
     def get_cluster_name(self):
         return self._env_vars.get('cluster_name')

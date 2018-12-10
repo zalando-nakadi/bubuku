@@ -1,3 +1,4 @@
+import json
 import logging
 
 from bubuku.aws.cluster_config import ClusterConfig, AwsInstanceUserDataLoader
@@ -137,19 +138,22 @@ class RemoteCommandExecutorCheck(Check):
     @staticmethod
     def register_rolling_restart(zk: BukuExhibitor, broker_id: str, image: str, instance_type: str, scalyr_key: str,
                                  scalyr_region: str, vpc_id: str, kms_key_id: str):
-        zk.is_rolling_restart_in_progress()
+        if zk.is_rolling_restart_in_progress():
+            _LOG.warning('Rolling restart in progress, skipping')
+            return
 
         def _get_restart_assignment():
             restart_assignment = {}
             brokers = zk.get_broker_ids()
-            for b in brokers:
-                if b != broker_id:
-                    restart_assignment[broker_id] = b
             brokers.remove(broker_id)
-            restart_assignment[brokers[0]] = broker_id
+            restart_assignment[broker_id] = brokers[0]
+            for b in brokers:
+                restart_assignment[b] = broker_id
             return restart_assignment
 
-        for broker_id_making_restart, broker_id_to_restart in _get_restart_assignment(zk, broker_id).items():
+        restart_assignment = _get_restart_assignment()
+        _LOG.info('Rolling restart assignment\n {}'.format(json.dumps(restart_assignment, indent=2)))
+        for broker_id_to_restart, broker_id_making_restart in restart_assignment.items():
             action = {'name': 'rolling_restart',
                       'broker_id_to_restart': broker_id_to_restart,
                       'image': image,

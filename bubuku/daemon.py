@@ -3,7 +3,7 @@
 
 import logging
 
-from bubuku import health
+from bubuku import health, api
 from bubuku.broker import BrokerManager, StartupTimeout
 from bubuku.process import KafkaProcess
 from bubuku.config import load_config, KafkaProperties, Config
@@ -85,6 +85,7 @@ def main():
     _LOG.info('Starting health server')
     cmd_helper = CmdHelper()
     health.start_server(config.health_port, cmd_helper)
+    api.start_api_server()
     restart_on_init = False
     while True:
         try:

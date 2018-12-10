@@ -1,9 +1,6 @@
 import logging
-from time import sleep, time
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3 import Retry
 
 from bubuku.api import ApiConfig
 from bubuku.aws import AWSResources, node, volume
@@ -13,22 +10,6 @@ from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rolling_restart')
-_TIMEOUT_SECONDS_KAFKA_STOP = 60 * 20
-
-
-def _requests_retry_session(retries=3, backoff_factor=0.3, status_forcelist=(500, 501, 502, 503, 504), session=None):
-    retry = Retry(
-        total=retries,
-        read=retries,
-        connect=retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=status_forcelist,
-    )
-    session = session or requests.Session()
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('http://', adapter)
-    session.mount('https://', adapter)
-    return session
 
 
 class RollingRestartChange(Change):
@@ -49,42 +30,42 @@ class RollingRestartChange(Change):
         self.cluster_config.set_scalyr_region(scalyr_region)
         self.cluster_config.set_kms_key_id(kms_key_id)
         self.cluster_config.set_vpc_id(vpc_id)
+        self.kafka_stopped = False
+        self.requests_session = requests.sessions.Session()
 
     def get_name(self) -> str:
         return 'rolling_restart'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'restart', 'rebalance', 'stop']])
+        return all([a not in current_actions for a in ['start', 'stop', 'restart', 'rebalance']])
 
     def run(self, current_actions) -> bool:
-        if self._is_cluster_stable():
+        if not self._is_cluster_in_good_state():
             _LOG.error('Cluster is not stable skipping restart iteration')
             return True
 
-        broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
-        _LOG.info('Restarting broker {} {}'.format(self.broker_id_to_restart, broker_ip_to_restart))
-        if not self._gracefully_stop_kafka(broker_ip_to_restart):
+        if not self._gracefully_stop_kafka():
             return True
 
-        if not self._relaunch_kafka_instance(broker_ip_to_restart):
-            return True
+        self._relaunch_kafka_instance(broker_ip_to_restart)
 
         return False
 
-    def _gracefully_stop_kafka(self, broker_ip_to_restart) -> bool:
-        resp = _requests_retry_session().post(ApiConfig.get_url(broker_ip_to_restart, 'stop'))
-        if resp.status_code != 200:
-            _LOG.error('Failed to stop Kafka: {} {}', resp.status_code, resp.text)
-            return False
+    def _gracefully_stop_kafka(self) -> bool:
+        broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
+        if not self.kafka_stopped:
+            _LOG.info('Stopping broker {} {}'.format(self.broker_id_to_restart, broker_ip_to_restart))
+            resp = self.requests_session.post(ApiConfig.get_url(broker_ip_to_restart, 'stop'))
+            if resp.status_code != 200:
+                _LOG.error('Failed to stop Kafka: {} {}', resp.status_code, resp.text)
+                return False
+            self.kafka_stopped = True
 
-        finish_at = time.time() + _TIMEOUT_SECONDS_KAFKA_STOP
-        while finish_at < time.time():
-            resp = _requests_retry_session().get(ApiConfig.get_url(broker_ip_to_restart, 'state')).json()
-            if resp.get('state') == 'stopped':
-                return True
-            sleep(10)
+        resp = self.requests_session.get(ApiConfig.get_url(broker_ip_to_restart, 'state')).json()
+        _LOG.info('Check broker is stopped {}'.format(resp))
+        if resp.get('state') == 'stopped':
+            return True
 
-        _LOG.error('Give up wating for Kafka to stop')
         return False
 
     def _relaunch_kafka_instance(self, broker_ip_to_restart) -> bool:
@@ -114,5 +95,5 @@ class RollingRestartChange(Change):
         # volumes are going to be attached by taupage
         volume.wait_volumes_attached(aws_)
 
-    def _is_cluster_stable(self):
+    def _is_cluster_in_good_state(self):
         return True

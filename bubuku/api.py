@@ -8,12 +8,12 @@ from bubuku.zookeeper import load_exhibitor_proxy
 
 
 class ApiConfig():
-    ENDPOINT = '/api/'
+    ENDPOINT = '/api/broker/'
     PORT = 8888
 
     @staticmethod
     def get_url(ip: str, path: str):
-        return '{}:{}{}{}'.format(ip, ApiConfig.PORT, ApiConfig.ENDPOINT, path)
+        return 'http://{}:{}{}{}'.format(ip, ApiConfig.PORT, ApiConfig.ENDPOINT, path)
 
 
 _LOG = logging.getLogger('bubuku.api')
@@ -24,23 +24,29 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path in '{}{}'.format(ApiConfig.ENDPOINT, 'stop'):
             config, env_provider = prepare_configs()
             with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zk:
-                broker_id = get_opt_broker_id(None, config, zk, env_provider)
-                from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-                RemoteCommandExecutorCheck.register_stop(zk, broker_id)
-                self._send_response()
+                try:
+                    broker_id = get_opt_broker_id(None, config, zk, env_provider)
+                    from bubuku.features.remote_exec import RemoteCommandExecutorCheck
+                    RemoteCommandExecutorCheck.register_stop(zk, broker_id)
+                    self._send_response()
+                except Exception as e:
+                    self._send_response({'state': 'stopped', 'details': str(e)})
 
     def do_GET(self):
         if self.path in '{}{}'.format(ApiConfig.ENDPOINT, 'state'):
             config, env_provider = prepare_configs()
             with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zk:
-                broker_id = get_opt_broker_id(None, config, zk, env_provider)
-                if zk.is_broker_registered(zk, broker_id):
-                    if 'restart' in zk.get_running_changes():
-                        self._send_response({'state': 'restarting'})
-                        return
-                    self._send_response({'state': 'running'})
-                else:
-                    self._send_response({'state': 'stopped'})
+                try:
+                    broker_id = get_opt_broker_id(None, config, zk, env_provider)
+                    if zk.is_broker_registered(broker_id):
+                        if any([c not in zk.get_running_changes() for c in ['start', 'restart', 'stop']]):
+                            self._send_response({'state': 'restarting'})
+                            return
+                        self._send_response({'state': 'running'})
+                    else:
+                        self._send_response({'state': 'stopped'})
+                except Exception as e:
+                    self._send_response({'state': 'stopped', 'details': str(e)})
 
     def _send_response(self, json_=None, status_code=200):
         self.send_response(status_code)

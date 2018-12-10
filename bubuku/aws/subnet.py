@@ -3,7 +3,7 @@ import logging
 import netaddr
 
 from bubuku.aws.cluster_config import ClusterConfig
-from instance_control.aws import AWSResources
+from bubuku.aws import AWSResources
 
 _LOG = logging.getLogger('bubuku.cluster.aws.subnet')
 

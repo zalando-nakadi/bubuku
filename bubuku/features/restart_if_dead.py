@@ -20,6 +20,8 @@ class CheckBrokerStopped(Check):
             return None
         if self.broker.is_running_and_registered():
             return None
+        if self.zk.is_rolling_restart_in_progress():
+            return None
         _LOG.info('Oops! Broker is dead, triggering restart')
         self.need_check = False
 
