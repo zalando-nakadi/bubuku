@@ -1,12 +1,15 @@
 import logging
 
+from bubuku.aws.cluster_config import ClusterConfig, AwsInstanceUserDataLoader
 from bubuku.broker import BrokerManager
 from bubuku.controller import Check, Change
 from bubuku.features.migrate import MigrationChange
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.rebalance.change_simple import SimpleRebalanceChange
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
+from bubuku.features.rolling_restart import RollingRestartChange
 from bubuku.features.swap_partitions import SwapPartitionsChange, load_swap_data
+from bubuku.features.terminate import StopBrokerChange
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.remote_exec')
@@ -49,6 +52,17 @@ class RemoteCommandExecutorCheck(Check):
             elif data['name'] == 'fatboyslim':
                 return SwapPartitionsChange(self.zk,
                                             lambda x: load_swap_data(x, self.api_port, int(data['threshold_kb'])))
+            elif data['name'] == 'rolling_restart':
+                return RollingRestartChange(self.zk, ClusterConfig(AwsInstanceUserDataLoader()),
+                                            data['broker_id_to_restart'],
+                                            data['image'],
+                                            data['instance_type'],
+                                            data['scalyr_key'],
+                                            data['scalyr_region'],
+                                            data['vpc_id'],
+                                            data['kms_key_id'])
+            if data['name'] == 'stop':
+                return StopBrokerChange(self.broker_manager)
             else:
                 _LOG.error('Action {} not supported'.format(data))
         except Exception as e:
@@ -119,3 +133,33 @@ class RemoteCommandExecutorCheck(Check):
                          'processing')
         with zk.lock():
             zk.register_action({'name': 'fatboyslim', 'threshold_kb': threshold_kb})
+
+    @staticmethod
+    def register_rolling_restart(zk: BukuExhibitor, broker_id: str, image: str, instance_type: str, scalyr_key: str,
+                                 scalyr_region: str, vpc_id: str, kms_key_id: str):
+        zk.is_rolling_restart_in_progress()
+
+        def _get_restart_assignment():
+            restart_assignment = {}
+            brokers = zk.get_broker_ids()
+            for b in brokers:
+                if b != broker_id:
+                    restart_assignment[broker_id] = b
+            brokers.remove(broker_id)
+            restart_assignment[brokers[0]] = broker_id
+            return restart_assignment
+
+        for broker_id_making_restart, broker_id_to_restart in _get_restart_assignment(zk, broker_id).items():
+            action = {'name': 'rolling_restart',
+                      'broker_id_to_restart': broker_id_to_restart,
+                      'image': image,
+                      'instance_type': instance_type,
+                      'scalyr_key': scalyr_key,
+                      'scalyr_region': scalyr_region,
+                      'vpc_id': vpc_id,
+                      'kms_key_id': kms_key_id}
+            zk.register_action(action, broker_id=broker_id_making_restart)
+
+    @staticmethod
+    def register_stop(zk: BukuExhibitor, broker_id: str):
+        zk.register_action({'name': 'stop'}, broker_id=broker_id)
