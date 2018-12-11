@@ -7,7 +7,6 @@ from requests import Response
 from bubuku.config import load_config, KafkaProperties, Config
 from bubuku.env_provider import EnvProvider
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-from bubuku.features.metric_collector import MetricCollector
 from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.cli')
