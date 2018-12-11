@@ -11,7 +11,7 @@ class ConfigLoader():
 
 class AwsInstanceUserDataLoader(ConfigLoader):
     def load_config(self):
-        return yaml.load(requests.get('http://169.254.169.254/latest/user-data').text())
+        return yaml.load(requests.get('http://169.254.169.254/latest/user-data').text)
 
 
 class ClusterConfig():
@@ -21,10 +21,10 @@ class ClusterConfig():
         self._env_vars = self._user_data.get('environment')
 
     def get_cluster_name(self):
-        return self._env_vars.get('cluster_name')
+        return self._env_vars.get('CLUSTER_NAME')
 
     def get_health_port(self):
-        return self._env_vars.get('health_port')
+        return self._env_vars.get('HEALTH_PORT')
 
     def get_aws_region(self):
         return 'eu-central-1'
@@ -43,7 +43,7 @@ class ClusterConfig():
         self._user_data['source'] = 'registry.opensource.zalan.do/aruha/{}:{}'.format(_ARTIFACT_NAME, image)
 
     def get_application_version(self):
-        self._user_data.get('application_version')
+        return self._user_data.get('application_version')
 
     def set_instance_type(self, instance_type):
         self._user_data['instance_type'] = instance_type
