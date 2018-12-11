@@ -177,7 +177,7 @@ class TerminateInstance(State):
                                            self.state_context.broker_ip_to_restart)
 
         def func():
-            node.terminate(self.state_context.aws, self.cluster_config, instance)
+            node.terminate(self.state_context.aws, self.state_context.cluster_config, instance)
 
         return self.run_with_timeout(func)
 
