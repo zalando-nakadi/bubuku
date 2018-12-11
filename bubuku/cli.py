@@ -75,15 +75,15 @@ def restart_broker(broker: str):
               help='AWS instance type to run Kafka broker on')
 @click.option('--scalyr-key', type=click.STRING, help='Scalyr account key')
 @click.option('--scalyr-region', type=click.STRING, help='Scalyr region to use')
-@click.option('--vpd-id', type=click.STRING, help='VPC id to use to get subnets')
+@click.option('--vpc-id', type=click.STRING, help='VPC id to use to get subnets')
 @click.option('--kms-key-id', type=click.STRING, help='Kms key id to decrypt data with')
-def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, scalyr_region: str, vpd_id: str,
+def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, scalyr_region: str, vpc_id: str,
                            kms_key_id: str):
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         broker_id = get_opt_broker_id(None, config, zookeeper, env_provider)
         RemoteCommandExecutorCheck.register_rolling_restart(zookeeper, broker_id, image_tag, instance_type, scalyr_key,
-                                                            scalyr_region, vpd_id, kms_key_id)
+                                                            scalyr_region, vpc_id, kms_key_id)
 
 
 @cli.command('rebalance', help='Run rebalance process on one of brokers. If rack-awareness is enabled, replicas will '
