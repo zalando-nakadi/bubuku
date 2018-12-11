@@ -20,8 +20,7 @@ class RollingRestartChange(Change):
                  instance_type: str,
                  scalyr_key: str,
                  scalyr_region: str,
-                 kms_key_id: str,
-                 vpc_id: str):
+                 kms_key_id: str):
         self.zk = zk
         self.cluster_config = cluster_config
         self.cluster_config.set_application_version(image)
@@ -29,7 +28,6 @@ class RollingRestartChange(Change):
         self.cluster_config.set_scalyr_account_key(scalyr_key)
         self.cluster_config.set_scalyr_region(scalyr_region)
         self.cluster_config.set_kms_key_id(kms_key_id)
-        self.cluster_config.set_vpc_id(vpc_id)
         self.state_context = StateContext(self.cluster_config, broker_id_to_restart,
                                           self.zk.get_broker_address(broker_id_to_restart))
 
