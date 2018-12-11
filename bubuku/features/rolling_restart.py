@@ -193,6 +193,7 @@ class LaunchInstance(State):
     def run(self):
         ec2 = EC2(self.state_context.aws)
         ec2.create(self.state_context.cluster_config, 1)
+        return True
 
     def next(self):
         return self.state_context.state_volume_attached

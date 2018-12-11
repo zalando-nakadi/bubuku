@@ -12,13 +12,13 @@ def terminate(aws_: AWSResources, cluster_config: ClusterConfig, instance):
     instance.terminate()
 
 
-# def is_terminated(instance):
-#     instance.load()
-#     _LOG.info('Instance state is %s. Waiting ...', instance.state['Name'])
-#     if instance.state['Name'] == 'terminated':
-#         _LOG.info('%s is successfully terminated', instance)
-#         return True
-#     return False
+def is_terminated(instance):
+    instance.load()
+    _LOG.info('Instance state is %s. Waiting ...', instance.state['Name'])
+    if instance.state['Name'] == 'terminated':
+        _LOG.info('%s is successfully terminated', instance)
+        return True
+    return False
 
 
 def _delete_alarm(aws_: AWSResources, cluster_name: str, instance):

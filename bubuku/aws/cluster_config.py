@@ -1,5 +1,3 @@
-import os
-
 import requests
 import yaml
 
@@ -32,11 +30,7 @@ class ClusterConfig():
         return 'eu-central-1'
 
     def get_instance_type(self):
-        instance_type = self._user_data.get('instance_type')
-        if instance_type is None:
-            instance_type = os.getenv('INSTANCE_TYPE', 'm4.4xlarge')
-            self.set_instance_type(instance_type)
-        return instance_type
+        return self._user_data.get('instance_type')
 
     def set_scalyr_account_key(self, scalyr_account_key):
         if scalyr_account_key:
@@ -85,11 +79,7 @@ class ClusterConfig():
         return self._user_data.get('volume_type')
 
     def get_vpc_id(self):
-        vpc_id = self._user_data.get('vpc_id')
-        if vpc_id is None:
-            vpc_id = os.getenv('VPC_ID')
-            self._user_data['vpc_id'] = vpc_id
-        return vpc_id
+        return self._user_data.get('vpc_id')
 
     def get_user_data(self):
         return dict(self._user_data)
