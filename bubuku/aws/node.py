@@ -1,5 +1,4 @@
 import logging
-import time
 
 from bubuku.aws import AWSResources
 from bubuku.aws.cluster_config import ClusterConfig
@@ -13,13 +12,11 @@ def terminate(aws_: AWSResources, cluster_config: ClusterConfig, instance):
     instance.terminate()
 
     _LOG.info('Instance state is %s. Waiting ...', instance.state['Name'])
-    while True:
-        instance.load()
-        if instance.state['Name'] == 'terminated':
-            _LOG.info('%s is successfully terminated', instance)
-            return
-        _LOG.info('Instance state is %s. Waiting 10 secs more ...', instance.state['Name'])
-        time.sleep(10)
+    instance.load()
+    if instance.state['Name'] == 'terminated':
+        _LOG.info('%s is successfully terminated', instance)
+        return True
+    return False
 
 
 def _delete_alarm(aws_: AWSResources, cluster_name: str, instance):

@@ -64,6 +64,9 @@ class StateContext:
         self.state_attach_volume = AttachVolume(self)
 
     def run(self):
+        """
+        Runs states one after another. If state is finished, it takes the next one.
+        """
         try:
             if self.current_state.run():
                 next_state = self.current_state.next()
@@ -78,14 +81,38 @@ class StateContext:
 
 
 class State:
+    """
+    State which can be run as many times as required before it finishes it work. The progress of the state has to be
+    recoverable
+    """
+
     def __init__(self, state_context):
         self.state_context = state_context
+        self.time_to_check_s = time()
 
-    def run(self):
+    def run(self) -> bool:
+        """
+        Runs the state, and if state finishes successfully it returns True, otherwise it returns False, which means
+        that state has to be executed again
+        """
         pass
 
     def next(self):
+        """
+        Return the next state, which has to be executed after the current state
+        """
         pass
+
+    def run_with_timeout(self, func, timeout_s=10):
+        """
+        Runs func() with timeout
+        :param func function to execute
+        :param timeout_s timeout before executing state next time
+        """
+        if time() >= self.time_to_check_s:
+            self.time_to_check_s = time() + timeout_s
+            return func()
+        return False
 
 
 class StopKafka(State):
@@ -108,13 +135,11 @@ class WaitBrokerStopped(State):
         self.time_to_check_s = time()
 
     def run(self):
-        if time() >= self.time_to_check_s:
+        def func():
             resp = requests.get(ApiConfig.get_url(self.state_context.broker_ip_to_restart, 'state')).json()
-            _LOG.info('Check broker is stopped {}'.format(resp))
-            if resp.get('state') == 'stopped':
-                return True
-            self.time_to_check_s = time() + 10
-        return False
+            return resp.get('state') == 'stopped'
+
+        return self.run_with_timeout(func)
 
     def next(self):
         return self.state_context.state_detach_volume
@@ -150,7 +175,11 @@ class TerminateInstance(State):
         instance = node.get_instance_by_ip(self.state_context.aws.ec2_resource,
                                            self.state_context.cluster_config,
                                            self.state_context.broker_ip_to_restart)
-        node.terminate(self.state_context.self.state_context, self.cluster_config, instance)
+
+        def func():
+            node.terminate(self.state_context.self.state_context, self.cluster_config, instance)
+
+        return self.run_with_timeout(func)
 
     def next(self):
         return self.state_context.state_launch_instance
@@ -171,11 +200,10 @@ class AttachVolume(State):
         self.time_to_check_s = time()
 
     def run(self):
-        if time() >= self.time_to_check_s:
-            if volume.are_volumes_attached(self.state_context.aws):
-                return True
-            self.time_to_check_s = time() + 10
-        return False
+        def func():
+            volume.are_volumes_attached(self.state_context.aws)
+
+        return self.run_with_timeout(func)
 
     def next(self):
         return None
