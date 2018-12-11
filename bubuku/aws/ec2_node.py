@@ -133,7 +133,7 @@ class EC2(object):
         _LOG.info('Preparing AWS configuration for ec2 instance creation')
         try:
             node_ips = subnet.allocate_ip_addresses(self.aws, cluster_config, instance_count)
-            taupage_amis = taupage.find_amis(self.aws.ec2_resource, self.cluster_config.get_aws_region())
+            taupage_amis = taupage.find_amis(self.aws.ec2_resource, cluster_config.get_aws_region())
             security_groups = security_group.create_or_ger_security_group(self.aws, cluster_config)
             iam_profile = iam.create_or_get_instance_profile(self.aws, cluster_config)
 
