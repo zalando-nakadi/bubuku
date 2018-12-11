@@ -88,7 +88,7 @@ class ClusterConfig():
         vpc_id = self._user_data.get('vpc_id')
         if vpc_id is None:
             vpc_id = os.getenv('VPC_ID')
-            self._user_data.get['vpc_id'] = vpc_id
+            self._user_data['vpc_id'] = vpc_id
         return vpc_id
 
     def get_user_data(self):
