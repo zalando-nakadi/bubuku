@@ -1,4 +1,5 @@
 import logging
+from time import time
 
 import requests
 
@@ -22,7 +23,6 @@ class RollingRestartChange(Change):
                  kms_key_id: str,
                  vpc_id: str):
         self.zk = zk
-        self.broker_id_to_restart = broker_id_to_restart
         self.cluster_config = cluster_config
         self.cluster_config.set_application_version(image)
         self.cluster_config.set_instance_type(instance_type)
@@ -30,8 +30,8 @@ class RollingRestartChange(Change):
         self.cluster_config.set_scalyr_region(scalyr_region)
         self.cluster_config.set_kms_key_id(kms_key_id)
         self.cluster_config.set_vpc_id(vpc_id)
-        self.kafka_stopped = False
-        self.requests_session = requests.sessions.Session()
+        self.state_context = StateContext(self.cluster_config, broker_id_to_restart,
+                                          self.zk.get_broker_address(broker_id_to_restart))
 
     def get_name(self) -> str:
         return 'rolling_restart'
@@ -44,56 +44,138 @@ class RollingRestartChange(Change):
             _LOG.error('Cluster is not stable skipping restart iteration')
             return True
 
-        if not self._gracefully_stop_kafka():
+        return self.state_context.run()
+
+    def _is_cluster_in_good_state(self):
+        return True
+
+
+class StateContext:
+    def __init__(self, cluster_config, broker_id_to_restart, broker_ip_to_restart):
+        self.broker_id_to_restart = broker_id_to_restart
+        self.broker_ip_to_restart = broker_ip_to_restart
+        self.cluster_config = cluster_config
+        self.aws = AWSResources(region=self.cluster_config.get_aws_region())
+        self.current_state = StopKafka(self)
+        self.state_wait_broker_stopped = WaitBrokerStopped(self)
+        self.state_detach_volume = DetachVolume(self)
+        self.state_terminate_instance = TerminateInstance(self)
+        self.state_launch_instance = LaunchInstance(self)
+        self.state_attach_volume = AttachVolume(self)
+
+    def run(self):
+        try:
+            if self.current_state.run():
+                next_state = self.current_state.next()
+                _LOG.info('Next state is {}'.format(next_state))
+                if next_state is None:
+                    return False
+                self.current_state = next_state
+            return True
+        except Exception as e:
+            _LOG.error('Failed to run state', exc_info=e)
             return True
 
-        self._relaunch_kafka_instance(broker_ip_to_restart)
 
+class State:
+    def __init__(self, state_context):
+        self.state_context = state_context
+
+    def run(self):
+        pass
+
+    def next(self):
+        pass
+
+
+class StopKafka(State):
+    def run(self):
+        _LOG.info('Stopping broker {} {}'.format(self.state_context.broker_id_to_restart,
+                                                 self.state_context.broker_ip_to_restart))
+        resp = requests.post(ApiConfig.get_url(self.state_context.broker_ip_to_restart, 'stop'))
+        if resp.status_code != 200:
+            _LOG.error('Failed to stop Kafka: {} {}', resp.status_code, resp.text)
+            return False
+        return True
+
+    def next(self):
+        return self.state_context.state_wait_broker_stopped
+
+
+class WaitBrokerStopped(State):
+    def __init__(self, state_context):
+        super(WaitBrokerStopped, self).__init__(state_context)
+        self.time_to_check_s = time()
+
+    def run(self):
+        if time() >= self.time_to_check_s:
+            resp = requests.get(ApiConfig.get_url(self.state_context.broker_ip_to_restart, 'state')).json()
+            _LOG.info('Check broker is stopped {}'.format(resp))
+            if resp.get('state') == 'stopped':
+                return True
+            self.time_to_check_s = time() + 10
         return False
 
-    def _gracefully_stop_kafka(self) -> bool:
-        broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
-        if not self.kafka_stopped:
-            _LOG.info('Stopping broker {} {}'.format(self.broker_id_to_restart, broker_ip_to_restart))
-            resp = self.requests_session.post(ApiConfig.get_url(broker_ip_to_restart, 'stop'))
-            if resp.status_code != 200:
-                _LOG.error('Failed to stop Kafka: {} {}', resp.status_code, resp.text)
-                return False
-            self.kafka_stopped = True
+    def next(self):
+        return self.state_context.state_detach_volume
 
-        resp = self.requests_session.get(ApiConfig.get_url(broker_ip_to_restart, 'state')).json()
-        _LOG.info('Check broker is stopped {}'.format(resp))
-        if resp.get('state') == 'stopped':
-            return True
 
-        return False
-
-    def _relaunch_kafka_instance(self, broker_ip_to_restart) -> bool:
-        aws_ = AWSResources(region=self.cluster_config.get_aws_region())
-
-        instance = node.get_instance_by_ip(aws_.ec2_resource, self.cluster_config, broker_ip_to_restart)
+class DetachVolume(State):
+    def run(self):
+        instance = node.get_instance_by_ip(self.state_context.aws.ec2_resource,
+                                           self.state_context.cluster_config,
+                                           self.state_context.broker_ip_to_restart)
 
         _LOG.info('Searching for instance %s volumes', instance.instance_id)
-        volumes = aws_.ec2_client.describe_instance_attribute(InstanceId=instance.instance_id,
-                                                              Attribute='blockDeviceMapping')
+        volumes = self.state_context.aws.ec2_client.describe_instance_attribute(InstanceId=instance.instance_id,
+                                                                                Attribute='blockDeviceMapping')
         data_volume = next(v for v in volumes['BlockDeviceMappings'] if v['DeviceName'] == '/dev/xvdk')
         data_volume_id = data_volume['Ebs']['VolumeId']
 
         _LOG.info('Creating tag:Name=%s for %s', volume.KAFKA_LOGS_EBS, data_volume_id)
-        vol = aws_.ec2_resource.Volume(data_volume_id)
+        vol = self.state_context.aws.ec2_resource.Volume(data_volume_id)
+        self.state_context.cluster_config.set_availability_zone(vol.availability_zone)
         vol.create_tags(Tags=[{'Key': 'Name', 'Value': volume.KAFKA_LOGS_EBS}])
         _LOG.info('Detaching %s from %s', data_volume_id, instance.instance_id)
 
-        aws_.ec2_client.detach_volume(VolumeId=data_volume_id, Force=False)
-
-        node.terminate(aws_, self.cluster_config, instance)
-        self.cluster_config.set_availability_zone(vol.availability_zone)
-
-        ec2 = EC2(aws_)
-
-        ec2.create(self.cluster_config, 1)
-        # volumes are going to be attached by taupage
-        volume.wait_volumes_attached(aws_)
-
-    def _is_cluster_in_good_state(self):
+        self.state_context.aws.ec2_client.detach_volume(VolumeId=data_volume_id, Force=False)
         return True
+
+    def next(self):
+        return self.state_context.state_terminate_instance
+
+
+class TerminateInstance(State):
+    def run(self):
+        instance = node.get_instance_by_ip(self.state_context.aws.ec2_resource,
+                                           self.state_context.cluster_config,
+                                           self.state_context.broker_ip_to_restart)
+        node.terminate(self.state_context.self.state_context, self.cluster_config, instance)
+
+    def next(self):
+        return self.state_context.state_launch_instance
+
+
+class LaunchInstance(State):
+    def run(self):
+        ec2 = EC2(self.state_context.aws)
+        ec2.create(self.state_context.cluster_config, 1)
+
+    def next(self):
+        return self.state_context.state_attach_volume
+
+
+class AttachVolume(State):
+    def __init__(self, state_context):
+        super(AttachVolume, self).__init__(state_context)
+        self.time_to_check_s = time()
+
+    def run(self):
+        if time() >= self.time_to_check_s:
+            if volume.are_volumes_attached(self.state_context.aws):
+                return True
+            self.time_to_check_s = time() + 10
+        return False
+
+    def next(self):
+        return None

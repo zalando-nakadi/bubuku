@@ -1,5 +1,4 @@
 import logging
-import time
 
 from bubuku.aws import AWSResources
 
@@ -7,20 +6,14 @@ _LOG = logging.getLogger('bubuku.aws.volume')
 KAFKA_LOGS_EBS = 'kafka-logs-ebs'
 
 
-def wait_volumes_attached(aws_: AWSResources):
+def are_volumes_attached(aws_: AWSResources):
     _LOG.info('Searching for volumes with tag %s to attach', KAFKA_LOGS_EBS)
     response = aws_.ec2_client.describe_volumes(Filters=[{'Name': 'tag:Name', 'Values': [KAFKA_LOGS_EBS]}])
     volumes = [aws_.ec2_resource.Volume(v['VolumeId']) for v in response['Volumes']]
 
     _LOG.info('Waiting for %s to be attached', volumes)
-    while True:
-        volumes = [v for v in volumes if clear_tag(v)]
-        if len(volumes) == 0:
-            _LOG.info('All volumes are attached')
-            return
-        else:
-            _LOG.info('Waiting 10 secs more for %s to be attached', volumes)
-            time.sleep(10)
+    volumes = [v for v in volumes if clear_tag(v)]
+    return len(volumes) == 0
 
 
 def clear_tag(v):

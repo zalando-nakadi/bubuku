@@ -46,6 +46,16 @@ logging.basicConfig(level=getattr(logging, 'INFO', None))
 
 @click.group()
 def cli():
+    logo = """
+        ____        __          __        
+       / __ )__  __/ /_  __  __/ /____  __
+      / __  / / / / __ \/ / / / //_/ / / /
+     / /_/ / /_/ / /_/ / /_/ / ,< / /_/ / 
+    /_____/\__,_/_.___/\__,_/_/|_|\__,_/  
+    """
+    print(logo)
+    print('Start, monitor and rebalance kafka cluster in AWS setup')
+    print()
     pass
 
 
