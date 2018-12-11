@@ -61,7 +61,7 @@ class StateContext:
         self.state_detach_volume = DetachVolume(self)
         self.state_terminate_instance = TerminateInstance(self)
         self.state_launch_instance = LaunchInstance(self)
-        self.state_attach_volume = AttachVolume(self)
+        self.state_volume_attached = WaitVolumeAttach(self)
 
     def run(self):
         """
@@ -171,13 +171,19 @@ class DetachVolume(State):
 
 
 class TerminateInstance(State):
+    def __init__(self, state_context):
+        super(TerminateInstance, self).__init__(state_context)
+        self.instance = None
+
     def run(self):
-        instance = node.get_instance_by_ip(self.state_context.aws.ec2_resource,
-                                           self.state_context.cluster_config,
-                                           self.state_context.broker_ip_to_restart)
+        if self.instance is None:
+            self.instance = node.get_instance_by_ip(self.state_context.aws.ec2_resource,
+                                                    self.state_context.cluster_config,
+                                                    self.state_context.broker_ip_to_restart)
 
         def func():
-            node.terminate(self.state_context.aws, self.state_context.cluster_config, instance)
+            node.terminate(self.state_context.aws, self.state_context.cluster_config, self.instance)
+            return True
 
         return self.run_with_timeout(func)
 
@@ -191,17 +197,13 @@ class LaunchInstance(State):
         ec2.create(self.state_context.cluster_config, 1)
 
     def next(self):
-        return self.state_context.state_attach_volume
+        return self.state_context.state_volume_attached
 
 
-class AttachVolume(State):
-    def __init__(self, state_context):
-        super(AttachVolume, self).__init__(state_context)
-        self.time_to_check_s = time()
-
+class WaitVolumeAttach(State):
     def run(self):
         def func():
-            volume.are_volumes_attached(self.state_context.aws)
+            return volume.are_volumes_attached(self.state_context.aws)
 
         return self.run_with_timeout(func)
 
