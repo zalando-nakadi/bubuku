@@ -48,7 +48,7 @@ class MetricCollector:
             metrics = loop.run_until_complete(self._get_metrics_from_brokers(broker_ids))
             return metrics
         except Exception as e:
-            _LOG.error('Could not fetch metrics from brokers', e)
+            _LOG.error('Could not fetch metrics from brokers', exc_info=e)
         finally:
             loop.close()
 

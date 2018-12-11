@@ -80,16 +80,6 @@ def restart_broker(broker: str):
         RemoteCommandExecutorCheck.register_restart(zookeeper, broker_id)
 
 
-@cli.command('metrics', help='Get some important kafka metrics')
-@click.option('--brokers', type=click.STRING, help="Comma separated list of broker ids from "
-                                                   "which to collect the metrics from")
-def collect_metrics(brokers: str):
-    config, env_provider = __prepare_configs()
-    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
-        broker_ids = zookeeper.get_broker_ids() if brokers is None else brokers.split(',')
-        _print_table(MetricCollector(zookeeper).get_metrics_from_brokers(broker_ids))
-
-
 @cli.command('rebalance', help='Run rebalance process on one of brokers. If rack-awareness is enabled, replicas will '
                                'only be move to other brokers in the same rack')
 @click.option('--broker', type=click.STRING,
