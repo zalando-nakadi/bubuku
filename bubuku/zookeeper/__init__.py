@@ -497,15 +497,14 @@ class RebalanceThrottleManager(object):
         replica_data = {topic: {partition: replicas} for (topic, partition, replicas) in partitions_data}
 
         for topic, partition, isrs in partition_isrs:
-            follower_topic_replicas = ["{}:{}".format(partition, replica) for replica in
-                                       replica_data[topic][partition] if replica not in isrs]
-            leader_topic_replicas = ["{}:{}".format(partition, replica) for replica in isrs]
+            topic_changes[topic][RebalanceThrottleManager._TOPIC_FOLLOWER_THROTTLE_REPLICAS].extend(
+                ["{}:{}".format(partition, replica) for replica in replica_data[topic][partition] if
+                 replica not in isrs])
+            topic_changes[topic][RebalanceThrottleManager._TOPIC_LEADER_THROTTLE_REPLICAS].extend(
+                ["{}:{}".format(partition, replica) for replica in isrs])
             leader_replicas = leader_replicas.union(set(isrs))
             follower_replicas = follower_replicas.union(
                 set([replica for replica in replica_data[topic][partition] if replica not in isrs]))
-            topic_changes[topic][RebalanceThrottleManager._TOPIC_LEADER_THROTTLE_REPLICAS].extend(leader_topic_replicas)
-            topic_changes[topic][RebalanceThrottleManager._TOPIC_LEADER_THROTTLE_REPLICAS].extend(
-                follower_topic_replicas)
 
         for topic, throttle_replicas in topic_changes.items():
             throttle_config_changes = {}
