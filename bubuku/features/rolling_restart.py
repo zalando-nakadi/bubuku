@@ -48,7 +48,7 @@ class RollingRestartChange(Change):
 
 
 class StateContext:
-    def __init__(self, zk, cluster_config, broker_id_to_restart):
+    def __init__(self, zk: BukuExhibitor, cluster_config, broker_id_to_restart):
         self.zk = zk
         self.broker_id_to_restart = broker_id_to_restart
         self.broker_ip_to_restart = self.zk.get_broker_address(broker_id_to_restart)
@@ -199,14 +199,7 @@ class WaitVolumeAttached(State):
 class WaitKafkaRunning(State):
     def run(self):
         def func():
-            try:
-                new_broker_ip = self.state_context.zk.get_broker_address(self.state_context.broker_id_to_restart)
-                if new_broker_ip is None:
-                    return False
-                resp = requests.get(ApiConfig.get_url(new_broker_ip, 'state')).json()
-                return resp.get('state') == 'running'
-            except:
-                return False
+            return self.state_context.zk.is_broker_registered(self.state_context.broker_id_to_restart)
 
         return self.run_with_timeout(func)
 
