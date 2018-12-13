@@ -31,6 +31,16 @@ class _Handler(BaseHTTPRequestHandler):
                     self._send_response()
                 except Exception as e:
                     self._send_response({'state': 'stopped', 'details': str(e)})
+        if self.path in '{}{}'.format(ApiConfig.ENDPOINT, 'start'):
+            config, env_provider = prepare_configs()
+            with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zk:
+                try:
+                    broker_id = get_opt_broker_id(None, config, zk, env_provider)
+                    from bubuku.features.remote_exec import RemoteCommandExecutorCheck
+                    RemoteCommandExecutorCheck.register_start(zk, broker_id)
+                    self._send_response()
+                except Exception as e:
+                    self._send_response({'details': str(e)})
 
     def do_GET(self):
         if self.path in '{}{}'.format(ApiConfig.ENDPOINT, 'state'):

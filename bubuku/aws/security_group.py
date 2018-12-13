@@ -6,7 +6,7 @@ from bubuku.aws.cluster_config import ClusterConfig
 _LOG = logging.getLogger('bubuku.aws.security_group')
 
 
-def create_or_ger_security_group(aws_: AWSResources, cluster_config: ClusterConfig) -> dict:
+def create_or_get_security_group(aws_: AWSResources, cluster_config: ClusterConfig) -> dict:
     _LOG.info('Configuring security group ...')
     security_groups = aws_.ec2_client.describe_security_groups(
         Filters=[{'Name': 'group-name', 'Values': [cluster_config.get_cluster_name()]}])
@@ -27,7 +27,7 @@ def create_or_ger_security_group(aws_: AWSResources, cluster_config: ClusterConf
         GroupId=sg['GroupId'],
         IpPermissions=[get_ip_permission(22), get_ip_permission(8004),
                        get_ip_permission(8778), get_ip_permission(9100),
-                       get_ip_permission(9092),
+                       get_ip_permission(9092), get_ip_permission(8888),
                        get_ip_permission(cluster_config.get_health_port())])
     _LOG.info("Security group got ingress for ports: 22, 8004, 8080, 8778, 9100, %s", cluster_config.get_health_port())
     return sg

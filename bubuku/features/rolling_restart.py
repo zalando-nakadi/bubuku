@@ -1,13 +1,12 @@
 import logging
 from time import time
 
-import requests
-
-from bubuku.api import ApiConfig
 from bubuku.aws import AWSResources, node, volume
 from bubuku.aws.cluster_config import ClusterConfig
 from bubuku.aws.ec2_node import EC2
+from bubuku.broker import BrokerManager
 from bubuku.controller import Change
+from bubuku.features.remote_exec import RemoteCommandExecutorCheck
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rolling_restart')
@@ -34,7 +33,7 @@ class RollingRestartChange(Change):
         return 'rolling_restart'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'stop', 'restart', 'rebalance']])
+        return all([a not in current_actions for a in ['stop', 'restart', 'rebalance']])
 
     def run(self, current_actions) -> bool:
         if not self._is_cluster_in_good_state():
@@ -47,11 +46,31 @@ class RollingRestartChange(Change):
         return True
 
 
+class StartBrokerChange(Change):
+    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
+        self.zk = zk
+        self.broker = broker
+
+    def get_name(self):
+        return 'start'
+
+    def can_run(self, current_actions):
+        return all([a not in current_actions for a in ['restart', 'stop']])
+
+    def run(self, current_actions):
+        zk_conn_str = self.zk.get_conn_str()
+        try:
+            self.broker.start_kafka_process(zk_conn_str)
+        except Exception as e:
+            _LOG.error('Failed to start kafka process against {}'.format(zk_conn_str), exc_info=e)
+            return True
+        return False
+
+
 class StateContext:
     def __init__(self, zk: BukuExhibitor, cluster_config, broker_id_to_restart):
         self.zk = zk
         self.broker_id_to_restart = broker_id_to_restart
-        self.broker_ip_to_restart = self.zk.get_broker_address(broker_id_to_restart)
         self.cluster_config = cluster_config
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.current_state = StopKafka(self)
@@ -106,19 +125,15 @@ class State:
         :param timeout_s timeout before executing state next time
         """
         if time() >= self.time_to_check_s:
+            result = func()
             self.time_to_check_s = time() + timeout_s
-            return func()
+            return result
         return False
 
 
 class StopKafka(State):
     def run(self):
-        _LOG.info('Stopping broker {} {}'.format(self.state_context.broker_id_to_restart,
-                                                 self.state_context.broker_ip_to_restart))
-        resp = requests.post(ApiConfig.get_url(self.state_context.broker_ip_to_restart, 'stop'))
-        if resp.status_code != 200:
-            _LOG.error('Failed to stop Kafka: {} {}', resp.status_code, resp.text)
-            return False
+        RemoteCommandExecutorCheck.register_stop(self.state_context.zk, self.state_context.broker_id_to_restart)
         return True
 
     def next(self):
@@ -128,8 +143,7 @@ class StopKafka(State):
 class WaitBrokerStopped(State):
     def run(self):
         def func():
-            resp = requests.get(ApiConfig.get_url(self.state_context.broker_ip_to_restart, 'state')).json()
-            return resp.get('state') == 'stopped'
+            return not self.state_context.zk.is_broker_registered(self.state_context.broker_id_to_restart)
 
         return self.run_with_timeout(func)
 
@@ -189,6 +203,18 @@ class WaitVolumeAttached(State):
     def run(self):
         def func():
             return volume.clear_volume_tag_if_in_use(self.state_context.volume)
+
+        return self.run_with_timeout(func)
+
+    def next(self):
+        return StartKafka(self.state_context)
+
+
+class StartKafka(State):
+    def run(self):
+        def func():
+            RemoteCommandExecutorCheck.register_start(self.state_context.zk, self.state_context.broker_id_to_restart)
+            return True
 
         return self.run_with_timeout(func)
 
