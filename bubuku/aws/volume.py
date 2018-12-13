@@ -12,7 +12,7 @@ def are_volumes_attached(aws_: AWSResources):
     volumes = [aws_.ec2_resource.Volume(v['VolumeId']) for v in response['Volumes']]
 
     _LOG.info('Waiting for %s to be attached', volumes)
-    volumes = [v for v in volumes if clear_volume_tag_if_in_use(v)]
+    volumes = [v for v in volumes if not clear_volume_tag_if_in_use(v)]
     return len(volumes) == 0
 
 
@@ -22,13 +22,13 @@ def clear_volume_tag_if_in_use(volume):
         _LOG.info('Volume %s is attached. Clearing tag:Name', volume)
         volume.create_tags(Tags=[{'Key': 'Name', 'Value': ''}])
         _LOG.info('Completed clearing tag:Name for %s', volume)
-        return False
-    return True
+        return True
+    return False
 
 
-def is_volume_available(v):
-    v.load()
-    return v.state == 'available'
+def is_volume_available(volume):
+    volume.load()
+    return volume.state == 'available'
 
 
 def detach_volume(aws_: AWSResources, instance):

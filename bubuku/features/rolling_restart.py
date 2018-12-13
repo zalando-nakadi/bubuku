@@ -28,8 +28,7 @@ class RollingRestartChange(Change):
         self.cluster_config.set_scalyr_account_key(scalyr_key)
         self.cluster_config.set_scalyr_region(scalyr_region)
         self.cluster_config.set_kms_key_id(kms_key_id)
-        self.state_context = StateContext(self.cluster_config, broker_id_to_restart,
-                                          self.zk.get_broker_address(broker_id_to_restart))
+        self.state_context = StateContext(self.zk, self.cluster_config, broker_id_to_restart)
 
     def get_name(self) -> str:
         return 'rolling_restart'
@@ -49,9 +48,10 @@ class RollingRestartChange(Change):
 
 
 class StateContext:
-    def __init__(self, cluster_config, broker_id_to_restart, broker_ip_to_restart):
+    def __init__(self, zk, cluster_config, broker_id_to_restart):
+        self.zk = zk
         self.broker_id_to_restart = broker_id_to_restart
-        self.broker_ip_to_restart = broker_ip_to_restart
+        self.broker_ip_to_restart = self.zk.get_broker_address(broker_id_to_restart)
         self.cluster_config = cluster_config
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.current_state = StopKafka(self)
@@ -199,8 +199,14 @@ class WaitVolumeAttached(State):
 class WaitKafkaRunning(State):
     def run(self):
         def func():
-            resp = requests.get(ApiConfig.get_url(self.state_context.broker_ip_to_restart, 'state')).json()
-            return resp.get('state') == 'running'
+            try:
+                new_broker_ip = self.state_context.zk.get_broker_address(self.state_context.broker_id_to_restart)
+                if new_broker_ip is None:
+                    return False
+                resp = requests.get(ApiConfig.get_url(new_broker_ip, 'state')).json()
+                return resp.get('state') == 'running'
+            except:
+                return False
 
         return self.run_with_timeout(func)
 
