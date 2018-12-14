@@ -70,6 +70,7 @@ class StateContext:
     def __init__(self, zk: BukuExhibitor, cluster_config, broker_id_to_restart):
         self.zk = zk
         self.broker_id_to_restart = broker_id_to_restart
+        self.broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
         self.cluster_config = cluster_config
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.current_state = StopKafka(self)
@@ -117,16 +118,15 @@ class State:
         """
         pass
 
-    def run_with_timeout(self, func, timeout_s=10):
+    def run_with_timeout(self, func):
         """
         Runs func() with timeout
         :param func function to execute
         :param timeout_s timeout before executing state next time
         """
         if time() >= self.time_to_check_s:
-            result = func()
-            self.time_to_check_s = time() + timeout_s
-            return result
+            self.time_to_check_s = time() + 10
+            return func()
         return False
 
 
@@ -156,7 +156,7 @@ class DetachVolume(State):
         self.state_context.instance = node.get_instance_by_ip(
             self.state_context.aws.ec2_resource,
             self.state_context.cluster_config,
-            self.state_context.zk.get_broker_address(self.state_context.broker_id_to_restart))
+            self.state_context.broker_ip_to_restart)
 
         vol = volume.detach_volume(self.state_context.aws, self.state_context.instance)
         self.state_context.cluster_config.set_availability_zone(vol.availability_zone)
