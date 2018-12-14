@@ -6,7 +6,6 @@ from bubuku.aws.cluster_config import ClusterConfig
 from bubuku.aws.ec2_node import EC2
 from bubuku.broker import BrokerManager
 from bubuku.controller import Change
-from bubuku.features.remote_exec import RemoteCommandExecutorCheck
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rolling_restart')
@@ -133,6 +132,7 @@ class State:
 
 class StopKafka(State):
     def run(self):
+        from bubuku.features.remote_exec import RemoteCommandExecutorCheck
         RemoteCommandExecutorCheck.register_stop(self.state_context.zk, self.state_context.broker_id_to_restart)
         return True
 
@@ -153,9 +153,10 @@ class WaitBrokerStopped(State):
 
 class DetachVolume(State):
     def run(self):
-        self.state_context.instance = node.get_instance_by_ip(self.state_context.aws.ec2_resource,
-                                                              self.state_context.cluster_config,
-                                                              self.state_context.broker_ip_to_restart)
+        self.state_context.instance = node.get_instance_by_ip(
+            self.state_context.aws.ec2_resource,
+            self.state_context.cluster_config,
+            self.state_context.zk.get_broker_address(self.state_context.broker_id_to_restart))
 
         vol = volume.detach_volume(self.state_context.aws, self.state_context.instance)
         self.state_context.cluster_config.set_availability_zone(vol.availability_zone)
@@ -213,6 +214,7 @@ class WaitVolumeAttached(State):
 class StartKafka(State):
     def run(self):
         def func():
+            from bubuku.features.remote_exec import RemoteCommandExecutorCheck
             RemoteCommandExecutorCheck.register_start(self.state_context.zk, self.state_context.broker_id_to_restart)
             return True
 
