@@ -471,8 +471,8 @@ def load_exhibitor_proxy(address_provider: AddressListProvider, prefix: str) -> 
 
 class RebalanceThrottleManager(object):
 
-    _BROKER_FOLLOWER_THROTTLE_RATE = "follower.replication.throttle.rate"
-    _BROKER_LEADER_THROTTLE_RATE = "leader.replication.throttle.rate"
+    _BROKER_FOLLOWER_THROTTLE_RATE = "follower.replication.throttled.rate"
+    _BROKER_LEADER_THROTTLE_RATE = "leader.replication.throttled.rate"
     _TOPIC_LEADER_THROTTLE_REPLICAS = "leader.replication.throttled.replicas"
     _TOPIC_FOLLOWER_THROTTLE_REPLICAS = "follower.replication.throttled.replicas"
 
