@@ -73,7 +73,8 @@ class StateContext:
         self.zk = zk
         self.broker_id = broker_id
         self.restart_assignment = restart_assignment
-        self.broker_ip_to_restart = self.zk.get_broker_address(self.restart_assignment.pop(broker_id))
+        self.broker_id_to_restart = self.restart_assignment.pop(broker_id)
+        self.broker_ip_to_restart = self.zk.get_broker_address()
         self.cluster_config = cluster_config
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.current_state = StopKafka(self)
@@ -240,17 +241,18 @@ class WaitKafkaRunning(State):
 
 class RegisterRollingRestart(State):
     def run(self):
-        if len(self.restart_assignment) == 0:
+        if len(self.state_context.restart_assignment) == 0:
             _LOG.info('Rolling restart is successfully finished')
         else:
             action = {'name': 'rolling_restart',
-                      'restart_assignment': self.restart_assignment,
+                      'restart_assignment': self.state_context.restart_assignment,
                       'image': self.state_context.cluster_config.get_application_version(),
                       'instance_type': self.state_context.cluster_config.get_instance_type(),
                       'scalyr_key': self.state_context.cluster_config.get_scalyr_region(),
                       'scalyr_region': self.state_context.cluster_config.get_scalyr_account_key(),
                       'kms_key_id': self.state_context.cluster_config.get_kms_key_id()}
-            self.zk.register_action(action, broker_id=self.state_context.broker_id)
+            next_broker_id = list(self.state_context.restart_assignment.keys())[0]
+            self.zk.register_action(action, broker_id=next_broker_id)
         return True
 
     def next(self):
