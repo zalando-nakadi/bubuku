@@ -1,4 +1,3 @@
-import json
 import logging
 
 from bubuku.aws.cluster_config import ClusterConfig, AwsInstanceUserDataLoader
@@ -55,7 +54,8 @@ class RemoteCommandExecutorCheck(Check):
                                             lambda x: load_swap_data(x, self.api_port, int(data['threshold_kb'])))
             elif data['name'] == 'rolling_restart':
                 return RollingRestartChange(self.zk, ClusterConfig(AwsInstanceUserDataLoader()),
-                                            data['broker_id_to_restart'],
+                                            data['restart_assignment'],
+                                            self.broker_manager.id_manager.broker_id,
                                             data['image'],
                                             data['instance_type'],
                                             data['scalyr_key'],
@@ -143,26 +143,25 @@ class RemoteCommandExecutorCheck(Check):
             _LOG.warning('Rolling restart in progress, skipping')
             return
 
-        def _get_restart_assignment():
-            restart_assignment = {}
-            brokers = zk.get_broker_ids()
-            brokers.remove(broker_id)
-            restart_assignment[broker_id] = brokers[0]
-            for b in brokers:
-                restart_assignment[b] = broker_id
-            return restart_assignment
+        restart_assignment = {}
+        brokers = zk.get_broker_ids()
+        for idx in range(len(brokers)):
+            broker_to_make_restart = brokers[idx]
+            if idx == len(brokers) - 1:
+                broker_to_restart = brokers[0]
+            else:
+                broker_to_restart = brokers[idx + 1]
+            restart_assignment[broker_to_make_restart] = broker_to_restart
 
-        restart_assignment = _get_restart_assignment()
-        _LOG.info('Rolling restart assignment\n {}'.format(json.dumps(restart_assignment, indent=2)))
-        for broker_id_to_restart, broker_id_making_restart in restart_assignment.items():
-            action = {'name': 'rolling_restart',
-                      'broker_id_to_restart': broker_id_to_restart,
-                      'image': image,
-                      'instance_type': instance_type,
-                      'scalyr_key': scalyr_key,
-                      'scalyr_region': scalyr_region,
-                      'kms_key_id': kms_key_id}
-            zk.register_action(action, broker_id=broker_id_making_restart)
+        _LOG.info('Rolling restart assignment\n {}'.format(restart_assignment))
+        action = {'name': 'rolling_restart',
+                  'restart_assignment': restart_assignment,
+                  'image': image,
+                  'instance_type': instance_type,
+                  'scalyr_key': scalyr_key,
+                  'scalyr_region': scalyr_region,
+                  'kms_key_id': kms_key_id}
+        zk.register_action(action, broker_id=broker_id)
 
     @staticmethod
     def register_stop(zk: BukuExhibitor, broker_id: str):

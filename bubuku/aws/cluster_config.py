@@ -36,9 +36,15 @@ class ClusterConfig():
         if scalyr_account_key:
             self._user_data['scalyr_account_key'] = scalyr_account_key
 
+    def get_scalyr_account_key(self):
+        return self._user_data['scalyr_account_key']
+
     def set_scalyr_region(self, scalyr_region):
         if scalyr_region:
             self._user_data['scalyr_region'] = scalyr_region
+
+    def get_scalyr_region(self):
+        return self._user_data['scalyr_region']
 
     def set_application_version(self, image):
         if image:

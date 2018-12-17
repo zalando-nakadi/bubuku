@@ -13,20 +13,22 @@ _LOG = logging.getLogger('bubuku.features.rolling_restart')
 
 class RollingRestartChange(Change):
     def __init__(self, zk: BukuExhibitor, cluster_config: ClusterConfig,
-                 broker_id_to_restart: str,
+                 restart_assignment,
+                 broker_id: str,
                  image: str,
                  instance_type: str,
                  scalyr_key: str,
                  scalyr_region: str,
                  kms_key_id: str):
         self.zk = zk
+        self.restart_assignment = restart_assignment
         self.cluster_config = cluster_config
         self.cluster_config.set_application_version(image)
         self.cluster_config.set_instance_type(instance_type)
         self.cluster_config.set_scalyr_account_key(scalyr_key)
         self.cluster_config.set_scalyr_region(scalyr_region)
         self.cluster_config.set_kms_key_id(kms_key_id)
-        self.state_context = StateContext(self.zk, self.cluster_config, broker_id_to_restart)
+        self.state_context = StateContext(self.zk, self.cluster_config, broker_id, restart_assignment)
 
     def get_name(self) -> str:
         return 'rolling_restart'
@@ -67,10 +69,11 @@ class StartBrokerChange(Change):
 
 
 class StateContext:
-    def __init__(self, zk: BukuExhibitor, cluster_config, broker_id_to_restart):
+    def __init__(self, zk: BukuExhibitor, cluster_config, broker_id, restart_assignment):
         self.zk = zk
-        self.broker_id_to_restart = broker_id_to_restart
-        self.broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
+        self.broker_id = broker_id
+        self.restart_assignment = restart_assignment
+        self.broker_ip_to_restart = self.zk.get_broker_address(self.restart_assignment.pop(broker_id))
         self.cluster_config = cluster_config
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.current_state = StopKafka(self)
@@ -230,6 +233,25 @@ class WaitKafkaRunning(State):
             return self.state_context.zk.is_broker_registered(self.state_context.broker_id_to_restart)
 
         return self.run_with_timeout(func)
+
+    def next(self):
+        return RegisterRollingRestart(self.state_context)
+
+
+class RegisterRollingRestart(State):
+    def run(self):
+        if len(self.restart_assignment) == 0:
+            _LOG.info('Rolling restart is successfully finished')
+        else:
+            action = {'name': 'rolling_restart',
+                      'restart_assignment': self.restart_assignment,
+                      'image': self.state_context.cluster_config.get_application_version(),
+                      'instance_type': self.state_context.cluster_config.get_instance_type(),
+                      'scalyr_key': self.state_context.cluster_config.get_scalyr_region(),
+                      'scalyr_region': self.state_context.cluster_config.get_scalyr_account_key(),
+                      'kms_key_id': self.state_context.cluster_config.get_kms_key_id()}
+            self.zk.register_action(action, broker_id=self.state_context.broker_id)
+        return True
 
     def next(self):
         return None
