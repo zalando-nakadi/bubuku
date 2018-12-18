@@ -22,7 +22,7 @@ class Ec2Node(object):
         self.volume = self.aws.ec2_resource.Volume(data_volume_id)
 
     def get_node_availability_zone(self):
-        return self.instance.availability_zone
+        return self.volume.availability_zone
 
     def is_volume_in_use(self):
         self.volume.load()
