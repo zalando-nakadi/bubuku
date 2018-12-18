@@ -9,16 +9,13 @@ _LOG = logging.getLogger('MetricCollector')
 class MetricCollector:
     _OFFLINE_PARTITIONS_MBEAN = {
         'name': 'OfflinePartitions',
-        'mbean': 'kafka.controller:type=KafkaController,name=OfflinePartitionsCount'
-    }
+        'mbean': 'kafka.controller:type=KafkaController,name=OfflinePartitionsCount'}
     _UNDER_REPLICATED_PARTITIONS_MBEAN = {
         'name': 'UnderReplicatedPartitions',
-        'mbean': 'kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions'
-    }
+        'mbean': 'kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions'}
     _PREFERRED_REPLICA_IMBALANCE_MBEAN = {
         'name': 'PreferredReplicaImbalance',
-        'mbean': 'kafka.controller:name=PreferredReplicaImbalanceCount,type=KafkaController'
-    }
+        'mbean': 'kafka.controller:name=PreferredReplicaImbalanceCount,type=KafkaController'}
     _JOLOKIA_PORT = 8778
 
     def __init__(self, zk: BukuExhibitor):
@@ -68,7 +65,6 @@ class MetricCollector:
             _LOG.error('Could not fetch metrics from brokers', exc_info=e)
         finally:
             loop.close()
-
 
     @classmethod
     def get_metric_mbeans(cls):
