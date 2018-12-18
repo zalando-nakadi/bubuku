@@ -74,7 +74,7 @@ class StateContext:
         self.broker_id = broker_id
         self.restart_assignment = restart_assignment
         self.broker_id_to_restart = self.restart_assignment.pop(broker_id)
-        self.broker_ip_to_restart = self.zk.get_broker_address()
+        self.broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
         self.cluster_config = cluster_config
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.current_state = StopKafka(self)
@@ -252,7 +252,7 @@ class RegisterRollingRestart(State):
                       'scalyr_region': self.state_context.cluster_config.get_scalyr_account_key(),
                       'kms_key_id': self.state_context.cluster_config.get_kms_key_id()}
             next_broker_id = list(self.state_context.restart_assignment.keys())[0]
-            self.zk.register_action(action, broker_id=next_broker_id)
+            self.state_context.zk.register_action(action, broker_id=next_broker_id)
         return True
 
     def next(self):
