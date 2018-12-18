@@ -1,9 +1,10 @@
 import logging
 from time import time
 
-from bubuku.aws import AWSResources, node, volume
+from bubuku.aws import AWSResources
 from bubuku.aws.cluster_config import ClusterConfig
-from bubuku.aws.ec2_node import EC2
+from bubuku.aws.ec2_node_launcher import Ec2NodeLauncher
+from bubuku.aws.node import Ec2Node
 from bubuku.broker import BrokerManager
 from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
@@ -22,13 +23,24 @@ class RollingRestartChange(Change):
                  kms_key_id: str):
         self.zk = zk
         self.restart_assignment = restart_assignment
+        self.broker_id = broker_id
+        self.broker_id_to_restart = self.restart_assignment.pop(broker_id)
+        self.broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
+
         self.cluster_config = cluster_config
         self.cluster_config.set_application_version(image)
         self.cluster_config.set_instance_type(instance_type)
         self.cluster_config.set_scalyr_account_key(scalyr_key)
         self.cluster_config.set_scalyr_region(scalyr_region)
         self.cluster_config.set_kms_key_id(kms_key_id)
-        self.state_context = StateContext(self.zk, self.cluster_config, broker_id, restart_assignment)
+
+        self.aws = AWSResources(region=self.cluster_config.get_aws_region())
+        self.ec_node = Ec2Node(self.aws, self.cluster_config, self.broker_ip_to_restart)
+
+        self.cluster_config.set_availability_zone(self.ec_node.get_node_availability_zone())
+
+        self.state_context = StateContext(self.zk, self.aws, self.ec_node, self.broker_id_to_restart,
+                                          restart_assignment)
 
     def get_name(self) -> str:
         return 'rolling_restart'
@@ -69,17 +81,14 @@ class StartBrokerChange(Change):
 
 
 class StateContext:
-    def __init__(self, zk: BukuExhibitor, cluster_config, broker_id, restart_assignment):
+    def __init__(self, zk: BukuExhibitor, aws: AWSResources, ec_node: Ec2Node, broker_id_to_restart,
+                 restart_assignment):
         self.zk = zk
-        self.broker_id = broker_id
         self.restart_assignment = restart_assignment
-        self.broker_id_to_restart = self.restart_assignment.pop(broker_id)
-        self.broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
-        self.cluster_config = cluster_config
-        self.aws = AWSResources(region=self.cluster_config.get_aws_region())
+        self.aws = aws
+        self.ec_node = ec_node
+        self.broker_id_to_restart = broker_id_to_restart
         self.current_state = StopKafka(self)
-        self.instance = None
-        self.volume = None
 
     def run(self):
         """
@@ -157,14 +166,7 @@ class WaitBrokerStopped(State):
 
 class DetachVolume(State):
     def run(self):
-        self.state_context.instance = node.get_instance_by_ip(
-            self.state_context.aws.ec2_resource,
-            self.state_context.cluster_config,
-            self.state_context.broker_ip_to_restart)
-
-        vol = volume.detach_volume(self.state_context.aws, self.state_context.instance)
-        self.state_context.cluster_config.set_availability_zone(vol.availability_zone)
-        self.state_context.volume = vol
+        self.state_context.ec_node.detach_volume()
         return True
 
     def next(self):
@@ -173,11 +175,8 @@ class DetachVolume(State):
 
 class TerminateInstance(State):
     def run(self):
-        def func():
-            node.terminate(self.state_context.aws, self.state_context.cluster_config, self.state_context.instance)
-            return True
-
-        return self.run_with_timeout(func)
+        self.state_context.ec_node.terminate()
+        return True
 
     def next(self):
         return WaitVolumeAvailable(self.state_context)
@@ -186,7 +185,7 @@ class TerminateInstance(State):
 class WaitVolumeAvailable(State):
     def run(self):
         def func():
-            return volume.is_volume_available(self.state_context.volume)
+            return self.state_context.ec_node.is_volume_available()
 
         return self.run_with_timeout(func)
 
@@ -196,8 +195,8 @@ class WaitVolumeAvailable(State):
 
 class LaunchInstance(State):
     def run(self):
-        ec2 = EC2(self.state_context.aws)
-        ec2.create(self.state_context.cluster_config, 1)
+        ec2_node_launcher = Ec2NodeLauncher(self.state_context.aws)
+        ec2_node_launcher.launch()
         return True
 
     def next(self):
@@ -207,7 +206,7 @@ class LaunchInstance(State):
 class WaitVolumeAttached(State):
     def run(self):
         def func():
-            return volume.clear_volume_tag_if_in_use(self.state_context.volume)
+            return self.state_context.ec_node.is_volume_in_use()
 
         return self.run_with_timeout(func)
 
@@ -217,12 +216,9 @@ class WaitVolumeAttached(State):
 
 class StartKafka(State):
     def run(self):
-        def func():
-            from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-            RemoteCommandExecutorCheck.register_start(self.state_context.zk, self.state_context.broker_id_to_restart)
-            return True
-
-        return self.run_with_timeout(func)
+        from bubuku.features.remote_exec import RemoteCommandExecutorCheck
+        RemoteCommandExecutorCheck.register_start(self.state_context.zk, self.state_context.broker_id_to_restart)
+        return True
 
     def next(self):
         return WaitKafkaRunning(self.state_context)

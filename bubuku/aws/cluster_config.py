@@ -72,12 +72,6 @@ class ClusterConfig():
         if availability_zone:
             self._user_data['availability_zone'] = availability_zone
 
-    def should_create_ebs(self):
-        return self._user_data.get('should_create_ebs')
-
-    def set_should_create_ebs(self, v):
-        self._user_data['should_create_ebs'] = v
-
     def get_volume_size(self):
         return self._user_data.get('volume_size')
 
