@@ -26,17 +26,20 @@ class MetricCollector:
         data = {'broker_address': broker_address, 'broker_id': broker_id, 'metrics': {}}
         for metric in self.get_metric_mbeans():
             metric_fetched = False
-            response = requests.get("http://{}:{}/jolokia/read/{}".format(
-                broker_address, self._JOLOKIA_PORT, metric['mbean']))
-            if response.status_code == 200:
-                response_body = response.json()
-                if response_body.get('status') == 200:
-                    if response_body.get('value', {}).get('Value') is not None:
-                        data['metrics'][metric['name']] = response_body['value']['Value']
-                        metric_fetched = True
-            if not metric_fetched:
-                _LOG.error("Fetching metric {} for broker: {} failed. Response from broker: {}:{}:{}".format(
-                    metric['name'], broker_id, response.status_code, response.reason, response.content))
+            try:
+                response = requests.get("http://{}:{}/jolokia/read/{}".format(
+                    broker_address, self._JOLOKIA_PORT, metric['mbean']))
+                if response.status_code == 200:
+                    response_body = response.json()
+                    if response_body.get('status') == 200:
+                        if response_body.get('value', {}).get('Value') is not None:
+                            data['metrics'][metric['name']] = response_body['value']['Value']
+                            metric_fetched = True
+                if not metric_fetched:
+                    _LOG.error("Fetching metric {} for broker: {} failed. Response from broker: {}:{}".format(
+                        metric['name'], broker_id, response.status_code, response.text))
+            except Exception as e:
+                _LOG.error("Fetching metric {} for broker {} failed".format(metric['name'], broker_id), exc_info=e)
         return data
 
     async def _get_metrics_from_brokers(self, broker_ids):
