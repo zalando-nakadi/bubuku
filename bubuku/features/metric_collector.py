@@ -23,14 +23,23 @@ class MetricCollector:
 
     async def _get_metrics_from_broker(self, broker_id: int):
         broker_address = self.zk.get_broker_address(broker_id)
-        data = {'broker_address': broker_address, 'broker_id': broker_id}
+        data = {'broker_address': broker_address, 'broker_id': broker_id, 'metrics': {}}
         for metric in self.get_metric_mbeans():
-            request = requests.get("http://{}:{}/jolokia/read/{}".format(
-                broker_address, self._JOLOKIA_PORT, metric['mbean']))
-            if request.status_code == 200:
-                response = request.json()
-                if response.get('status') == 200:
-                    data[metric['name']] = response.get('value', {}).get('Value')
+            metric_fetched = False
+            try:
+                response = requests.get("http://{}:{}/jolokia/read/{}".format(
+                    broker_address, self._JOLOKIA_PORT, metric['mbean']))
+                if response.status_code == 200:
+                    response_body = response.json()
+                    if response_body.get('status') == 200:
+                        if response_body.get('value', {}).get('Value') is not None:
+                            data['metrics'][metric['name']] = response_body['value']['Value']
+                            metric_fetched = True
+                if not metric_fetched:
+                    _LOG.error("Fetching metric {} for broker: {} failed. Response from broker: {}:{}".format(
+                        metric['name'], broker_id, response.status_code, response.text))
+            except Exception as e:
+                _LOG.error("Fetching metric {} for broker {} failed".format(metric['name'], broker_id), exc_info=e)
         return data
 
     async def _get_metrics_from_brokers(self, broker_ids):
@@ -41,12 +50,21 @@ class MetricCollector:
         return metrics
 
     def get_metrics_from_brokers(self, broker_ids=None):
+        """
+        Get metrics for brokers in the cluster
+        :param broker_ids: List of broker_ids to fetch metrics for
+        :return: List of dictionaries containing metrics for each broker
+        {
+            "metrics": {...},
+            "broker_id": int,
+            "broker_address": str
+        }
+        """
         broker_ids = self.zk.get_broker_ids() if not broker_ids else broker_ids
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            metrics = loop.run_until_complete(self._get_metrics_from_brokers(broker_ids))
-            return metrics
+            return loop.run_until_complete(self._get_metrics_from_brokers(broker_ids))
         except Exception as e:
             _LOG.error('Could not fetch metrics from brokers', exc_info=e)
         finally:
