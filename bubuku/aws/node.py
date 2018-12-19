@@ -24,6 +24,12 @@ class Ec2Node(object):
     def get_node_availability_zone(self):
         return self.volume.availability_zone
 
+    def get_volume_id(self):
+        return self.volume.id
+
+    def get_ip(self):
+        return self.ip
+
     def is_volume_in_use(self):
         self.volume.load()
         if self.volume.state == 'in-use':
@@ -43,9 +49,10 @@ class Ec2Node(object):
         self.aws.ec2_client.detach_volume(VolumeId=self.volume.id, Force=False)
 
     def terminate(self):
-        _LOG.info('Terminating %s in %s', self.instance, self.cluster_config.get_cluster_name())
-        alarm_name = '{}-{}-auto-recover'.format(self.cluster_name, self.instance.instance_id)
-        _LOG.info('Deleting alarm %s in %s for %s', alarm_name, self.cluster_name, self.instance)
+        cluster_name = self.cluster_config.get_cluster_name()
+        _LOG.info('Terminating %s in %s', self.instance, cluster_name)
+        alarm_name = '{}-{}-auto-recover'.format(cluster_name, self.instance.instance_id)
+        _LOG.info('Deleting alarm %s in %s for %s', alarm_name, cluster_name, self.instance.instance_id)
         self.aws.cloudwatch_client.delete_alarms(AlarmNames=[alarm_name])
         self.instance.terminate()
 

@@ -16,8 +16,8 @@ class Ec2NodeLauncher(object):
         self.aws = aws
         self.cluster_config = cluster_config
 
-    def _launch_instance(self, ip: str, subnet_: dict, ami: object, security_group_id: str, iam_profile):
-        _LOG.info('Launching node {} in {}', ip, subnet_['AvailabilityZone'])
+    def _launch_instance(self, ip: str, subnet: dict, ami: object, security_group_id: str, iam_profile):
+        _LOG.info('Launching node %s in %s', ip, subnet['AvailabilityZone'])
 
         #
         # Override any ephemeral volumes with NoDevice mapping,
@@ -61,7 +61,7 @@ class Ec2NodeLauncher(object):
             SecurityGroupIds=[security_group_id],
             UserData=taupage_user_data,
             InstanceType=self.cluster_config.get_instance_type(),
-            SubnetId=subnet_['SubnetId'],
+            SubnetId=subnet['SubnetId'],
             PrivateIpAddress=ip,
             BlockDeviceMappings=block_devices,
             IamInstanceProfile={'Arn': iam_profile['Arn']},
@@ -69,7 +69,7 @@ class Ec2NodeLauncher(object):
             EbsOptimized=True)
 
         instance_id = resp['Instances'][0]['InstanceId']
-        _LOG.info('Instance {} launched, waiting for it to initialize', instance_id)
+        _LOG.info('Instance %s launched, waiting for it to initialize', instance_id)
         self.aws.ec2_client.create_tags(
             Resources=[instance_id],
             Tags=[
@@ -81,7 +81,7 @@ class Ec2NodeLauncher(object):
         return instance_id
 
     def _create_auto_recovery_alarm(self, cluster_name: str, instance_id):
-        _LOG.info('Creating AWS auto recovery alarm for {}', instance_id)
+        _LOG.info('Creating AWS auto recovery alarm for %s', instance_id)
         alarm_actions = ['arn:aws:automate:{}:ec2:recover'.format(self.aws.region)]
         alarm_name = '{}-{}-auto-recover'.format(cluster_name, instance_id)
 
@@ -99,12 +99,12 @@ class Ec2NodeLauncher(object):
             EvaluationPeriods=2,
             Threshold=0,
             ComparisonOperator='GreaterThanThreshold')
-        _LOG.info('Created alarm {}', alarm_name)
+        _LOG.info('Created alarm %s', alarm_name)
 
     def launch(self):
         _LOG.info('Preparing AWS configuration for ec2 instance creation')
         ip_address_allocator = IpAddressAllocator(self.aws, self.cluster_config)
-        ip, subnet = ip_address_allocator.allocate_ip_addresses(1)[0]
+        subnet, ip = ip_address_allocator.allocate_ip_addresses(1)[0]
         self._launch_instance(
             ip,
             subnet,
@@ -115,7 +115,7 @@ class Ec2NodeLauncher(object):
     def _get_instance_profile(self):
         profile_name = 'profile-{}'.format(self.cluster_config.get_cluster_name())
         profile = self.aws.iam_client.get_instance_profile(InstanceProfileName=profile_name)
-        _LOG.info("IAM profile {} exists, using it", profile_name)
+        _LOG.info("IAM profile %s exists, using it", profile_name)
         return profile['InstanceProfile']
 
     def _get_security_group_id(self) -> dict:
@@ -124,7 +124,7 @@ class Ec2NodeLauncher(object):
             Filters=[{'Name': 'group-name', 'Values': [self.cluster_config.get_cluster_name()]}])
         if security_groups['SecurityGroups']:
             sg = security_groups['SecurityGroups'][0]
-            _LOG.info('Security group for {} exists, will use it {}',
+            _LOG.info('Security group for %s exists, will use it %s',
                       self.cluster_config.get_cluster_name(), sg['GroupId'])
             return sg['GroupId']
         raise Exception('Security group does not exist for {}'.format(self.cluster_config.get_cluster_name()))
@@ -139,7 +139,7 @@ class Ec2NodeLauncher(object):
 
     def _find_taupage_amis(self) -> dict:
         region = self.cluster_config.get_aws_region()
-        _LOG.info('Finding latest Taupage AMI in {}..', region)
+        _LOG.info('Finding latest Taupage AMI in %s..', region)
 
         filters = [{'Name': 'name', 'Values': ['*Taupage-AMI-*']},
                    {'Name': 'is-public', 'Values': ['false']},
@@ -150,6 +150,6 @@ class Ec2NodeLauncher(object):
             raise Exception('No Taupage AMI found')
         most_recent_image = sorted(images, key=lambda i: i.name)[-1]
 
-        _LOG.info('The latest AMI is {}', most_recent_image)
+        _LOG.info('The latest AMI is %s', most_recent_image)
 
         return most_recent_image

@@ -36,11 +36,11 @@ class RollingRestartChange(Change):
 
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.ec_node = Ec2Node(self.aws, self.cluster_config, self.broker_ip_to_restart)
-
+        self.ec2_node_launcher = Ec2NodeLauncher(self.aws, self.cluster_config)
         self.cluster_config.set_availability_zone(self.ec_node.get_node_availability_zone())
 
-        self.state_context = StateContext(self.zk, self.aws, self.ec_node, self.broker_id_to_restart,
-                                          restart_assignment)
+        self.state_context = StateContext(self.zk, self.aws, self.ec_node, self.ec2_node_launcher,
+                                          self.broker_id_to_restart, self.restart_assignment, self.cluster_config)
 
     def get_name(self) -> str:
         return 'rolling_restart'
@@ -81,12 +81,14 @@ class StartBrokerChange(Change):
 
 
 class StateContext:
-    def __init__(self, zk: BukuExhibitor, aws: AWSResources, ec_node: Ec2Node, broker_id_to_restart,
-                 restart_assignment):
+    def __init__(self, zk: BukuExhibitor, aws: AWSResources, ec_node: Ec2Node, ec2_node_launcher: Ec2NodeLauncher,
+                 broker_id_to_restart, restart_assignment, cluster_config: ClusterConfig):
         self.zk = zk
         self.restart_assignment = restart_assignment
+        self.cluster_config = cluster_config
         self.aws = aws
         self.ec_node = ec_node
+        self.ec2_node_launcher = ec2_node_launcher
         self.broker_id_to_restart = broker_id_to_restart
         self.current_state = StopKafka(self)
 
@@ -152,6 +154,9 @@ class StopKafka(State):
     def next(self):
         return WaitBrokerStopped(self.state_context)
 
+    def __str__(self):
+        return 'StopKafka: stopping broker {}'.format(self.state_context.broker_id_to_restart)
+
 
 class WaitBrokerStopped(State):
     def run(self):
@@ -163,6 +168,9 @@ class WaitBrokerStopped(State):
     def next(self):
         return DetachVolume(self.state_context)
 
+    def __str__(self):
+        return 'WaitBrokerStopped: waiting for broker {} to stop'.format(self.state_context.broker_id_to_restart)
+
 
 class DetachVolume(State):
     def run(self):
@@ -172,6 +180,10 @@ class DetachVolume(State):
     def next(self):
         return TerminateInstance(self.state_context)
 
+    def __str__(self):
+        return 'DetachVolume: detaching volume {} from broker {}'.format(self.state_context.ec_node.get_volume_id(),
+                                                                         self.state_context.broker_id_to_restart)
+
 
 class TerminateInstance(State):
     def run(self):
@@ -180,6 +192,9 @@ class TerminateInstance(State):
 
     def next(self):
         return WaitVolumeAvailable(self.state_context)
+
+    def __str__(self):
+        return 'WaitBrokerStopped: waiting for broker {} to stop'.format(self.state_context.broker_id_to_restart)
 
 
 class WaitVolumeAvailable(State):
@@ -192,11 +207,14 @@ class WaitVolumeAvailable(State):
     def next(self):
         return LaunchInstance(self.state_context)
 
+    def __str__(self):
+        return 'WaitVolumeAvailable: waiting for volume {} to be available'.format(
+            self.state_context.ec_node.get_volume_id())
+
 
 class LaunchInstance(State):
     def run(self):
-        ec2_node_launcher = Ec2NodeLauncher(self.state_context.aws)
-        ec2_node_launcher.launch()
+        self.state_context.ec2_node_launcher.launch()
         return True
 
     def next(self):
@@ -213,6 +231,10 @@ class WaitVolumeAttached(State):
     def next(self):
         return StartKafka(self.state_context)
 
+    def __str__(self):
+        return 'WaitVolumeAttached: waiting for volume {} to be attached'.format(
+            self.state_context.ec_node.get_volume_id())
+
 
 class StartKafka(State):
     def run(self):
@@ -222,6 +244,9 @@ class StartKafka(State):
 
     def next(self):
         return WaitKafkaRunning(self.state_context)
+
+    def __str__(self):
+        return 'StartKafka: starting broker {}'.format(self.state_context.broker_id_to_restart)
 
 
 class WaitKafkaRunning(State):
@@ -233,6 +258,9 @@ class WaitKafkaRunning(State):
 
     def next(self):
         return RegisterRollingRestart(self.state_context)
+
+    def __str__(self):
+        return 'WaitKafkaRunning: waiting broker {} is running'.format(self.state_context.broker_id_to_restart)
 
 
 class RegisterRollingRestart(State):

@@ -58,7 +58,7 @@ class IpAddressAllocator(object):
         # which iterate through subnets to put the instances into
         # different Availability Zones.
         #
-        subnets = self._get_subnets('internal-', self.cluster_config)
+        subnets = self._get_subnets('internal-')
         network_ips = [netaddr.IPNetwork(s['CidrBlock']).iter_hosts() for s in subnets]
 
         for idx, ips in enumerate(network_ips):
@@ -71,7 +71,7 @@ class IpAddressAllocator(object):
                 try_next_address(ips, subnets[idx])
 
         i = 0
-        result_ips_subnets = []
+        result_subnets_ips = []
         while i < address_count:
             idx = i % len(subnets)
             subnet = subnets[idx]
@@ -83,8 +83,8 @@ class IpAddressAllocator(object):
             if not resp['Reservations']:
                 i += 1
                 _LOG.info('Got ip address %s ', ip)
-                result_ips_subnets.append((subnet, ip))
+                result_subnets_ips.append((subnet, ip))
 
         _LOG.info('IP Addresses are allocated')
 
-        return result_ips_subnets
+        return result_subnets_ips

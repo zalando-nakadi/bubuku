@@ -81,5 +81,9 @@ class ClusterConfig():
     def get_vpc_id(self):
         return self._user_data.get('vpc_id')
 
+    def set_vpc_id(self, vpc_id):
+        if vpc_id:
+            self._user_data['vpc_id'] = vpc_id
+
     def get_user_data(self):
         return dict(self._user_data)
