@@ -1,15 +1,12 @@
 import logging
 from time import time
 
-import requests
-
 from bubuku import utils
 from bubuku.aws import AWSResources
 from bubuku.aws.cluster_config import ClusterConfig
 from bubuku.aws.ec2_node_launcher import Ec2NodeLauncher
 from bubuku.aws.node import Ec2Node
 from bubuku.broker import BrokerManager
-from bubuku.config import load_config
 from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
@@ -55,6 +52,7 @@ class RollingRestartChange(Change):
     def run(self, current_actions) -> bool:
         return self.state_context.run()
 
+
 class StartBrokerChange(Change):
     def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
         self.zk = zk
@@ -87,6 +85,7 @@ class StateContext:
         self.ec2_node_launcher = ec2_node_launcher
         self.broker_id_to_restart = broker_id_to_restart
         self.current_state = StopKafka(self)
+        self.new_instance_id = None
 
     def run(self):
         """
@@ -213,7 +212,7 @@ class WaitVolumeAvailable(State):
 
 class LaunchInstance(State):
     def run(self):
-        self.state_context.ec2_node_launcher.launch()
+        self.state_context.new_instance_id = self.state_context.ec2_node_launcher.launch()
         return True
 
     def next(self):
@@ -223,7 +222,10 @@ class LaunchInstance(State):
 class WaitVolumeAttached(State):
     def run(self):
         def func():
-            return self.state_context.ec_node.is_volume_in_use()
+            if self.state_context.ec_node.is_volume_in_use():
+                self.state_context.ec2_node_launcher.create_auto_recovery_alarm(self.state_context.new_instance_id)
+                return True
+            return False
 
         return self.run_with_timeout(func)
 

@@ -80,10 +80,10 @@ class Ec2NodeLauncher(object):
 
         return instance_id
 
-    def _create_auto_recovery_alarm(self, cluster_name: str, instance_id):
+    def create_auto_recovery_alarm(self, instance_id):
         _LOG.info('Creating AWS auto recovery alarm for %s', instance_id)
         alarm_actions = ['arn:aws:automate:{}:ec2:recover'.format(self.aws.region)]
-        alarm_name = '{}-{}-auto-recover'.format(cluster_name, instance_id)
+        alarm_name = '{}-{}-auto-recover'.format(self.cluster_config.get_cluster_name(), instance_id)
 
         self.aws.cloudwatch_client.put_metric_alarm(
             AlarmName=alarm_name,
@@ -105,12 +105,11 @@ class Ec2NodeLauncher(object):
         _LOG.info('Preparing AWS configuration for ec2 instance creation')
         ip_address_allocator = IpAddressAllocator(self.aws, self.cluster_config)
         subnet, ip = ip_address_allocator.allocate_ip_addresses(1)[0]
-        self._launch_instance(
-            ip,
-            subnet,
-            self._find_taupage_amis(),
-            self._get_security_group_id(),
-            self._get_instance_profile())
+        return self._launch_instance(ip,
+                                     subnet,
+                                     self._find_taupage_amis(),
+                                     self._get_security_group_id(),
+                                     self._get_instance_profile())
 
     def _get_instance_profile(self):
         profile_name = 'profile-{}'.format(self.cluster_config.get_cluster_name())
