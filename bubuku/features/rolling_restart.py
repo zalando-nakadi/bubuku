@@ -1,11 +1,15 @@
 import logging
 from time import time
 
+import requests
+
+from bubuku import utils
 from bubuku.aws import AWSResources
 from bubuku.aws.cluster_config import ClusterConfig
 from bubuku.aws.ec2_node_launcher import Ec2NodeLauncher
 from bubuku.aws.node import Ec2Node
 from bubuku.broker import BrokerManager
+from bubuku.config import load_config
 from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
@@ -49,15 +53,7 @@ class RollingRestartChange(Change):
         return all([a not in current_actions for a in ['stop', 'restart', 'rebalance']])
 
     def run(self, current_actions) -> bool:
-        if not self._is_cluster_in_good_state():
-            _LOG.error('Cluster is not stable skipping restart iteration')
-            return True
-
         return self.state_context.run()
-
-    def _is_cluster_in_good_state(self):
-        return True
-
 
 class StartBrokerChange(Change):
     def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
@@ -147,9 +143,12 @@ class State:
 
 class StopKafka(State):
     def run(self):
-        from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-        RemoteCommandExecutorCheck.register_stop(self.state_context.zk, self.state_context.broker_id_to_restart)
-        return True
+        if utils.is_cluster_healthy():
+            from bubuku.features.remote_exec import RemoteCommandExecutorCheck
+            RemoteCommandExecutorCheck.register_stop(self.state_context.zk, self.state_context.broker_id_to_restart)
+            return True
+        _LOG.warning('Cluster is not healthy, waiting for it to recover')
+        return False
 
     def next(self):
         return WaitBrokerStopped(self.state_context)

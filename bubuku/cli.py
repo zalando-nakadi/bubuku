@@ -5,7 +5,7 @@ import requests
 from requests import Response
 
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-from bubuku.utils import get_opt_broker_id, prepare_configs
+from bubuku.utils import get_opt_broker_id, prepare_configs, is_cluster_healthy
 from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.cli')
@@ -77,6 +77,10 @@ def restart_broker(broker: str):
 @click.option('--scalyr-region', type=click.STRING, help='Scalyr region to use')
 @click.option('--kms-key-id', type=click.STRING, help='Kms key id to decrypt data with')
 def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, scalyr_region: str, kms_key_id: str):
+    if not is_cluster_healthy():
+        print('Cluster is not healthy, try again later :)')
+        return
+
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         broker_id = get_opt_broker_id(None, config, zookeeper, env_provider)

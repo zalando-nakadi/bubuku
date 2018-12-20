@@ -1,6 +1,8 @@
 import logging
 import subprocess
 
+import requests
+
 from bubuku.config import Config, KafkaProperties, load_config
 from bubuku.env_provider import EnvProvider
 from bubuku.zookeeper import BukuExhibitor
@@ -46,3 +48,27 @@ def prepare_configs():
     _LOG.info('Using config: {}'.format(config))
     env_provider = EnvProvider.create_env_provider(config)
     return config, env_provider
+
+
+def is_cluster_healthy():
+    config = load_config()
+    try:
+        response = requests.get('http://{}:{}/api/metrics'.format('localhost', '8080'))
+        resp_json = response.json()
+        if not resp_json['metrics']:
+            return False
+        for metrics in resp_json['metrics']:
+            metric = metrics['metrics']
+            if metric:
+                if metric['PreferredReplicaImbalance'] > 0:
+                    return False
+                if metric['OfflinePartitions'] > 0:
+                    return False
+                if metric['UnderReplicatedPartitions'] > 0:
+                    return False
+            else:
+                return False
+        return True
+    except Exception as e:
+        _LOG.error('Failed to get cluster state', exc_info=e)
+        return False
