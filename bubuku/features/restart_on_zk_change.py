@@ -22,7 +22,7 @@ class RestartBrokerChange(Change):
         return 'restart'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'restart', 'stop']])
+        return all([a not in current_actions for a in ['start', 'restart', 'stop', 'rolling_restart']])
 
     def run(self, current_actions):
         if self.stage == _STAGE_STOP:
@@ -49,7 +49,7 @@ class RestartBrokerChange(Change):
             self.processed_callback()
 
     def __str__(self):
-        return 'RestartOnZkChange ({}), stage={}'.format(self.get_name(), self.stage)
+        return 'RestartBrokerChange ({}), stage={}'.format(self.get_name(), self.stage)
 
 
 class CheckExhibitorAddressChanged(Check):
