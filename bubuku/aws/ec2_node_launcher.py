@@ -17,8 +17,6 @@ class Ec2NodeLauncher(object):
         self.cluster_config = cluster_config
 
     def _launch_instance(self, ip: str, subnet: dict, ami: object, security_group_id: str, iam_profile):
-        _LOG.info('Launching node %s in %s', ip, subnet['AvailabilityZone'])
-
         #
         # Override any ephemeral volumes with NoDevice mapping,
         # otherwise auto-recovery alarm cannot be actually enabled.
@@ -54,6 +52,7 @@ class Ec2NodeLauncher(object):
         user_data['volumes']['ebs']['/dev/xvdk'] = KAFKA_LOGS_EBS
         taupage_user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(user_data))
 
+        _LOG.info('Launching node %s in %s', ip, subnet['AvailabilityZone'])
         resp = self.aws.ec2_client.run_instances(
             ImageId=ami.id,
             MinCount=1,

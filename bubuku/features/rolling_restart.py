@@ -11,6 +11,7 @@ from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rolling_restart')
+_TIMEOUT_PUSH_BACK = 20
 
 
 class RollingRestartChange(Change):
@@ -265,20 +266,34 @@ class WaitKafkaRunning(State):
 
 
 class RegisterRollingRestart(State):
+    def __init__(self):
+        self.cluster_is_healthy_from = 0
+
     def run(self):
         if len(self.state_context.restart_assignment) == 0:
             _LOG.info('Rolling restart is successfully finished')
+            return True
         else:
-            action = {'name': 'rolling_restart',
-                      'restart_assignment': self.state_context.restart_assignment,
-                      'image': self.state_context.cluster_config.get_application_version(),
-                      'instance_type': self.state_context.cluster_config.get_instance_type(),
-                      'scalyr_key': self.state_context.cluster_config.get_scalyr_region(),
-                      'scalyr_region': self.state_context.cluster_config.get_scalyr_account_key(),
-                      'kms_key_id': self.state_context.cluster_config.get_kms_key_id()}
-            next_broker_id = list(self.state_context.restart_assignment.keys())[0]
-            self.state_context.zk.register_action(action, broker_id=next_broker_id)
-        return True
+            if utils.is_cluster_healthy():
+                if self.cluster_is_healthy_from == 0:
+                    self.cluster_is_healthy_from = time()
+            else:
+                _LOG.warning('Cluster is not healthy, waiting for it to recover')
+                self.cluster_is_healthy_from = 0
+                return False
+
+            if time() - self.cluster_is_healthy_from >= _TIMEOUT_PUSH_BACK:
+                action = {'name': 'rolling_restart',
+                          'restart_assignment': self.state_context.restart_assignment,
+                          'image': self.state_context.cluster_config.get_application_version(),
+                          'instance_type': self.state_context.cluster_config.get_instance_type(),
+                          'scalyr_key': self.state_context.cluster_config.get_scalyr_region(),
+                          'scalyr_region': self.state_context.cluster_config.get_scalyr_account_key(),
+                          'kms_key_id': self.state_context.cluster_config.get_kms_key_id()}
+                next_broker_id = list(self.state_context.restart_assignment.keys())[0]
+                self.state_context.zk.register_action(action, broker_id=next_broker_id)
+                return True
+            return False
 
     def next(self):
         return None
