@@ -266,7 +266,8 @@ class WaitKafkaRunning(State):
 
 
 class RegisterRollingRestart(State):
-    def __init__(self):
+    def __init__(self, state_context):
+        super(RegisterRollingRestart, self).__init__(state_context)
         self.cluster_is_healthy_from = 0
 
     def run(self):
