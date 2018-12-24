@@ -129,9 +129,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.action_queue = []
         self.state = OptimizedRebalanceChange._LOAD_STATE
         self.parallelism = parallelism
-        self.throttle = throttle
-        self.ongoing = ongoing
-        self.throttle_manager = RebalanceThrottleManager(self.zk)
+        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle, ongoing)
 
     def __str__(self):
         return 'OptimizedRebalance state={}, queue_size={}, parallelism={}'.format(
@@ -143,11 +141,6 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             _LOG.warning("Rebalance paused, because other blocking events running: {}".format(current_actions))
             return True
         if self.zk.is_rebalancing():
-            if self.ongoing and self.throttle:
-                # Don't execute the current rebalance, but alter the throttle value
-                _LOG.info("Throttling ongoing rebalance with throttle value = {throttle}".format(throttle=self.throttle))
-                self.throttle_manager.throttle_ongoing_rebalance(self.throttle)
-                return False
             return True
 
         new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
@@ -178,8 +171,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if not items:
             return True
         data_to_rebalance = [(key[0], key[1], replicas) for key, replicas in items]
-        if self.throttle:
-            self.throttle_manager.apply_throttle(data_to_rebalance, self.throttle)
+        self.throttle_manager.apply_throttle(data_to_rebalance)
         if not self.zk.reallocate_partitions(data_to_rebalance):
             for key, replicas in items:
                 self.action_queue[key] = replicas
@@ -325,5 +317,4 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
                 active_brokers_in_rack[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
 
     def on_remove(self):
-        if self.throttle:
-            self.throttle_manager.remove_throttle_configurations()
+        self.throttle_manager.remove_throttle_configurations()

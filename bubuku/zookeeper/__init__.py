@@ -8,7 +8,6 @@ from typing import Dict, List, Iterable, Tuple
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
 from collections import defaultdict
-from enum import Enum
 
 _LOG = logging.getLogger('bubuku.exhibitor')
 
@@ -168,6 +167,11 @@ class _ZookeeperProxy(object):
                 _LOG.error('Failed to obtain lock for exhibitor, retrying', exc_info=e)
 
 
+class ConfigEntityType(object):
+    BROKER = "brokers"
+    TOPIC = "topics"
+
+
 class BukuExhibitor(object):
     def __init__(self, exhibitor: _ZookeeperProxy, async=True):
         self.exhibitor = exhibitor
@@ -186,9 +190,6 @@ class BukuExhibitor(object):
         _LOG.info('Exiting safe exhibitor space')
         self.exhibitor.terminate()
 
-    class ConfigEntityType(Enum):
-        BROKER = "brokers"
-        TOPIC = "topics"
 
     def is_broker_registered(self, broker_id):
         try:
@@ -298,7 +299,7 @@ class BukuExhibitor(object):
     def remove_configuration_properties(self, entity_type: str, properties: list, entities=None):
         """
         Remove properties from configuration of an entity
-        :param entity_type: Type of the entity_type (brokers/topics)
+        :param entity_type: Type of the entity_type (ConfigEntityType.BROKER, ConfigEntityType.TOPIC)
         :param properties: List of properties to remove from the configuration
         :param entities: List of entities to apply the configuration change to
         """
@@ -332,8 +333,7 @@ class BukuExhibitor(object):
         Applies dynamic config changes using zookeeper
         :param entity: id of the entity (broker id or topic name)
         :param changes: dictionary containing property and key values
-        :param entity_type: type of the entity to which the config change
-        need to be applied ('brokers' or 'topics')
+        :param entity_type: type of the entity to apply config changes (ConfigEntityType.BROKER/ConfigEntityType.TOPIC)
         """
 
         zk_config_path = "/config/{}/{}".format(entity_type, entity)
@@ -476,25 +476,34 @@ class RebalanceThrottleManager(object):
     _TOPIC_LEADER_THROTTLE_REPLICAS = "leader.replication.throttled.replicas"
     _TOPIC_FOLLOWER_THROTTLE_REPLICAS = "follower.replication.throttled.replicas"
 
-    def __init__(self, zk: BukuExhibitor):
+    def __init__(self, zk: BukuExhibitor, throttle: int, ongoing: bool):
         self.zk = zk
+        self.throttle = throttle
+        self.ongoing = ongoing
 
-    def apply_throttle(self, partitions_data, throttle):
+    def apply_throttle(self, partitions_data):
         """
         Applies throttle to the brokers and partitions based on reassignment-json-file data.
         :param partitions_data: List of (topic, partition, replicas)
-        :param throttle: throttle to be applied to the brokers and the topics
         """
-        self._apply_throttle_to_brokers(*self._add_throttle_replicas_per_topic(partitions_data), throttle)
+        if self.throttle:
+            leader_replicas, follower_replicas = self._add_throttle_replicas_per_topic(partitions_data)
+            self._apply_throttle_to_brokers(leader_replicas, follower_replicas)
 
     def _add_throttle_replicas_per_topic(self, partitions_data):
-
+        """
+        Set partitions to apply throttle to in topic configuration
+        :param partitions_data: List of (topic, partition, replicas)
+        :return: List of leader and follower replicas to which replication throttle is to be applied
+        """
         partition_isrs = self.zk.load_partition_isr(
             [(topic, partition) for (topic, partition, replicas) in partitions_data])
         topic_changes = defaultdict(lambda: defaultdict(list))
         follower_replicas, leader_replicas = set(), set()
 
-        replica_data = {topic: {partition: replicas} for (topic, partition, replicas) in partitions_data}
+        replica_data = defaultdict(lambda: defaultdict(list))
+        for topic, partition, replicas in partitions_data:
+            replica_data[topic][partition].extend(replicas)
 
         for topic, partition, isrs in partition_isrs:
             topic_changes[topic][RebalanceThrottleManager._TOPIC_FOLLOWER_THROTTLE_REPLICAS].extend(
@@ -510,26 +519,26 @@ class RebalanceThrottleManager(object):
             throttle_config_changes = {}
             for _property in throttle_replicas:
                 throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
-            self.zk.apply_configuration_properties(str(topic), throttle_config_changes, 'topics')
+            self.zk.apply_configuration_properties(str(topic), throttle_config_changes, ConfigEntityType.TOPIC)
 
         return leader_replicas, follower_replicas
 
-    def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas, throttle):
+    def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas):
         for replica in leader_replicas:
             self.zk.apply_configuration_properties(
                 str(replica),
                 {
-                    RebalanceThrottleManager._BROKER_LEADER_THROTTLE_RATE: str(throttle)
+                    RebalanceThrottleManager._BROKER_LEADER_THROTTLE_RATE: str(self.throttle)
                 },
-                "brokers"
+                ConfigEntityType.BROKER
             )
         for replica in follower_replicas:
             self.zk.apply_configuration_properties(
                 str(replica),
                 {
-                    RebalanceThrottleManager._BROKER_FOLLOWER_THROTTLE_RATE: str(throttle)
+                    RebalanceThrottleManager._BROKER_FOLLOWER_THROTTLE_RATE: str(self.throttle)
                 },
-                "brokers"
+                ConfigEntityType.BROKER
             )
 
     def remove_throttle_configurations(self):
@@ -537,21 +546,22 @@ class RebalanceThrottleManager(object):
         Remove the throttle configurations from the broker and the topic configurations
         """
         self.zk.remove_configuration_properties(
-            entity_type="brokers", properties=RebalanceThrottleManager.get_broker_throttle_properties())
+            entity_type=ConfigEntityType.BROKER, properties=RebalanceThrottleManager.get_broker_throttle_properties())
         self.zk.remove_configuration_properties(
-            entity_type="topics", properties=RebalanceThrottleManager.get_topic_throttle_properties())
+            entity_type=ConfigEntityType.TOPIC, properties=RebalanceThrottleManager.get_topic_throttle_properties())
 
-    def throttle_ongoing_rebalance(self, throttle):
+    def throttle_ongoing_rebalance(self):
         """
         Applies throttle to ongoing rebalance from json in /admin/reassign_partitions
-        :param throttle: Throttle to be applied
         """
-        rebalance_json, zk_stats = self.exhibitor.get("/admin/reassign_partitions")
-        data = json.loads(rebalance_json.decode('utf-8')).get('partitions', {})
-        partitions_data = []
-        for entry in data:
-            partitions_data.append((entry['topic'], entry['partition'], entry['replicas']))
-        self.apply_throttle(json.loads(partitions_data, throttle))
+        if self.throttle and self.ongoing:
+            _LOG.info("Applying throttle value: {throttle} to old rebalance".format(throttle=self.throttle))
+            rebalance_json, zk_stats = self.zk.exhibitor.get("/admin/reassign_partitions")
+            data = json.loads(rebalance_json.decode('utf-8')).get('partitions', {})
+            partitions_data = []
+            for entry in data:
+                partitions_data.append((entry['topic'], entry['partition'], entry['replicas']))
+            self.apply_throttle(partitions_data)
 
     @classmethod
     def get_broker_throttle_properties(cls):

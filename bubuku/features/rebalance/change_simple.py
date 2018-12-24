@@ -238,7 +238,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
     _STATE_BALANCE = 'balance'
 
     def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list, parallelism: int,
-                 throttle: int = 0, ongoing: bool = False):
+                 throttle: int = 100000000, ongoing: bool = False):
         self.state = self._STATE_INIT
         self.zk = zk
         self.fake = FakeBroker()
@@ -250,9 +250,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         self.empty_brokers = [str(e) for e in empty_brokers] if empty_brokers else []
         self.initial_broker_ids = sorted([str(broker_id) for broker_id in broker_ids])
         self.zone_checker = None
-        self.throttle = throttle
-        self.ongoing = ongoing
-        self.throttle_manager = RebalanceThrottleManager(self.zk)
+        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle, ongoing)
 
     def register_partition_change(self, partition: Partition):
         self.rebalance_queue[(partition.topic, partition.partition)] = partition
@@ -386,8 +384,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             for p in to_rebalance
         ]
 
-        if self.throttle:
-            self.throttle_manager.apply_throttle(to_rebalance_data, self.throttle)
+        self.throttle_manager.apply_throttle(to_rebalance_data)
         if not self.zk.reallocate_partitions(to_rebalance_data):
             for partition in to_rebalance:
                 self.register_partition_change(partition)
@@ -399,11 +396,6 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             _LOG.warning("Rebalance paused, because other blocking events running: {}".format(current_actions))
             return True
         if self.zk.is_rebalancing():
-            if self.ongoing and self.throttle:
-                # Don't execute the current rebalance, but alter the throttle value
-                _LOG.info("Applying throttle value: {throttle} to old rebalance".format(throttle=self.throttle))
-                self.throttle_manager.throttle_ongoing_rebalance(self.throttle)
-                return False
             return True
 
         new_broker_ids = sorted([str(id_) for id_ in self.zk.get_broker_ids()])
@@ -444,8 +436,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         return True
 
     def on_remove(self):
-        if self.throttle:
-            self.throttle_manager.remove_throttle_configurations()
+        self.throttle_manager.remove_throttle_configurations()
 
     def __str__(self):
         return 'SimpleRebalance state={}, queue_size={}, parallelism={}'.format(
