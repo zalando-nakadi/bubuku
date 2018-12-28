@@ -241,8 +241,8 @@ class BukuExhibitor(object):
         """
         Lists all the ISRs of partitions
         :param partitions: List of (topic, partition) tuples
-        :return: generator of tuples
-        (topic_name, str, partition: int, isr: tuple of int)
+        :return: list of tuples
+        (topic_name, str, partition: int, replicas: tuple of int)
         """
         if not partitions:
             return
@@ -489,7 +489,7 @@ class RebalanceThrottleManager(object):
         :param partitions_data: List of (topic, partition, replicas)
         :return: List of leader and follower replicas to which replication throttle is to be applied
         """
-        partition_isrs = self.zk.load_partition_replicas(
+        current_replicas = self.zk.load_partition_replicas(
             [(topic, partition) for (topic, partition, replicas) in partitions_data])
         topic_changes = defaultdict(lambda: defaultdict(list))
         follower_replicas, leader_replicas = set(), set()
@@ -498,22 +498,22 @@ class RebalanceThrottleManager(object):
         for topic, partition, replicas in partitions_data:
             replica_data[topic][partition].extend(replicas)
 
-        for topic, partition, isrs in partition_isrs:
+        for topic, partition, partition_replicas in current_replicas:
             topic_changes[topic][RebalanceThrottleManager._TOPIC_FOLLOWER_THROTTLE_REPLICAS].extend(
                 ["{}:{}".format(partition, replica) for replica in replica_data[topic][partition] if
-                 replica not in isrs])
+                 int(replica) not in partition_replicas])
             topic_changes[topic][RebalanceThrottleManager._TOPIC_LEADER_THROTTLE_REPLICAS].extend(
-                ["{}:{}".format(partition, replica) for replica in isrs])
-            leader_replicas = leader_replicas.union(set(isrs))
+                ["{}:{}".format(partition, replica) for replica in partition_replicas])
+            leader_replicas = leader_replicas.union(set(partition_replicas))
+
             follower_replicas = follower_replicas.union(
-                set([replica for replica in replica_data[topic][partition] if replica not in isrs]))
+                set([replica for replica in replica_data[topic][partition] if int(replica) not in partition_replicas]))
 
         for topic, throttle_replicas in topic_changes.items():
             throttle_config_changes = {}
             for _property in throttle_replicas:
                 throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
             self.zk.apply_configuration_properties(str(topic), throttle_config_changes, ConfigEntityType.TOPIC)
-
         return leader_replicas, follower_replicas
 
     def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas):
