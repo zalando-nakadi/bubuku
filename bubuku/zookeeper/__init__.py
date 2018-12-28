@@ -237,7 +237,7 @@ class BukuExhibitor(object):
                 for k, v in data['partitions'].items():
                     yield (topic, int(k), v)
 
-    def load_partition_isr(self, partitions: list) -> list:
+    def load_partition_replicas(self, partitions: list) -> list:
         """
         Lists all the ISRs of partitions
         :param partitions: List of (topic, partition) tuples
@@ -246,20 +246,13 @@ class BukuExhibitor(object):
         """
         if not partitions:
             return
-        if self.async:
-            results = [(topic, partition, self.exhibitor.get_async(
-                '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))) for topic, partition in partitions]
-            for topic, partition, result in results:
-                try:
-                    value, stat = result.get(block=True)
-                except ConnectionLossException:
-                    value, stat = self.exhibitor.get(
-                        '/brokers/topics/{}/partitions/{}/state'.format(topic, partitions))
-                yield (topic, int(partition), json.loads(value.decode('utf-8')).get('isr', []))
-        else:
-            return ((topic, partition, json.loads(self.exhibitor.get(
-                '/brokers/topics/{}/partitions/{}/state'.format(topic, partition)[0])).decode('utf-8').get('isr', []))
-                    for topic, partition in partitions)
+        assignments = defaultdict(lambda: defaultdict(list))
+        topics = {topic for topic, partition in partitions}
+        current_assignments = self.load_partition_assignment(topics=topics)
+        for topic, partition, replica_list in current_assignments:
+            assignments[topic][partition].extend(replica_list)
+        return [(topic, partition, assignments[topic][partition]) for
+                topic, partition in partitions]
 
     def load_partition_states(self, topics=None) -> list:
         """
@@ -496,7 +489,7 @@ class RebalanceThrottleManager(object):
         :param partitions_data: List of (topic, partition, replicas)
         :return: List of leader and follower replicas to which replication throttle is to be applied
         """
-        partition_isrs = self.zk.load_partition_isr(
+        partition_isrs = self.zk.load_partition_replicas(
             [(topic, partition) for (topic, partition, replicas) in partitions_data])
         topic_changes = defaultdict(lambda: defaultdict(list))
         follower_replicas, leader_replicas = set(), set()
@@ -554,14 +547,13 @@ class RebalanceThrottleManager(object):
         """
         Applies throttle to ongoing rebalance from json in /admin/reassign_partitions
         """
-        if self.throttle and self.ongoing:
-            _LOG.info("Applying throttle value: {throttle} to old rebalance".format(throttle=self.throttle))
-            rebalance_json, zk_stats = self.zk.exhibitor.get("/admin/reassign_partitions")
-            data = json.loads(rebalance_json.decode('utf-8')).get('partitions', {})
-            partitions_data = []
-            for entry in data:
-                partitions_data.append((entry['topic'], entry['partition'], entry['replicas']))
-            self.apply_throttle(partitions_data)
+        _LOG.info("Applying throttle value: {throttle} to old rebalance".format(throttle=self.throttle))
+        rebalance_json, zk_stats = self.zk.exhibitor.get("/admin/reassign_partitions")
+        data = json.loads(rebalance_json.decode('utf-8')).get('partitions', {})
+        partitions_data = []
+        for entry in data:
+            partitions_data.append((entry['topic'], entry['partition'], entry['replicas']))
+        self.apply_throttle(partitions_data)
 
     @classmethod
     def get_broker_throttle_properties(cls):
