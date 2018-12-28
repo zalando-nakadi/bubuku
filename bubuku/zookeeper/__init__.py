@@ -241,18 +241,26 @@ class BukuExhibitor(object):
         """
         Lists all the ISRs of partitions
         :param partitions: List of (topic, partition) tuples
-        :return: list of tuples
-        (topic_name, str, partition: int, replicas: tuple of int)
+        :return: generator of tuples
+        (topic_name, str, partition: int, isr: list of int)
         """
         if not partitions:
             return
-        assignments = defaultdict(lambda: defaultdict(list))
-        topics = {topic for topic, partition in partitions}
-        current_assignments = self.load_partition_assignment(topics=topics)
-        for topic, partition, replica_list in current_assignments:
-            assignments[topic][partition].extend(replica_list)
-        return [(topic, partition, assignments[topic][partition]) for
-                topic, partition in partitions]
+        if self.async:
+            results = [(topic, partition, self.exhibitor.get_async(
+                '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))) for topic, partition in
+                       partitions]
+            for topic, partition, result in results:
+                try:
+                    value, stat = result.get(block=True)
+                except ConnectionLossException:
+                    value, stat = self.exhibitor.get(
+                        '/brokers/topics/{}/partitions/{}/state'.format(topic, partitions))
+                yield (topic, int(partition), json.loads(value.decode('utf-8')).get('isr', []))
+        else:
+            return ((topic, partition, json.loads(self.exhibitor.get(
+                '/brokers/topics/{}/partitions/{}/state'.format(topic, partition)[0]))
+                     .decode('utf-8').get('isr', [])) for topic, partition in partitions)
 
     def load_partition_states(self, topics=None) -> list:
         """
@@ -479,9 +487,15 @@ class RebalanceThrottleManager(object):
         Applies throttle to the brokers and partitions based on reassignment-json-file data.
         :param partitions_data: List of (topic, partition, replicas)
         """
+        partitions_data = [(
+            topic,
+            partition,
+            list(map(int, replicas))
+        ) for topic, partition, replicas in partitions_data]
         if self.throttle:
-            leader_replicas, follower_replicas = self._add_throttle_replicas_per_topic(partitions_data)
-            self._apply_throttle_to_brokers(leader_replicas, follower_replicas)
+            brokers_to_throttle = self._add_throttle_replicas_per_topic(partitions_data)
+            _LOG.info("Applying replication limit to these brokers: {}".format(brokers_to_throttle))
+            self._apply_throttle_to_brokers(brokers_to_throttle)
 
     def _add_throttle_replicas_per_topic(self, partitions_data):
         """
@@ -492,7 +506,7 @@ class RebalanceThrottleManager(object):
         current_replicas = self.zk.load_partition_replicas(
             [(topic, partition) for (topic, partition, replicas) in partitions_data])
         topic_changes = defaultdict(lambda: defaultdict(list))
-        follower_replicas, leader_replicas = set(), set()
+        brokers_to_throttle = set()
 
         replica_data = defaultdict(lambda: defaultdict(list))
         for topic, partition, replicas in partitions_data:
@@ -501,34 +515,26 @@ class RebalanceThrottleManager(object):
         for topic, partition, partition_replicas in current_replicas:
             topic_changes[topic][RebalanceThrottleManager._TOPIC_FOLLOWER_THROTTLE_REPLICAS].extend(
                 ["{}:{}".format(partition, replica) for replica in replica_data[topic][partition] if
-                 int(replica) not in partition_replicas])
+                 replica not in partition_replicas])
             topic_changes[topic][RebalanceThrottleManager._TOPIC_LEADER_THROTTLE_REPLICAS].extend(
                 ["{}:{}".format(partition, replica) for replica in partition_replicas])
-            leader_replicas = leader_replicas.union(set(partition_replicas))
+            brokers_to_throttle = brokers_to_throttle.union(set(partition_replicas + replica_data[topic][partition]))
 
-            follower_replicas = follower_replicas.union(
-                set([replica for replica in replica_data[topic][partition] if int(replica) not in partition_replicas]))
+        # There is no need to make same changes to the topic configs in case of ongoing rebalance
+        if not self.ongoing:
+            for topic, throttle_replicas in topic_changes.items():
+                throttle_config_changes = {}
+                for _property in throttle_replicas:
+                    throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
+                self.zk.apply_configuration_properties(str(topic), throttle_config_changes, ConfigEntityType.TOPIC)
+        return brokers_to_throttle
 
-        for topic, throttle_replicas in topic_changes.items():
-            throttle_config_changes = {}
-            for _property in throttle_replicas:
-                throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
-            self.zk.apply_configuration_properties(str(topic), throttle_config_changes, ConfigEntityType.TOPIC)
-        return leader_replicas, follower_replicas
-
-    def _apply_throttle_to_brokers(self, leader_replicas, follower_replicas):
-        for replica in leader_replicas:
+    def _apply_throttle_to_brokers(self, replicas: set):
+        for replica in replicas:
             self.zk.apply_configuration_properties(
                 str(replica),
                 {
-                    RebalanceThrottleManager._BROKER_LEADER_THROTTLE_RATE: str(self.throttle)
-                },
-                ConfigEntityType.BROKER
-            )
-        for replica in follower_replicas:
-            self.zk.apply_configuration_properties(
-                str(replica),
-                {
+                    RebalanceThrottleManager._BROKER_LEADER_THROTTLE_RATE: str(self.throttle),
                     RebalanceThrottleManager._BROKER_FOLLOWER_THROTTLE_RATE: str(self.throttle)
                 },
                 ConfigEntityType.BROKER

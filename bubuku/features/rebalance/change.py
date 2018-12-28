@@ -130,6 +130,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.state = OptimizedRebalanceChange._LOAD_STATE
         self.parallelism = parallelism
         self.throttle_manager = RebalanceThrottleManager(self.zk, throttle, ongoing)
+        self.throttle_applied = False
 
     def __str__(self):
         return 'OptimizedRebalance state={}, queue_size={}, parallelism={}'.format(
@@ -171,7 +172,9 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         if not items:
             return True
         data_to_rebalance = [(key[0], key[1], replicas) for key, replicas in items]
-        self.throttle_manager.apply_throttle(data_to_rebalance)
+        if not self.throttle_applied:
+            self.throttle_manager.apply_throttle(data_to_rebalance)
+            self.throttle_applied = True
         if not self.zk.reallocate_partitions(data_to_rebalance):
             for key, replicas in items:
                 self.action_queue[key] = replicas

@@ -251,6 +251,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         self.initial_broker_ids = sorted([str(broker_id) for broker_id in broker_ids])
         self.zone_checker = None
         self.throttle_manager = RebalanceThrottleManager(self.zk, throttle, ongoing)
+        self.throttle_applied = False
 
     def register_partition_change(self, partition: Partition):
         self.rebalance_queue[(partition.topic, partition.partition)] = partition
@@ -383,8 +384,9 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             (p.topic, int(p.partition), [b.id_ for b in p.brokers])
             for p in to_rebalance
         ]
-
-        self.throttle_manager.apply_throttle(to_rebalance_data)
+        if not self.throttle_applied:
+            self.throttle_manager.apply_throttle(to_rebalance_data)
+            self.throttle_applied = True
         if not self.zk.reallocate_partitions(to_rebalance_data):
             for partition in to_rebalance:
                 self.register_partition_change(partition)
