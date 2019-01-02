@@ -11,7 +11,7 @@ from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rolling_restart')
-_TIMEOUT_PUSH_BACK = 20
+_TIMEOUT_RESTART_COOLDOWN_SECONDS = 120
 
 
 class RollingRestartChange(Change):
@@ -283,7 +283,7 @@ class RegisterRollingRestart(State):
                 self.cluster_is_healthy_from = 0
                 return False
 
-            if time() - self.cluster_is_healthy_from >= _TIMEOUT_PUSH_BACK:
+            if time() - self.cluster_is_healthy_from >= _TIMEOUT_RESTART_COOLDOWN_SECONDS:
                 action = {'name': 'rolling_restart',
                           'restart_assignment': self.state_context.restart_assignment,
                           'image': self.state_context.cluster_config.get_application_version(),
