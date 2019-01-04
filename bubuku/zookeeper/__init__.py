@@ -476,7 +476,7 @@ class RebalanceThrottleManager(object):
     def __new__(cls, zk, throttle, ongoing):
         if not cls._instance:
             return cls._RebalanceThrottleManager(zk, throttle, ongoing)
-        cls._instance.throttle = throttle
+        cls._instance.throttle = int(throttle)
         cls._instance.zk = zk
         cls._instance.ongoing = ongoing
         return cls._instance
@@ -490,8 +490,10 @@ class RebalanceThrottleManager(object):
 
         def __init__(self, zk: BukuExhibitor, throttle: int, ongoing: bool):
             self.zk = zk
-            self.throttle = throttle
+            self.throttle = int(throttle)
             self.ongoing = ongoing
+            self._current_throttle_value = None
+            self._throttle_applied = False
 
         def apply_throttle(self, partitions_data):
             """
@@ -503,10 +505,13 @@ class RebalanceThrottleManager(object):
                 partition,
                 list(map(int, replicas))
             ) for topic, partition, replicas in partitions_data]
-            if self.throttle:
+            if self._throttle_applied and self.throttle == self._current_throttle_value:
+                _LOG.info("Throttle with value {} already applied".format(self._current_throttle_value))
+            elif not self._throttle_applied or self._current_throttle_value != self.throttle:
                 brokers_to_throttle = self._add_throttle_replicas_per_topic(partitions_data)
                 _LOG.info("Applying replication limit to these brokers: {}".format(brokers_to_throttle))
                 self._apply_throttle_to_brokers(brokers_to_throttle)
+                self._throttle_applied, self._current_throttle_value = True, self.throttle
 
         def _add_throttle_replicas_per_topic(self, partitions_data):
             """
@@ -559,6 +564,7 @@ class RebalanceThrottleManager(object):
                 entity_type=ConfigEntityType.BROKER, properties=self.get_broker_throttle_properties())
             self.zk.remove_configuration_properties(
                 entity_type=ConfigEntityType.TOPIC, properties=self.get_topic_throttle_properties())
+            self._throttle_applied = False
 
         def throttle_ongoing_rebalance(self):
             """
