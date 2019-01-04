@@ -60,7 +60,8 @@ class RemoteCommandExecutorCheck(Check):
                                             data['instance_type'],
                                             data['scalyr_key'],
                                             data['scalyr_region'],
-                                            data['kms_key_id'])
+                                            data['kms_key_id'],
+                                            data['cool_down'])
             if data['name'] == 'stop':
                 return StopBrokerChange(self.broker_manager)
             if data['name'] == 'start':
@@ -138,7 +139,7 @@ class RemoteCommandExecutorCheck(Check):
 
     @staticmethod
     def register_rolling_restart(zk: BukuExhibitor, broker_id: str, image: str, instance_type: str, scalyr_key: str,
-                                 scalyr_region: str, kms_key_id: str):
+                                 scalyr_region: str, kms_key_id: str, cool_down: int):
         if zk.is_rolling_restart_in_progress():
             _LOG.warning('Rolling restart in progress, skipping')
             return
@@ -160,7 +161,8 @@ class RemoteCommandExecutorCheck(Check):
                   'instance_type': instance_type,
                   'scalyr_key': scalyr_key,
                   'scalyr_region': scalyr_region,
-                  'kms_key_id': kms_key_id}
+                  'kms_key_id': kms_key_id,
+                  'cool_down': cool_down}
         zk.register_action(action, broker_id=broker_id)
 
     @staticmethod

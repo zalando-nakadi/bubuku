@@ -11,7 +11,6 @@ from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.rolling_restart')
-_TIMEOUT_RESTART_COOLDOWN_SECONDS = 120
 
 
 class RollingRestartChange(Change):
@@ -22,7 +21,8 @@ class RollingRestartChange(Change):
                  instance_type: str,
                  scalyr_key: str,
                  scalyr_region: str,
-                 kms_key_id: str):
+                 kms_key_id: str,
+                 cool_down: int):
         self.zk = zk
         self.restart_assignment = restart_assignment
         self.broker_id = broker_id
@@ -42,7 +42,8 @@ class RollingRestartChange(Change):
         self.cluster_config.set_availability_zone(self.ec_node.get_node_availability_zone())
 
         self.state_context = StateContext(self.zk, self.aws, self.ec_node, self.ec2_node_launcher,
-                                          self.broker_id_to_restart, self.restart_assignment, self.cluster_config)
+                                          self.broker_id_to_restart, self.restart_assignment,
+                                          self.cluster_config, cool_down)
 
     def get_name(self) -> str:
         return 'rolling_restart'
@@ -77,7 +78,7 @@ class StartBrokerChange(Change):
 
 class StateContext:
     def __init__(self, zk: BukuExhibitor, aws: AWSResources, ec_node: Ec2Node, ec2_node_launcher: Ec2NodeLauncher,
-                 broker_id_to_restart, restart_assignment, cluster_config: ClusterConfig):
+                 broker_id_to_restart, restart_assignment, cluster_config: ClusterConfig, cool_down: int):
         self.zk = zk
         self.restart_assignment = restart_assignment
         self.cluster_config = cluster_config
@@ -87,6 +88,7 @@ class StateContext:
         self.broker_id_to_restart = broker_id_to_restart
         self.current_state = StopKafka(self)
         self.new_instance_id = None
+        self.cool_down = cool_down
 
     def run(self):
         """
@@ -190,10 +192,25 @@ class TerminateInstance(State):
         return True
 
     def next(self):
+        return WaitInstanceTerminated(self.state_context)
+
+    def __str__(self):
+        return 'TerminateInstance: terminating instance {}'.format(self.state_context.ec_node.get_ip())
+
+
+class WaitInstanceTerminated(State):
+    def run(self):
+        def func():
+            return self.state_context.ec_node.is_terminated()
+
+        return self.run_with_timeout(func)
+
+    def next(self):
         return WaitVolumeAvailable(self.state_context)
 
     def __str__(self):
-        return 'WaitBrokerStopped: waiting for broker {} to stop'.format(self.state_context.broker_id_to_restart)
+        return 'WaitInstanceTerminated: waiting for instance {} to be terminated'.format(
+            self.state_context.ec_node.get_ip())
 
 
 class WaitVolumeAvailable(State):
@@ -283,14 +300,15 @@ class RegisterRollingRestart(State):
                 self.cluster_is_healthy_from = 0
                 return False
 
-            if time() - self.cluster_is_healthy_from >= _TIMEOUT_RESTART_COOLDOWN_SECONDS:
+            if time() - self.cluster_is_healthy_from >= self.state_context.cool_down:
                 action = {'name': 'rolling_restart',
                           'restart_assignment': self.state_context.restart_assignment,
                           'image': self.state_context.cluster_config.get_application_version(),
                           'instance_type': self.state_context.cluster_config.get_instance_type(),
                           'scalyr_key': self.state_context.cluster_config.get_scalyr_region(),
                           'scalyr_region': self.state_context.cluster_config.get_scalyr_account_key(),
-                          'kms_key_id': self.state_context.cluster_config.get_kms_key_id()}
+                          'kms_key_id': self.state_context.cluster_config.get_kms_key_id(),
+                          'cool_down': self.state_context.cool_down}
                 next_broker_id = list(self.state_context.restart_assignment.keys())[0]
                 self.state_context.zk.register_action(action, broker_id=next_broker_id)
                 return True
