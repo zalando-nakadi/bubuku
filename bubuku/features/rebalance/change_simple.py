@@ -377,6 +377,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         if len(to_rebalance) > self.parallelism:
             to_rebalance = to_rebalance[:self.parallelism]
         to_rebalance = [self.rebalance_queue.pop(k) for k in to_rebalance]
+        self.throttle_manager.remove_old_throttle_configurations()
         if not to_rebalance:
             return True
         to_rebalance_data = [
@@ -433,9 +434,6 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             _LOG.warning("Stopping rebalance, as state {} is not supported".format(self.state))
             return False
         return True
-
-    def on_remove(self):
-        self.throttle_manager.remove_throttle_configurations()
 
     def __str__(self):
         return 'SimpleRebalance state={}, queue_size={}, parallelism={}'.format(

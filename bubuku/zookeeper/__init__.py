@@ -190,7 +190,6 @@ class BukuExhibitor(object):
         _LOG.info('Exiting safe exhibitor space')
         self.exhibitor.terminate()
 
-
     def is_broker_registered(self, broker_id):
         try:
             _, stat = self.exhibitor.get('/brokers/ids/{}'.format(broker_id))
@@ -475,7 +474,8 @@ class RebalanceThrottleManager(object):
 
     def __new__(cls, zk, throttle, ongoing):
         if not cls._instance:
-            return cls._RebalanceThrottleManager(zk, throttle, ongoing)
+            cls._instance = cls._RebalanceThrottleManager(zk, throttle, ongoing)
+            return cls._instance
         cls._instance.throttle = int(throttle)
         cls._instance.zk = zk
         cls._instance.ongoing = ongoing
@@ -494,6 +494,8 @@ class RebalanceThrottleManager(object):
             self.ongoing = ongoing
             self._current_throttle_value = None
             self._throttle_applied = False
+            self.throttled_brokers = set()
+            self.throttled_topics = set()
 
         def apply_throttle(self, partitions_data):
             """
@@ -519,6 +521,7 @@ class RebalanceThrottleManager(object):
             :param partitions_data: List of (topic, partition, replicas)
             :return: List of leader and follower replicas to which replication throttle is to be applied
             """
+            self.throttled_topics = set()
             current_replicas = self.zk.load_partition_replicas(
                 [(topic, partition) for (topic, partition, replicas) in partitions_data])
             topic_changes = defaultdict(lambda: defaultdict(list))
@@ -535,6 +538,7 @@ class RebalanceThrottleManager(object):
                 topic_changes[topic][self._TOPIC_LEADER_THROTTLE_REPLICAS].extend(
                     ["{}:{}".format(partition, replica) for replica in partition_replicas])
                 brokers_to_throttle = brokers_to_throttle.union(set(partition_replicas + replica_data[topic][partition]))
+                self.throttled_topics.add(topic)
 
             # There is no need to make same changes to the topic configs in case of ongoing rebalance
             if not self.ongoing:
@@ -555,16 +559,28 @@ class RebalanceThrottleManager(object):
                     },
                     ConfigEntityType.BROKER
                 )
+            self.throttled_brokers = replicas
 
-        def remove_throttle_configurations(self):
+        def remove_old_throttle_configurations(self):
             """
             Remove the throttle configurations from the broker and the topic configurations
             """
-            self.zk.remove_configuration_properties(
-                entity_type=ConfigEntityType.BROKER, properties=self.get_broker_throttle_properties())
-            self.zk.remove_configuration_properties(
-                entity_type=ConfigEntityType.TOPIC, properties=self.get_topic_throttle_properties())
+            if self.throttled_brokers:
+                _LOG.info("Removing throttle configurations for brokers: {}".format(self.throttled_brokers))
+                self.zk.remove_configuration_properties(
+                    entity_type=ConfigEntityType.BROKER,
+                    properties=self.get_broker_throttle_properties(),
+                    entities=self.throttled_brokers
+                )
+            if self.throttled_topics:
+                _LOG.info("Removing throttle configurations for topics: {}".format(self.throttled_topics))
+                self.zk.remove_configuration_properties(
+                    entity_type=ConfigEntityType.TOPIC,
+                    properties=self.get_topic_throttle_properties(),
+                    entities=self.throttled_topics
+                )
             self._throttle_applied = False
+            self.throttled_brokers, self.throttled_topics = set(), set()
 
         def throttle_ongoing_rebalance(self):
             """
