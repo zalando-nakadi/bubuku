@@ -238,7 +238,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
     _STATE_BALANCE = 'balance'
 
     def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list, parallelism: int,
-                 throttle: int = 100000000, ongoing: bool = False):
+                 throttle: int = 100000000):
         self.state = self._STATE_INIT
         self.zk = zk
         self.fake = FakeBroker()
@@ -250,7 +250,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         self.empty_brokers = [str(e) for e in empty_brokers] if empty_brokers else []
         self.initial_broker_ids = sorted([str(broker_id) for broker_id in broker_ids])
         self.zone_checker = None
-        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle, ongoing)
+        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle)
 
     def register_partition_change(self, partition: Partition):
         self.rebalance_queue[(partition.topic, partition.partition)] = partition

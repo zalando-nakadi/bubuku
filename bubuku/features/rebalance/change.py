@@ -118,7 +118,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _BALANCE = 'balance'
 
     def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
-                 throttle: int = 100000000, ongoing: bool = False, parallelism: int = 1):
+                 throttle: int = 100000000, parallelism: int = 1):
         self.zk = zk
         self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
@@ -129,7 +129,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.action_queue = []
         self.state = OptimizedRebalanceChange._LOAD_STATE
         self.parallelism = parallelism
-        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle, ongoing)
+        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle)
 
     def __str__(self):
         return 'OptimizedRebalance state={}, queue_size={}, parallelism={}'.format(
