@@ -582,6 +582,19 @@ class RebalanceThrottleManager(object):
             self._throttle_applied = False
             self.throttled_brokers, self.throttled_topics = set(), set()
 
+        def remove_all_throttle_configurations(self):
+            """
+            Remove the throttle configurations from all brokers and topics
+            """
+            self.zk.remove_configuration_properties(
+                    entity_type=ConfigEntityType.BROKER,
+                    properties=self.get_broker_throttle_properties(),
+            )
+            self.zk.remove_configuration_properties(
+                entity_type=ConfigEntityType.TOPIC,
+                properties=self.get_topic_throttle_properties(),
+            )
+
         def throttle_ongoing_rebalance(self):
             """
             Applies throttle to ongoing rebalance from json in /admin/reassign_partitions

@@ -435,6 +435,9 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             return False
         return True
 
+    def on_remove(self):
+        self.throttle_manager.remove_all_throttle_configurations()
+
     def __str__(self):
         return 'SimpleRebalance state={}, queue_size={}, parallelism={}'.format(
             self.state, len(self.rebalance_queue), self.parallelism)
