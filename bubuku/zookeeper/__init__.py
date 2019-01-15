@@ -3,8 +3,7 @@ import logging
 import threading
 import time
 import uuid
-
-from typing import Dict
+from typing import Dict, List, Iterable, Tuple
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
@@ -192,7 +191,7 @@ class BukuExhibitor(object):
         except NoNodeError:
             return False
 
-    def get_broker_ids(self) -> list:
+    def get_broker_ids(self) -> List[str]:
         """
         Gets list of available broker ids
         :return: Sorted list of strings - active broker ids.
@@ -204,9 +203,11 @@ class BukuExhibitor(object):
         Lists the rack of each broker, if it exists
         :return: a dictionary of tuples (broker_id, rack), where rack can be None
         """
-        return {int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for broker in self.get_broker_ids()}
+        return {
+        int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for
+        broker in self.get_broker_ids()}
 
-    def load_partition_assignment(self, topics=None) -> list:
+    def load_partition_assignment(self, topics=None) -> Iterable[Tuple[str, int, List[int]]]:
         """
         Lists all the assignments of partitions to particular broker ids.
         :param topics Optional list of topics to get data for
@@ -298,7 +299,7 @@ class BukuExhibitor(object):
         except NoNodeError:
             return None
 
-    def get_disk_stats(self):
+    def get_disk_stats(self) -> Dict[str, dict]:
         stats = {}
         for broker_id in self.get_broker_ids():
             try:
@@ -358,7 +359,7 @@ class BukuExhibitor(object):
         return {
             change: self.exhibitor.get('/bubuku/changes/{}'.format(change))[0].decode('utf-8')
             for change in self.exhibitor.get_children('/bubuku/changes')
-            }
+        }
 
     def register_change(self, name, provider_id):
         _LOG.info('Registering change in zk: {}'.format(name))
