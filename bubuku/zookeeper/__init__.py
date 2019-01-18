@@ -369,6 +369,11 @@ class BukuExhibitor(object):
         _LOG.info('Removing change {} from locks'.format(name))
         self.exhibitor.delete('/bubuku/changes/{}'.format(name), recursive=True)
 
+    def is_rolling_restart_in_progress(self):
+        if 'rolling_restart' in self.get_running_changes():
+            return True
+        return False
+
 
 def load_exhibitor_proxy(address_provider: AddressListProvider, prefix: str) -> BukuExhibitor:
     proxy = _ZookeeperProxy(address_provider, prefix)

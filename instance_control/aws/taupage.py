@@ -70,7 +70,9 @@ def generate_user_data(cluster_config: dict) -> str:
                 }
             },
             'scalyr_account_key': cluster_config['scalyr_key'],
-            'scalyr_region': cluster_config.get('scalyr_region')
+            'scalyr_region': cluster_config.get('scalyr_region'),
+            'vpc_id': cluster_config.get('vpc_id'),
+            'instance_type': cluster_config.get('instance_type')
             }
 
     _LOG.info('Generated data:')

@@ -11,10 +11,6 @@ _LOG = logging.getLogger('bubuku.cluster.aws.iam')
 
 def create_or_get_instance_profile(aws_: AWSResources, cluster_config: dict):
     profile_name = 'profile-{}'.format(cluster_config['cluster_name'])
-    role_name = 'role-{}'.format(cluster_config['cluster_name'])
-    policy_datavolume = 'policy-{}-datavolume'.format(cluster_config['cluster_name'])
-    policy_metadata = 'policy-{}-metadata'.format(cluster_config['cluster_name'])
-    policy_zmon = 'policy-{}-zmon'.format(cluster_config['cluster_name'])
 
     try:
         profile = aws_.iam_client.get_instance_profile(InstanceProfileName=profile_name)
@@ -26,6 +22,7 @@ def create_or_get_instance_profile(aws_: AWSResources, cluster_config: dict):
 
     profile = aws_.iam_client.create_instance_profile(InstanceProfileName=profile_name)
 
+    role_name = 'role-{}'.format(cluster_config['cluster_name'])
     _LOG.info("Creating iam role %s", role_name)
     aws_.iam_client.create_role(RoleName=role_name, AssumeRolePolicyDocument="""{
         "Version": "2012-10-17",
@@ -79,18 +76,109 @@ def create_or_get_instance_profile(aws_: AWSResources, cluster_config: dict):
         ]
     }"""
 
+    policy_cw_document = """{
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "VisualEditor0",
+                "Effect": "Allow",
+                "Action": [
+                    "cloudwatch:PutMetricAlarm",
+                    "cloudwatch:DeleteAlarms"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }"""
+
+    policy_ec2_document = """{
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "VisualEditor0",
+                "Effect": "Allow",
+                "Action": [
+                    "ec2:DetachVolume",
+                    "ec2:AttachVolume",
+                    "ec2:AuthorizeSecurityGroupIngress",
+                    "ec2:DescribeInstances",
+                    "ec2:TerminateInstances",
+                    "ec2:DeleteTags",
+                    "ec2:DescribeTags",
+                    "ec2:CreateTags",
+                    "ec2:DescribeInstanceAttribute",
+                    "ec2:RunInstances",
+                    "ec2:StopInstances",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeVolumeAttribute",
+                    "ec2:CreateVolume",
+                    "ec2:DescribeImages",
+                    "ec2:DescribeVolumeStatus",
+                    "ec2:StartInstances",
+                    "ec2:CreateSecurityGroup",
+                    "ec2:DescribeVolumes",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeInstanceStatus"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }"""
+
+    policy_iam_document = """{
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "VisualEditor0",
+                "Effect": "Allow",
+                "Action": [
+                    "iam:CreateInstanceProfile",
+                    "iam:PassRole",
+                    "iam:GetInstanceProfile",
+                    "iam:CreateRole",
+                    "iam:PutRolePolicy",
+                    "iam:AddRoleToInstanceProfile"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }"""
+
+    policy_datavolume = 'policy-{}-datavolume'.format(cluster_config['cluster_name'])
     _LOG.info("Creating IAM policy %s", policy_datavolume)
     aws_.iam_client.put_role_policy(RoleName=role_name,
                                     PolicyName=policy_datavolume,
                                     PolicyDocument=policy_datavolume_document)
+
+    policy_metadata = 'policy-{}-metadata'.format(cluster_config['cluster_name'])
     _LOG.info("Creating IAM policy %s", policy_metadata)
     aws_.iam_client.put_role_policy(RoleName=role_name,
                                     PolicyName=policy_metadata,
                                     PolicyDocument=policy_metadata_document)
+
+    policy_zmon = 'policy-{}-zmon'.format(cluster_config['cluster_name'])
     _LOG.info("Creating IAM policy %s", policy_zmon)
     aws_.iam_client.put_role_policy(RoleName=role_name,
                                     PolicyName=policy_zmon,
                                     PolicyDocument=policy_zmon_document)
+
+    policy_cw = 'policy-{}-cw'.format(cluster_config['cluster_name'])
+    _LOG.info("Creating IAM policy %s", policy_cw)
+    aws_.iam_client.put_role_policy(RoleName=role_name,
+                                    PolicyName=policy_cw,
+                                    PolicyDocument=policy_cw_document)
+
+    policy_ec2 = 'policy-{}-ec2'.format(cluster_config['cluster_name'])
+    _LOG.info("Creating IAM policy %s", policy_zmon)
+    aws_.iam_client.put_role_policy(RoleName=role_name,
+                                    PolicyName=policy_ec2,
+                                    PolicyDocument=policy_ec2_document)
+
+    policy_iam = 'policy-{}-iam'.format(cluster_config['cluster_name'])
+    _LOG.info("Creating IAM policy %s", policy_zmon)
+    aws_.iam_client.put_role_policy(RoleName=role_name,
+                                    PolicyName=policy_iam,
+                                    PolicyDocument=policy_iam_document)
 
     if "kms_key_id" in cluster_config:
         policy_kms_document = json.dumps({
