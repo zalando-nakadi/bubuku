@@ -39,13 +39,16 @@ class RemoteCommandExecutorCheck(Check):
                                                     self.zk.get_broker_ids(),
                                                     data['empty_brokers'],
                                                     data['exclude_topics'],
+                                                    data['throttle'],
                                                     int(data.get('parallelism', 1)))
                 else:
                     return SimpleRebalanceChange(self.zk,
                                                  self.zk.get_broker_ids(),
                                                  data['empty_brokers'],
                                                  data['exclude_topics'],
-                                                 int(data.get('parallelism', 1)))
+                                                 int(data.get('parallelism', 1)),
+                                                 data['throttle'])
+
             elif data['name'] == 'migrate':
                 return MigrationChange(self.zk, data['from'], data['to'], data['shrink'],
                                        int(data.get('parallelism', '1')))
@@ -84,14 +87,15 @@ class RemoteCommandExecutorCheck(Check):
 
     @staticmethod
     def register_rebalance(zk: BukuExhibitor, broker_id: str, empty_brokers: list, exclude_topics: list,
-                           parallelism: int, bin_packing: bool):
+                           parallelism: int, bin_packing: bool, throttle: int):
         if parallelism <= 0:
             raise Exception('Parallelism for rebalance should be greater than 0')
         action = {'name': 'rebalance',
                   'empty_brokers': empty_brokers,
                   'exclude_topics': exclude_topics,
                   'parallelism': int(parallelism),
-                  'bin_packing': bool(bin_packing)}
+                  'bin_packing': bool(bin_packing),
+                  'throttle': int(throttle)}
         with zk.lock():
             if broker_id:
                 zk.register_action(action, broker_id=broker_id)

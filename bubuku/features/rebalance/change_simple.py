@@ -2,7 +2,7 @@ import logging
 from typing import List
 
 from bubuku.features.rebalance import BaseRebalanceChange
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, RebalanceThrottleManager
 
 FAKE_ZONE = 'fake_zone'
 
@@ -237,8 +237,8 @@ class SimpleRebalanceChange(BaseRebalanceChange):
     _STATE_OPTIMIZE_LEADERS = 'optimize_leaders'
     _STATE_BALANCE = 'balance'
 
-    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
-                 parallelism: int):
+    def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list, parallelism: int,
+                 throttle: int = 100000000):
         self.state = self._STATE_INIT
         self.zk = zk
         self.fake = FakeBroker()
@@ -250,6 +250,7 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         self.empty_brokers = [str(e) for e in empty_brokers] if empty_brokers else []
         self.initial_broker_ids = sorted([str(broker_id) for broker_id in broker_ids])
         self.zone_checker = None
+        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle)
 
     def register_partition_change(self, partition: Partition):
         self.rebalance_queue[(partition.topic, partition.partition)] = partition
@@ -376,12 +377,14 @@ class SimpleRebalanceChange(BaseRebalanceChange):
         if len(to_rebalance) > self.parallelism:
             to_rebalance = to_rebalance[:self.parallelism]
         to_rebalance = [self.rebalance_queue.pop(k) for k in to_rebalance]
+        self.throttle_manager.remove_old_throttle_configurations()
         if not to_rebalance:
             return True
         to_rebalance_data = [
             (p.topic, int(p.partition), [b.id_ for b in p.brokers])
             for p in to_rebalance
         ]
+        self.throttle_manager.apply_throttle(to_rebalance_data)
         if not self.zk.reallocate_partitions(to_rebalance_data):
             for partition in to_rebalance:
                 self.register_partition_change(partition)
@@ -431,6 +434,9 @@ class SimpleRebalanceChange(BaseRebalanceChange):
             _LOG.warning("Stopping rebalance, as state {} is not supported".format(self.state))
             return False
         return True
+
+    def on_remove(self):
+        self.throttle_manager.remove_all_throttle_configurations()
 
     def __str__(self):
         return 'SimpleRebalance state={}, queue_size={}, parallelism={}'.format(
