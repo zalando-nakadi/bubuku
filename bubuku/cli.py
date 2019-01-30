@@ -5,7 +5,6 @@ import requests
 from requests import Response
 
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor, RebalanceThrottleManager
 from bubuku.utils import get_opt_broker_id, prepare_configs, is_cluster_healthy
 from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor
 
@@ -109,7 +108,7 @@ def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, 
                                                                     "rebalance")
 def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, parallelism: int, bin_packing: bool,
                          throttle: int):
-    config, env_provider = __prepare_configs()
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
         exclude_topics_list = [] if exclude_topics is None else exclude_topics.split(',')
