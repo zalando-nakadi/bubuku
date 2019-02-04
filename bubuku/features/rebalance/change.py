@@ -318,4 +318,4 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
                 active_brokers_in_rack[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
 
     def on_remove(self):
-        self.throttle_manager.remove_all_throttle_configurations()
+        RebalanceThrottleManager.remove_all_throttle_configurations(self.zk)
