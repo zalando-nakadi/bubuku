@@ -81,7 +81,8 @@ class Controller(object):
         if result:
             with self.zk.lock(self.provider_id):
                 self.zk.unregister_change(name)
-
+            for change in self.changes[name] and name in self.zk.get_running_changes():
+                change.on_remove()
             del self.changes[name]
         return result
 
