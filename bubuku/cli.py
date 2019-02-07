@@ -4,10 +4,10 @@ import click
 import requests
 from requests import Response
 
-from bubuku.config import load_config, KafkaProperties, Config
-from bubuku.env_provider import EnvProvider
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
+from bubuku.utils import get_opt_broker_id, prepare_configs, is_cluster_healthy
 from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor
+
 
 _LOG = logging.getLogger('bubuku.cli')
 
@@ -33,18 +33,6 @@ def __validate_not_empty(ctx, param, value):
     return value
 
 
-def __get_opt_broker_id(broker_id: str, config: Config, zk: BukuExhibitor, env_provider: EnvProvider) -> str:
-    if not broker_id:
-        kafka_properties = KafkaProperties(config.kafka_settings_template, '/tmp/tmp.props'.format(config.kafka_dir))
-        broker_id_manager = env_provider.create_broker_id_manager(zk, kafka_properties)
-        broker_id = broker_id_manager.detect_broker_id()
-        _LOG.info('Will use broker_id {}'.format(broker_id))
-    running_brokers = zk.get_broker_ids()
-    if broker_id not in running_brokers:
-        raise Exception('Broker id {} is not registered ({}), can not restart'.format(broker_id, running_brokers))
-    return broker_id
-
-
 def __check_all_broker_ids_exist(broker_ids: list, zk: BukuExhibitor):
     registered_brokers = zk.get_broker_ids()
     unknown_brokers = [broker_id for broker_id in broker_ids if broker_id not in registered_brokers]
@@ -54,18 +42,21 @@ def __check_all_broker_ids_exist(broker_ids: list, zk: BukuExhibitor):
         raise Exception('{} broker ids are not valid: {}'.format(len(unknown_brokers), ",".join(unknown_brokers)))
 
 
-def __prepare_configs():
-    config = load_config()
-    _LOG.info('Using config: {}'.format(config))
-    env_provider = EnvProvider.create_env_provider(config)
-    return config, env_provider
-
-
 logging.basicConfig(level=getattr(logging, 'INFO', None))
 
 
 @click.group()
 def cli():
+    logo = """
+        ____        __          __        
+       / __ )__  __/ /_  __  __/ /____  __
+      / __  / / / / __ \/ / / / //_/ / / /
+     / /_/ / /_/ / /_/ / /_/ / ,< / /_/ / 
+    /_____/\__,_/_.___/\__,_/_/|_|\__,_/  
+    """
+    print(logo)
+    print('Start, monitor and rebalance kafka cluster in AWS setup')
+    print()
     pass
 
 
@@ -73,27 +64,58 @@ def cli():
 @click.option('--broker', type=click.STRING,
               help='Broker id to restart. By default current broker id is restarted')
 def restart_broker(broker: str):
-    config, env_provider = __prepare_configs()
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
-        broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider)
+        broker_id = get_opt_broker_id(broker, config, zookeeper, env_provider)
         RemoteCommandExecutorCheck.register_restart(zookeeper, broker_id)
 
 
-@cli.command('rebalance', help='Run rebalance process on one of brokers')
+@cli.command('rolling-restart', help='Rolling restart of Kafka cluster')
+@click.option('--image-tag', type=click.STRING, help='Docker image to run Kafka broker')
+@click.option('--instance-type', type=click.STRING, default='m4.4xlarge',
+              help='AWS instance type to run Kafka broker on')
+@click.option('--scalyr-key', type=click.STRING, help='Scalyr account key')
+@click.option('--scalyr-region', type=click.STRING, help='Scalyr region to use')
+@click.option('--kms-key-id', type=click.STRING, help='Kms key id to decrypt data with')
+@click.option('--cool-down', type=click.INT, default=20, show_default=True,
+              help='Number of seconds to wait before passing the restart task to another broker, after cluster is '
+                   'stable')
+def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, scalyr_region: str, kms_key_id: str,
+                           cool_down: int):
+    if not is_cluster_healthy():
+        print('Cluster is not healthy, try again later :)')
+        return
+
+    config, env_provider = prepare_configs()
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        broker_id = get_opt_broker_id(None, config, zookeeper, env_provider)
+        RemoteCommandExecutorCheck.register_rolling_restart(zookeeper, broker_id, image_tag, instance_type, scalyr_key,
+                                                            scalyr_region, kms_key_id, cool_down)
+
+
+@cli.command('rebalance', help='Run rebalance process on one of brokers. If rack-awareness is enabled, replicas will '
+                               'only be move to other brokers in the same rack')
 @click.option('--broker', type=click.STRING,
               help="Broker instance on which to perform rebalance. By default, any free broker will start it")
 @click.option('--empty_brokers', type=click.STRING,
               help="Comma-separated list of brokers to empty. All partitions will be moved to other brokers")
 @click.option('--exclude_topics', type=click.STRING, help="Comma-separated list of topics to exclude from rebalance")
-def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str):
-    config, env_provider = __prepare_configs()
+@click.option('--bin-packing', is_flag=True, help="Use bean packing approach instead of one way processing")
+@click.option('--parallelism', type=click.INT, default=1, show_default=True,
+              help="Amount of partitions to move in a single rebalance step")
+
+@click.option('--throttle', type=click.INT, default=100000000, help="Upper bound on bandwidth (in bytes/sec) used for "
+                                                                    "rebalance")
+def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, parallelism: int, bin_packing: bool,
+                         throttle: int):
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
         exclude_topics_list = [] if exclude_topics is None else exclude_topics.split(',')
         __check_all_broker_ids_exist(empty_brokers_list, zookeeper)
-        broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
+        broker_id = get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
         RemoteCommandExecutorCheck.register_rebalance(zookeeper, broker_id, empty_brokers_list,
-                                                      exclude_topics_list)
+                                                      exclude_topics_list, parallelism, bin_packing, throttle)
 
 
 @cli.command('migrate', help='Replace one broker with another for all partitions')
@@ -104,17 +126,20 @@ def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str):
 @click.option('--shrink', is_flag=True, default=False, show_default=True,
               help='Whether or not to shrink replaced broker ids form partition assignment')
 @click.option('--broker', type=click.STRING, help='Optional broker id to execute check on')
-def migrate_broker(from_: str, to: str, shrink: bool, broker: str):
-    config, env_provider = __prepare_configs()
+@click.option('--parallelism', type=click.INT, show_default=True, default=1,
+              help="Amount of partitions to move in a single migration step")
+def migrate_broker(from_: str, to: str, shrink: bool, broker: str, parallelism: int):
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
-        broker_id = __get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
-        RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink, broker_id)
+        broker_id = get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
+        RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink, broker_id,
+                                                      parallelism)
 
 
 @cli.command('swap_fat_slim', help='Move one partition from fat broker to slim one')
 @click.option('--threshold', type=click.INT, default="100000", show_default=True, help="Threshold in kb to run swap")
 def swap_partitions(threshold: int):
-    config, env_provider = __prepare_configs()
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         RemoteCommandExecutorCheck.register_fatboy_slim(zookeeper, threshold_kb=threshold)
 
@@ -129,7 +154,7 @@ def actions():
               help='Broker id to list actions on. By default all brokers are enumerated')
 def list_actions(broker: str):
     table = []
-    config, env_provider = __prepare_configs()
+    config, env_provider = prepare_configs()
 
     for broker_id, address in _list_broker_addresses(config, env_provider, broker):
         try:
@@ -173,11 +198,12 @@ def list_actions(broker: str):
 def delete_actions(action: str, broker: str):
     if not action:
         print('No action specified. Please specify it')
-    config, env_provider = __prepare_configs()
+    config, env_provider = prepare_configs()
 
     for broker_id, address in _list_broker_addresses(config, env_provider, broker):
         try:
-            response = requests.delete('http://{}:{}/api/controller/queue/{}'.format(address, config.health_port, action))
+            response = requests.delete(
+                'http://{}:{}/api/controller/queue/{}'.format(address, config.health_port, action))
         except Exception as e:
             print('Failed to query information on {} ({})'.format(broker_id, address))
             _LOG.error('Failed to query information on {} ({})'.format(broker_id, address), exc_info=e)
@@ -206,7 +232,7 @@ def _list_broker_addresses(config, env_provider, broker):
 
 @cli.command('stats', help='Display statistics about brokers')
 def show_stats():
-    config, env_provider = __prepare_configs()
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         disk_stats = zookeeper.get_disk_stats()
         table = []
@@ -219,6 +245,34 @@ def show_stats():
                 'Used kb': disk.get('used_kb')
             })
         _print_table(table)
+
+
+@cli.group(name='validate', help='Validates internal structures of kafka/zk')
+def validate():
+    pass
+
+
+@validate.command('replication', help='Returns all partitions whose ISR size differs from the replication factor or '
+                                      'have not registered broker ids')
+@click.option('--factor', type=click.INT, default=3, show_default=True, help='Replication factor')
+def validate_replication(factor: int):
+    config, env_provider = prepare_configs()
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        brokers = {int(x) for x in zookeeper.get_broker_ids()}
+        table = []
+        for topic_name, partition, state in zookeeper.load_partition_states():
+            if len(state['isr']) != factor or not set(state['isr']).issubset(brokers):
+                table.append({
+                    'Partition': partition,
+                    'Topic': topic_name,
+                    'State': state
+                })
+        if table:
+            _LOG.info('Invalid topics:')
+            _print_table(table)
+        else:
+            print('All replica lists look valid')
+
 
 if __name__ == '__main__':
     cli()

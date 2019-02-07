@@ -7,7 +7,7 @@ import boto3
 import requests
 
 from bubuku.config import Config, KafkaProperties
-from bubuku.id_generator import BrokerIDByIp, BrokerIdAutoAssign
+from bubuku.id_generator import BrokerIdGenerator
 from bubuku.zookeeper import BukuExhibitor, AddressListProvider
 from bubuku.zookeeper.exhibitor import ExhibitorAddressProvider
 
@@ -22,6 +22,9 @@ class EnvProvider(object):
         raise NotImplementedError('Not implemented')
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
+        raise NotImplementedError('Not implemented')
+
+    def get_rack(self):
         raise NotImplementedError('Not implemented')
 
     @staticmethod
@@ -39,17 +42,23 @@ class AmazonEnvProvider(EnvProvider):
         self.aws_addr = '169.254.169.254'
         self.config = config
         self.ip_address = None
+        self._document = None
 
     def _get_document(self) -> dict:
-        document = requests.get('http://{}/latest/dynamic/instance-identity/document'.format(self.aws_addr),
-                                timeout=5).json()
-        _LOG.info("Amazon specific information loaded from AWS: {}".format(json.dumps(document, indent=2)))
-        return document
+        if not self._document:
+            self._document = requests.get(
+                'http://{}/latest/dynamic/instance-identity/document'.format(self.aws_addr),
+                timeout=5).json()
+            _LOG.info("Amazon specific information loaded from AWS: {}".format(json.dumps(self._document, indent=2)))
+        return self._document
 
     def get_id(self) -> str:
         if not self.ip_address:
             self.ip_address = self._get_document()['privateIp']
         return self.ip_address
+
+    def get_rack(self):
+        return self._get_document()['availabilityZone']
 
     def _load_instance_ips(self, lb_name: str):
         region = self._get_document()['region']
@@ -73,7 +82,7 @@ class AmazonEnvProvider(EnvProvider):
         return ExhibitorAddressProvider(partial(self._load_instance_ips, self.config.zk_stack_name))
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
-        return BrokerIDByIp(zk, self.get_id(), kafka_props)
+        return BrokerIdGenerator(zk, kafka_props)
 
 
 class _LocalAddressProvider(AddressListProvider):
@@ -90,5 +99,8 @@ class LocalEnvProvider(EnvProvider):
     def get_address_provider(self):
         return _LocalAddressProvider()
 
+    def get_rack(self):
+        return None
+
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
-        return BrokerIdAutoAssign(zk, kafka_props)
+        return BrokerIdGenerator(zk, kafka_props)

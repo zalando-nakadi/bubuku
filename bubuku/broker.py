@@ -1,9 +1,10 @@
 import json
 import logging
-import subprocess
+from time import time, sleep
 
 from bubuku.config import KafkaProperties
 from bubuku.id_generator import BrokerIdGenerator
+from bubuku.process import KafkaProcess
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.broker')
@@ -13,67 +14,83 @@ class LeaderElectionInProgress(Exception):
     pass
 
 
-class KafkaProcessHolder(object):
-    def __init__(self):
-        self.process = None
-
-    def get(self):
-        return self.process
-
-    def set(self, process):
-        self.process = process
-
-
 class StartupTimeout(object):
-    def __init__(self, initial_value: float, config: str):
-        self.timeout = initial_value
-        self.config = config
-
-    def get_timeout(self) -> float:
-        return self.timeout
+    def is_timed_out(self, seconds: float) -> bool:
+        raise Exception('Not supported')
 
     def on_timeout_fail(self):
-        self.timeout += self.get_step()
-
-    def get_step(self) -> float:
-        return 0.
-
-    def __str__(self):
-        return 'timeout={}, step={}, config={}'.format(self.get_timeout(), self.get_step(), self.config)
+        raise Exception('Not supported')
 
     @staticmethod
     def build(props: dict):
         type_ = props.get('type', 'linear')
-        result = StartupTimeout(float(props.get('initial', '300')),
-                                ','.join('{}={}'.format(k, v) for k, v in props.items()))
         if type_ == 'linear':
-            step = float(props.get('step', '60'))
-            result.get_step = lambda: step
+            return LinearTimeout(float(props.get('initial', 300)), float(props.get('step', '60')))
         elif type_ == 'progressive':
-            scale = float(props.get('step', '0.5'))
-            result.get_step = lambda: result.timeout * scale
+            return ProgressiveTimeout(float(props.get('initial', 300)), float(props.get('step', '0.5')))
+        elif type_ == 'none':
+            return NoTimeout()
         else:
             raise NotImplementedError('Startup timeout type {} is not valid'.format(type_))
-        return result
+
+
+class ProgressiveTimeout(StartupTimeout):
+    def __init__(self, initial: float, scale: float):
+        self.initial = initial
+        self.timeout = initial
+        self.scale = scale
+
+    def is_timed_out(self, seconds: float) -> bool:
+        return seconds > self.timeout
+
+    def on_timeout_fail(self):
+        self.timeout = self.timeout * (1 + self.scale)
+
+    def __str__(self):
+        return 'Progressive, initial={}, scale={}, current={}'.format(self.initial, self.scale, self.timeout)
+
+
+class LinearTimeout(StartupTimeout):
+    def __init__(self, initial: float, step: float):
+        self.initial = initial
+        self.timeout = initial
+        self.step = step
+
+    def is_timed_out(self, seconds: float) -> bool:
+        return seconds > self.timeout
+
+    def on_timeout_fail(self):
+        self.timeout += self.step
+
+    def __str__(self):
+        return 'Linear, initial={}, step={}, current={}'.format(self.initial, self.step, self.timeout)
+
+
+class NoTimeout(StartupTimeout):
+    def is_timed_out(self, seconds: float) -> bool:
+        return False
+
+    def on_timeout_fail(self):
+        pass
 
 
 class BrokerManager(object):
-    def __init__(self, process_holder: KafkaProcessHolder, kafka_dir: str, exhibitor: BukuExhibitor,
+    def __init__(self, process: KafkaProcess, exhibitor: BukuExhibitor,
                  id_manager: BrokerIdGenerator, kafka_properties: KafkaProperties, timeout: StartupTimeout):
-        self.kafka_dir = kafka_dir
         self.id_manager = id_manager
         self.exhibitor = exhibitor
         self.kafka_properties = kafka_properties
-        self.process_holder = process_holder
+        self.process = process
         self.timeout = timeout
 
     def is_running_and_registered(self):
-        if not self.process_holder.get():
+        if not self.process.is_running():
             return False
         return self.id_manager.is_registered()
 
     def stop_kafka_process(self):
-        self._terminate_process()
+        if self.process.is_running():
+            self.process.stop_and_wait()
         self._wait_for_zk_absence()
 
     def _is_clean_election(self):
@@ -90,19 +107,10 @@ class BrokerManager(object):
             return False
         return not self._is_leadership_transferred(dead_broker_ids=[broker_id])
 
-    def _terminate_process(self):
-        if self.process_holder.get() is not None:
-            try:
-                self.process_holder.get().terminate()
-                self.process_holder.get().wait()
-            except Exception as e:
-                _LOG.error('Failed to wait for termination of kafka process', exc_info=e)
-            finally:
-                self.process_holder.set(None)
-
     def _wait_for_zk_absence(self):
         try:
-            self.id_manager.wait_for_broker_id_absence()
+            while self.id_manager.is_registered():
+                sleep(1)
         except Exception as e:
             _LOG.error('Failed to wait until broker id absence in zk', exc_info=e)
 
@@ -115,16 +123,9 @@ class BrokerManager(object):
         :param zookeeper_address: Address to use for kafka
         :raise LeaderElectionInProgress: raised when broker can not be started because leader election is in progress
         """
-        if not self.process_holder.get():
+        if not self.process.is_running():
             if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_broker_ids()):
                 raise LeaderElectionInProgress()
-
-            broker_id = self.id_manager.get_broker_id()
-            _LOG.info('Using broker_id {} for kafka'.format(broker_id))
-            if broker_id is not None:
-                self.kafka_properties.set_property('broker.id', broker_id)
-            else:
-                self.kafka_properties.delete_property('broker.id')
 
             _LOG.info('Using ZK address: {}'.format(zookeeper_address))
             self.kafka_properties.set_property('zookeeper.connect', zookeeper_address)
@@ -132,32 +133,20 @@ class BrokerManager(object):
             self.kafka_properties.dump()
 
             _LOG.info('Staring kafka process')
-            self.process_holder.set(self._open_process())
+            self.process.start(self.kafka_properties.settings_file)
 
-            _LOG.info('Waiting for kafka to start up with timeout {} seconds'.format(self.timeout.get_timeout()))
-            if not self.id_manager.wait_for_broker_id_presence(self.timeout.get_timeout()):
-                self.timeout.on_timeout_fail()
+            _LOG.info('Waiting for kafka to start with timeout {}'.format(self.timeout))
+            start = time()
+            while self.process.is_running():
+                if self.id_manager.is_registered():
+                    break
+                if self.timeout.is_timed_out(time() - start):
+                    self.timeout.on_timeout_fail()
+                    break
+                sleep(1)
+            if not self.process.is_running() or not self.id_manager.is_registered():
                 _LOG.error(
-                    'Failed to wait for broker to start up, probably will kill, next timeout is'.format(
-                        self.timeout.get_timeout()))
-
-    def get_disjoined_isr_topic_partitions(self):
-        """
-        Gets list of (topic,partition) for which this broker should be in isr list, but for some reason it is not there 
-        :return: list of tuples (topic:str, partition:int)
-        """
-        broker_id = int(self.id_manager.get_broker_id())
-        checked_topic_partitoins = [
-            (topic, partition) for topic, partition, broker_ids in self.exhibitor.load_partition_assignment()
-            if broker_id in broker_ids
-        ]
-        unjoined_topic_partitions = []
-        for topic, partition, state in self.exhibitor.load_partition_states():
-            if (topic, partition) not in checked_topic_partitoins:
-                continue
-            if broker_id not in state.get('isr', []):
-                unjoined_topic_partitions.append((topic, partition))
-        return unjoined_topic_partitions
+                    'Failed to wait for broker to start up, probably will kill, next timeout is'.format(self.timeout))
 
     def _is_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
         _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
@@ -167,20 +156,16 @@ class BrokerManager(object):
                 leader = str(state['leader'])
                 if active_broker_ids and leader not in active_broker_ids:
                     if any(str(x) in active_broker_ids for x in state.get('isr', [])):
-                        _LOG.warn(
+                        _LOG.warning(
                             'Leadership is not transferred for {} {} ({}, brokers: {})'.format(
                                 topic, partition, json.dumps(state), active_broker_ids))
                         return False
                     else:
-                        _LOG.warn('Shit happens! No single isr available for {}, {}, state: {}, '
-                                  'skipping check for that'.format(topic, partition, json.dumps(state)))
+                        _LOG.warning('No single isr available for {}, {}, state: {}, skipping check for that'.format(
+                            topic, partition, json.dumps(state)))
                 if dead_broker_ids and leader in dead_broker_ids:
-                    _LOG.warn('Leadership is not transferred for {} {}, {} (dead list: {})'.format(
+                    _LOG.warning('Leadership is not transferred for {} {}, {} (dead list: {})'.format(
                         topic, partition, json.dumps(state), dead_broker_ids))
                     return False
 
         return True
-
-    def _open_process(self):
-        return subprocess.Popen(
-            [self.kafka_dir + "/bin/kafka-server-start.sh", self.kafka_properties.settings_file])

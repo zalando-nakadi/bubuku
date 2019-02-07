@@ -1,6 +1,7 @@
 import logging
 from collections import namedtuple
 from operator import attrgetter
+from typing import List
 
 import requests
 
@@ -147,7 +148,8 @@ def _load_disk_stats(zk: BukuExhibitor, api_port: int):
 
 def load_swap_data(zk: BukuExhibitor, api_port: int, gap: int) -> (str, str, int, dict):
     """
-    Finds brokers that could be used for gap of size gap
+    Finds brokers that could be used for gap of size gap. If rack awareness is enabled, the swap will be between two
+    brokers in the same rack
     :param zk: Bubuku exhibitor
     :param api_port: bubuku api port
     :param gap: gap in kb to get information for
@@ -157,12 +159,32 @@ def load_swap_data(zk: BukuExhibitor, api_port: int, gap: int) -> (str, str, int
     if not size_stats or len(size_stats) < 2:
         return None, None, None, size_stats
     sorted_stats = sorted(size_stats.items(), key=lambda tup: tup[1]["disk"]["free_kb"])
-    calculated_gap = sorted_stats[-1][1]['disk']['free_kb'] - sorted_stats[0][1]['disk']['free_kb']
+    fat_broker, slim_broker = select_fat_slim_brokers(zk, sorted_stats)
+    if fat_broker is None:
+        return None, None, None, size_stats
+
+    calculated_gap = slim_broker[1]['disk']['free_kb'] - fat_broker[1]['disk']['free_kb']
     _LOG.info('Gap between {} and {} is {}, need to fix: {}'.format(
-        sorted_stats[0][0], sorted_stats[-1][0], calculated_gap, calculated_gap > gap))
+        fat_broker[0], slim_broker[0], calculated_gap, calculated_gap > gap))
     if calculated_gap >= gap:
-        return int(sorted_stats[-1][0]), int(sorted_stats[0][0]), calculated_gap, size_stats
+        return int(slim_broker[0]), int(fat_broker[0]), calculated_gap, size_stats
     return None, None, calculated_gap, size_stats
+
+
+def select_fat_slim_brokers(zk: BukuExhibitor, sorted_stats: list):
+    racks = zk.get_broker_racks()
+    if any([rack is None for rack in racks.values()]):
+        return sorted_stats[0], sorted_stats[-1]
+    for i in range(len(sorted_stats) - 1):
+        fat_broker = sorted_stats[i]
+        fat_rack = racks[int(fat_broker[0])]
+        for j in range(len(sorted_stats) -1, i, -1):
+            slim_broker = sorted_stats[j]
+            slim_rack = racks[int(slim_broker[0])]
+            if slim_rack == fat_rack:
+                return fat_broker, slim_broker
+
+    return None, None
 
 
 class CheckBrokersDiskImbalance(Check):

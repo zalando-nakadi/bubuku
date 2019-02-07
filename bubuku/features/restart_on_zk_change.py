@@ -8,7 +8,6 @@ _LOG = logging.getLogger('bubuku.features.restart_on_zk')
 
 _STAGE_STOP = 'stop'
 _STAGE_START = 'start'
-_STAGE_WAIT_FOR_ISR = 'wait_for_isr'
 
 
 class RestartBrokerChange(Change):
@@ -23,7 +22,7 @@ class RestartBrokerChange(Change):
         return 'restart'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'restart', 'stop']])
+        return all([a not in current_actions for a in ['start', 'restart', 'stop', 'rolling_restart']])
 
     def run(self, current_actions):
         if self.stage == _STAGE_STOP:
@@ -40,16 +39,6 @@ class RestartBrokerChange(Change):
             except Exception as e:
                 _LOG.error('Failed to start kafka process against {}'.format(zk_conn_str), exc_info=e)
                 return True
-            self.stage = _STAGE_WAIT_FOR_ISR
-            return True
-        elif self.stage == _STAGE_WAIT_FOR_ISR:
-            if not self.broker.is_running_and_registered():
-                _LOG.warning("Broker is considered to be dead right after restart, won't wait for isr")
-                return False
-            unjoined = self.broker.get_disjoined_isr_topic_partitions()
-            if unjoined:
-                _LOG.info("Still waiting to join to isr list for topic partitions: {}".format(unjoined))
-                return True
             return False
         else:
             _LOG.error('Stage {} is not supported'.format(self.stage))
@@ -60,7 +49,7 @@ class RestartBrokerChange(Change):
             self.processed_callback()
 
     def __str__(self):
-        return 'RestartOnZkChange ({}), stage={}'.format(self.get_name(), self.stage)
+        return 'RestartBrokerChange ({}), stage={}'.format(self.get_name(), self.stage)
 
 
 class CheckExhibitorAddressChanged(Check):
@@ -79,7 +68,7 @@ class CheckExhibitorAddressChanged(Check):
                     _LOG.warning('ZK address changed again, from {} to {}'.format(new_conn_str, current_conn_str))
                     return True
                 if current_conn_str == self.broker.get_zk_connect_string():
-                    _LOG.warning('Broker already have latest version of zk address: '.format(current_conn_str))
+                    _LOG.warning('Broker already have latest version of zk address: {}'.format(current_conn_str))
                     return True
                 return False
 
