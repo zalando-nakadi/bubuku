@@ -6,7 +6,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from bubuku.communicate import execute_on_controller_thread
 from bubuku.controller import Controller
+from bubuku.env_provider import EnvProvider
 from bubuku.utils import CmdHelper
+from bubuku.features.metric_collector import MetricCollector
+from bubuku.config import load_config
+from bubuku.zookeeper import load_exhibitor_proxy
 
 _CONTROLLER_TIMEOUT = 5
 
@@ -34,6 +38,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_response({'free_kb': free_kb, 'used_kb': used_kb})
         elif self.path.startswith(_API_CONTROLLER):
             self.wrap_controller_execution(lambda: self._run_controller_action(self.path[len(_API_CONTROLLER):]))
+        elif self.path in ('/api/metrics', '/api/metrics/'):
+            config = load_config()
+            env_provider = EnvProvider.create_env_provider(config)
+            with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+                metrics = MetricCollector(zookeeper).get_metrics_from_brokers()
+                self._send_response({'metrics': metrics})
         else:
             self._send_response({'status': 'OK'})
 

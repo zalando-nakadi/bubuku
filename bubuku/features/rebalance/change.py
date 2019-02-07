@@ -2,7 +2,7 @@ import logging
 
 from bubuku.features.rebalance import BaseRebalanceChange
 from bubuku.features.rebalance.broker import BrokerDescription
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, RebalanceThrottleManager
 
 _LOG = logging.getLogger('bubuku.features.rebalance')
 
@@ -118,7 +118,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
     _BALANCE = 'balance'
 
     def __init__(self, zk: BukuExhibitor, broker_ids: list, empty_brokers: list, exclude_topics: list,
-                 parallelism: int = 1):
+                 throttle: int = 100000000, parallelism: int = 1):
         self.zk = zk
         self.all_broker_ids = sorted(int(id_) for id_ in broker_ids)
         self.broker_ids = sorted(int(id_) for id_ in broker_ids if id_ not in empty_brokers)
@@ -129,6 +129,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
         self.action_queue = []
         self.state = OptimizedRebalanceChange._LOAD_STATE
         self.parallelism = parallelism
+        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle)
 
     def __str__(self):
         return 'OptimizedRebalance state={}, queue_size={}, parallelism={}'.format(
@@ -141,6 +142,7 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             return True
         if self.zk.is_rebalancing():
             return True
+
         new_broker_ids = sorted(int(id_) for id_ in self.zk.get_broker_ids())
         if new_broker_ids != self.all_broker_ids:
             _LOG.warning("Rebalance stopped because of broker list change from {} to {}".format(
@@ -164,11 +166,13 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
 
     def _balance(self):
         items = []
+        self.throttle_manager.remove_old_throttle_configurations()
         while self.action_queue and len(items) < self.parallelism:
             items.append(self.action_queue.popitem())  # key, partition tuple
         if not items:
             return True
         data_to_rebalance = [(key[0], key[1], replicas) for key, replicas in items]
+        self.throttle_manager.apply_throttle(data_to_rebalance)
         if not self.zk.reallocate_partitions(data_to_rebalance):
             for key, replicas in items:
                 self.action_queue[key] = replicas
@@ -312,3 +316,6 @@ class OptimizedRebalanceChange(BaseRebalanceChange):
             for i in range(0, len(active_brokers_in_rack)):
                 active_brokers_in_rack[i].set_leader_expectation(new_leader_count[i])
                 active_brokers_in_rack[i].set_replica_expectation(new_replica_count[i] - new_leader_count[i])
+
+    def on_remove(self):
+        self.throttle_manager.remove_all_throttle_configurations()

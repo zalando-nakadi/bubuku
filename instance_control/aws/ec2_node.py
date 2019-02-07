@@ -141,7 +141,7 @@ class EC2(object):
 
             node_ips = subnet.allocate_ip_addresses(self.aws, cluster_config, instance_count)
 
-            cluster_config['security_group'] = security_group.create_or_ger_security_group(self.aws, cluster_config)
+            cluster_config['security_group'] = security_group.create_or_get_security_group(self.aws, cluster_config)
             cluster_config['user_data'] = taupage.generate_user_data(cluster_config)
             cluster_config['instance_profile'] = iam.create_or_get_instance_profile(self.aws, cluster_config)
 

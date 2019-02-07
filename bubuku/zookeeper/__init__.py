@@ -3,11 +3,11 @@ import logging
 import threading
 import time
 import uuid
-
-from typing import Dict
+from typing import Dict, List, Iterable, Tuple
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
+from collections import defaultdict
 
 _LOG = logging.getLogger('bubuku.exhibitor')
 
@@ -167,6 +167,11 @@ class _ZookeeperProxy(object):
                 _LOG.error('Failed to obtain lock for exhibitor, retrying', exc_info=e)
 
 
+class ConfigEntityType(object):
+    BROKER = "brokers"
+    TOPIC = "topics"
+
+
 class BukuExhibitor(object):
     def __init__(self, exhibitor: _ZookeeperProxy, async=True):
         self.exhibitor = exhibitor
@@ -192,7 +197,7 @@ class BukuExhibitor(object):
         except NoNodeError:
             return False
 
-    def get_broker_ids(self) -> list:
+    def get_broker_ids(self) -> List[str]:
         """
         Gets list of available broker ids
         :return: Sorted list of strings - active broker ids.
@@ -204,9 +209,11 @@ class BukuExhibitor(object):
         Lists the rack of each broker, if it exists
         :return: a dictionary of tuples (broker_id, rack), where rack can be None
         """
-        return {int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for broker in self.get_broker_ids()}
+        return {
+        int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for
+        broker in self.get_broker_ids()}
 
-    def load_partition_assignment(self, topics=None) -> list:
+    def load_partition_assignment(self, topics=None) -> Iterable[Tuple[str, int, List[int]]]:
         """
         Lists all the assignments of partitions to particular broker ids.
         :param topics Optional list of topics to get data for
@@ -228,6 +235,31 @@ class BukuExhibitor(object):
                 data = json.loads(self.exhibitor.get('/brokers/topics/{}'.format(topic))[0].decode('utf-8'))
                 for k, v in data['partitions'].items():
                     yield (topic, int(k), v)
+
+    def load_partition_replicas(self, partitions: list) -> list:
+        """
+        Lists all the ISRs of partitions
+        :param partitions: List of (topic, partition) tuples
+        :return: generator of tuples
+        (topic_name, str, partition: int, isr: list of int)
+        """
+        if not partitions:
+            return
+        if self.async:
+            results = [(topic, partition, self.exhibitor.get_async(
+                '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))) for topic, partition in
+                       partitions]
+            for topic, partition, result in results:
+                try:
+                    value, stat = result.get(block=True)
+                except ConnectionLossException:
+                    value, stat = self.exhibitor.get(
+                        '/brokers/topics/{}/partitions/{}/state'.format(topic, partitions))
+                yield (topic, int(partition), json.loads(value.decode('utf-8')).get('isr', []))
+        else:
+            return ((topic, partition, json.loads(self.exhibitor.get(
+                '/brokers/topics/{}/partitions/{}/state'.format(topic, partition)[0]))
+                     .decode('utf-8').get('isr', [])) for topic, partition in partitions)
 
     def load_partition_states(self, topics=None) -> list:
         """
@@ -264,6 +296,69 @@ class BukuExhibitor(object):
         """
         return self.reallocate_partitions([(topic, partition, replicas)])
 
+    def remove_configuration_properties(self, entity_type: str, properties: list, entities=None):
+        """
+        Remove properties from configuration of an entity
+        :param entity_type: Type of the entity_type (ConfigEntityType.BROKER, ConfigEntityType.TOPIC)
+        :param properties: List of properties to remove from the configuration
+        :param entities: List of entities to apply the configuration change to
+        """
+        zk_config_path = "/config/{}".format(entity_type)
+        entities = self.exhibitor.get_children(zk_config_path) if not entities else entities
+        asyncs = {entity: self.exhibitor.get_async("/config/{}/{}".format(entity_type, entity)) for entity
+                  in entities} if self.async else {}
+        to_change_entities = set()
+        for entity in entities:
+            if self.async:
+                try:
+                    config, stats = asyncs.get(entity).get(block=True)
+                except ConnectionLossException:
+                    config, stat = self.exhibitor.get('/config/{}/{}'.format(entity_type, entity))
+            else:
+                config, stats = self.exhibitor.get("/config/{}/{}".format(entity_type, entity))
+            config = json.loads(config.decode('utf-8'))
+            to_change = False
+            for config_property in properties:
+                if config_property in config.get('config', {}):
+                    config.get('config').pop(config_property, None)
+                    to_change = True
+            if to_change:
+                to_change_entities.add((entity, json.dumps(config).encode('utf-8')))
+        for entity, updated_config in to_change_entities:
+            self.exhibitor.set("/config/{}/{}".format(entity_type, entity), updated_config)
+            self._apply_change_notification(entity, entity_type)
+
+    def apply_configuration_properties(self, entity: str, changes: dict, entity_type: str):
+        """
+        Applies dynamic config changes using zookeeper
+        :param entity: id of the entity (broker id or topic name)
+        :param changes: dictionary containing property and key values
+        :param entity_type: type of the entity to apply config changes (ConfigEntityType.BROKER/ConfigEntityType.TOPIC)
+        """
+
+        zk_config_path = "/config/{}/{}".format(entity_type, entity)
+        try:
+            config = json.loads(self.exhibitor.get(zk_config_path)[0].decode('utf-8'))
+            updated_config = config
+            for config_property, value in changes.items():
+                updated_config.get('config', {})[config_property] = value
+            self.exhibitor.set(zk_config_path, json.dumps(updated_config).encode('utf-8'))
+        except NoNodeError:
+            updated_config = {
+                "version": 1,
+                "config": changes
+            }
+            self.exhibitor.create(zk_config_path, json.dumps(updated_config).encode('utf-8'))
+        self._apply_change_notification(entity, entity_type)
+
+    def _apply_change_notification(self, entity: str, entity_type: str):
+        notification_entity = {
+            "version": 2,
+            "entity_path": "{}/{}".format(entity_type, entity)
+        }
+        self.exhibitor.create("/config/changes/config_change_",
+                              json.dumps(notification_entity).encode('utf-8'), sequence=True)
+
     def reallocate_partitions(self, partitions_data: list) -> bool:
         j = {
             "version": "1",
@@ -298,7 +393,7 @@ class BukuExhibitor(object):
         except NoNodeError:
             return None
 
-    def get_disk_stats(self):
+    def get_disk_stats(self) -> Dict[str, dict]:
         stats = {}
         for broker_id in self.get_broker_ids():
             try:
@@ -358,7 +453,7 @@ class BukuExhibitor(object):
         return {
             change: self.exhibitor.get('/bubuku/changes/{}'.format(change))[0].decode('utf-8')
             for change in self.exhibitor.get_children('/bubuku/changes')
-            }
+        }
 
     def register_change(self, name, provider_id):
         _LOG.info('Registering change in zk: {}'.format(name))
@@ -368,7 +463,132 @@ class BukuExhibitor(object):
         _LOG.info('Removing change {} from locks'.format(name))
         self.exhibitor.delete('/bubuku/changes/{}'.format(name), recursive=True)
 
+    def is_rolling_restart_in_progress(self):
+        if 'rolling_restart' in self.get_running_changes():
+            return True
+        return False
+
 
 def load_exhibitor_proxy(address_provider: AddressListProvider, prefix: str) -> BukuExhibitor:
     proxy = _ZookeeperProxy(address_provider, prefix)
     return BukuExhibitor(proxy)
+
+
+class RebalanceThrottleManager(object):
+
+    _BROKER_FOLLOWER_THROTTLE_RATE = "follower.replication.throttled.rate"
+    _BROKER_LEADER_THROTTLE_RATE = "leader.replication.throttled.rate"
+    _TOPIC_LEADER_THROTTLE_REPLICAS = "leader.replication.throttled.replicas"
+    _TOPIC_FOLLOWER_THROTTLE_REPLICAS = "follower.replication.throttled.replicas"
+
+    def __init__(self, zk: BukuExhibitor, throttle: int):
+        self.zk = zk
+        self.throttle = int(throttle)
+        self._current_throttle_value = None
+        self._throttle_applied = False
+        self.throttled_brokers = set()
+        self.throttled_topics = set()
+
+    def apply_throttle(self, partitions_data):
+        """
+        Applies throttle to the brokers and partitions based on reassignment-json-file data.
+        :param partitions_data: List of (topic, partition, replicas)
+        """
+        partitions_data = [(
+            topic,
+            partition,
+            list(map(int, replicas))
+        ) for topic, partition, replicas in partitions_data]
+        if self._throttle_applied and self.throttle == self._current_throttle_value:
+            _LOG.info("Throttle with value {} already applied".format(self._current_throttle_value))
+        elif not self._throttle_applied or self._current_throttle_value != self.throttle:
+            brokers_to_throttle = self._add_throttle_replicas_per_topic(partitions_data)
+            _LOG.info("Applying replication limit to these brokers: {}".format(brokers_to_throttle))
+            self._apply_throttle_to_brokers(brokers_to_throttle)
+            self._throttle_applied, self._current_throttle_value = True, self.throttle
+
+    def _add_throttle_replicas_per_topic(self, partitions_data):
+        """
+        Set partitions to apply throttle to in topic configuration
+        :param partitions_data: List of (topic, partition, replicas)
+        :return: List of leader and follower replicas to which replication throttle is to be applied
+        """
+        self.throttled_topics = set()
+        current_replicas = self.zk.load_partition_replicas(
+            [(topic, partition) for (topic, partition, replicas) in partitions_data])
+        topic_changes = defaultdict(lambda: defaultdict(list))
+        brokers_to_throttle = set()
+
+        replica_data = defaultdict(lambda: defaultdict(list))
+        for topic, partition, replicas in partitions_data:
+            replica_data[topic][partition].extend(replicas)
+
+        for topic, partition, partition_replicas in current_replicas:
+            topic_changes[topic][self._TOPIC_FOLLOWER_THROTTLE_REPLICAS].extend(
+                ["{}:{}".format(partition, replica) for replica in replica_data[topic][partition] if
+                 replica not in partition_replicas])
+            topic_changes[topic][self._TOPIC_LEADER_THROTTLE_REPLICAS].extend(
+                ["{}:{}".format(partition, replica) for replica in partition_replicas])
+            brokers_to_throttle = brokers_to_throttle.union(set(partition_replicas + replica_data[topic][partition]))
+            self.throttled_topics.add(topic)
+
+        for topic, throttle_replicas in topic_changes.items():
+            throttle_config_changes = {}
+            for _property in throttle_replicas:
+                throttle_config_changes[_property] = ','.join(throttle_replicas[_property])
+            self.zk.apply_configuration_properties(str(topic), throttle_config_changes, ConfigEntityType.TOPIC)
+        return brokers_to_throttle
+
+    def _apply_throttle_to_brokers(self, replicas: set):
+        for replica in replicas:
+            self.zk.apply_configuration_properties(
+                str(replica),
+                {
+                    self._BROKER_LEADER_THROTTLE_RATE: str(self.throttle),
+                    self._BROKER_FOLLOWER_THROTTLE_RATE: str(self.throttle)
+                },
+                ConfigEntityType.BROKER
+            )
+        self.throttled_brokers = replicas
+
+    def remove_old_throttle_configurations(self):
+        """
+        Remove the throttle configurations from the broker and the topic configurations
+        """
+        if self.throttled_brokers:
+            _LOG.info("Removing throttle configurations for brokers: {}".format(self.throttled_brokers))
+            self.zk.remove_configuration_properties(
+                entity_type=ConfigEntityType.BROKER,
+                properties=self.get_broker_throttle_properties(),
+                entities=self.throttled_brokers
+            )
+        if self.throttled_topics:
+            _LOG.info("Removing throttle configurations for topics: {}".format(self.throttled_topics))
+            self.zk.remove_configuration_properties(
+                entity_type=ConfigEntityType.TOPIC,
+                properties=self.get_topic_throttle_properties(),
+                entities=self.throttled_topics
+            )
+        self._throttle_applied = False
+        self.throttled_brokers, self.throttled_topics = set(), set()
+
+    def remove_all_throttle_configurations(self):
+        """
+        Remove the throttle configurations from all brokers and topics
+        """
+        self.zk.remove_configuration_properties(
+                entity_type=ConfigEntityType.BROKER,
+                properties=self.get_broker_throttle_properties(),
+        )
+        self.zk.remove_configuration_properties(
+            entity_type=ConfigEntityType.TOPIC,
+            properties=self.get_topic_throttle_properties(),
+        )
+
+    @classmethod
+    def get_broker_throttle_properties(cls):
+        return [cls._BROKER_LEADER_THROTTLE_RATE, cls._BROKER_FOLLOWER_THROTTLE_RATE]
+
+    @classmethod
+    def get_topic_throttle_properties(cls):
+        return [cls._TOPIC_FOLLOWER_THROTTLE_REPLICAS, cls._TOPIC_LEADER_THROTTLE_REPLICAS]
