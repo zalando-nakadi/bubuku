@@ -5,7 +5,7 @@ from collections import namedtuple
 _LOG = logging.getLogger('bubuku.properties')
 
 Config = namedtuple('Config', ('kafka_dir', 'kafka_settings_template', 'zk_stack_name',
-                               'zk_prefix', 'features', 'health_port', 'mode', 'timeout'))
+                               'zk_prefix', 'features', 'health_port', 'mode', 'timeout', 'zk_static_ips'))
 
 
 class KafkaProperties(object):
@@ -66,6 +66,7 @@ def load_config() -> Config:
         kafka_dir=os.getenv('KAFKA_DIR'),
         kafka_settings_template=os.getenv('KAFKA_SETTINGS'),
         zk_stack_name=os.getenv('ZOOKEEPER_STACK_NAME'),
+        zk_static_ips=os.getenv('ZOOKEEPER_STATIC_IPS_PORT'),
         zk_prefix=zk_prefix if zk_prefix.startswith('/') or not zk_prefix else '/{}'.format(zk_prefix),
         features=features,
         health_port=int(os.getenv('HEALTH_PORT', '8888')),
