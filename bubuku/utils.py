@@ -72,3 +72,11 @@ def is_cluster_healthy():
     except Exception as e:
         _LOG.error('Failed to get cluster state', exc_info=e)
         return False
+
+
+def get_max_bytes_in():
+    response = requests.get('http://{}:{}/api/metrics'.format('localhost', '8080'))
+    resp_json = response.json()
+    if not resp_json['metrics']:
+        raise Exception("Can't fetch metrics to note current cluster state. Please try again")
+    return max([int(metric['metrics']['BytesIn']) for metric in resp_json["metrics"]])

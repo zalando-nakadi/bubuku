@@ -5,7 +5,7 @@ import requests
 from requests import Response
 
 from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-from bubuku.utils import get_opt_broker_id, prepare_configs, is_cluster_healthy
+from bubuku.utils import get_opt_broker_id, prepare_configs, is_cluster_healthy, get_max_bytes_in
 from bubuku.zookeeper import load_exhibitor_proxy, BukuExhibitor, RebalanceThrottleManager
 
 _LOG = logging.getLogger('bubuku.cli')
@@ -106,6 +106,11 @@ def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, 
                                                                     "rebalance")
 def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, parallelism: int, bin_packing: bool,
                          throttle: int):
+
+    if throttle and throttle < get_max_bytes_in():
+        print('Throttle value must be set above the max BytesIn for the replication to progress. '
+              'The current max BytesIn is {}'.format(get_max_bytes_in()))
+        return
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
@@ -245,7 +250,7 @@ def show_stats():
         _print_table(table)
 
 
-@cli.command('remove_throttle', help='Remove throttle from all brokers and topics')
+@cli.command('remove_throttle', help='Remove throttle configuration from all brokers and topics')
 def remove_all_throttle_config():
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
