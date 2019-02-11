@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 from functools import partial
+from typing import List
 
 import boto3
 import requests
@@ -79,15 +80,28 @@ class AmazonEnvProvider(EnvProvider):
         return private_ips
 
     def get_address_provider(self):
-        return ExhibitorAddressProvider(partial(self._load_instance_ips, self.config.zk_stack_name))
+        if self.config.zk_static_ips:
+            return StaticAddressesProvider(self.config.zk_static_ips)
+        else:
+            return ExhibitorAddressProvider(partial(self._load_instance_ips, self.config.zk_stack_name))
 
     def create_broker_id_manager(self, zk: BukuExhibitor, kafka_props: KafkaProperties):
         return BrokerIdGenerator(zk, kafka_props)
 
 
 class _LocalAddressProvider(AddressListProvider):
-    def get_latest_address(self) -> (list, int):
+    def get_latest_address(self) -> (List[str], int):
         return ('zookeeper',), 2181
+
+
+class StaticAddressesProvider(AddressListProvider):
+    def __init__(self, addr: str):
+        ips, port = addr.split(':')
+        self.ips = ips.split(',')
+        self.port = int(port)
+
+    def get_latest_address(self) -> (List[str], int):
+        return self.ips, self.port
 
 
 class LocalEnvProvider(EnvProvider):

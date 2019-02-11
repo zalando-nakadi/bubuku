@@ -53,6 +53,8 @@ Bubuku can be configured using environment properties:
  properties to this file and write the contents to `${KAFKA_DIR}/config/server.properties`. Kafka will be started 
   against generated file.
  - `ZOOKEEPER_STACK_NAME` - AWS load balancer name for zookeeper stack
+ - `ZOOKEEPER_STATIC_IPS_PORT` - (overrides ZOOKEEPER_STACK_NAME) - static list 
+ of ips/port of zookeeper stack in the following form: 127.0.0.1,127.0.0.2,127.0.0.3:2181 - several ips and 1 port 
  - `ZOOKEEPER_PREFIX` - Prefix for all the nodes in zk for kafka and bubuku
  - `BROKER_ID_POLICY` - Policy for generating broker id. Possible values are `ip` and `auto`
  - `BUKU_FEATURES` - List of optional bubuku features, see [features](#features) section

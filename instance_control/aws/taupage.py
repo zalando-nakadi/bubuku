@@ -46,7 +46,8 @@ def generate_user_data(cluster_config: dict) -> str:
             'application_logrotate_rotate': 4,
             'environment': {
                 'CLUSTER_NAME': cluster_config['cluster_name'],
-                'ZOOKEEPER_STACK_NAME': environment['zookeeper_stack_name'],
+                'ZOOKEEPER_STACK_NAME': environment.get('zookeeper_stack_name', ''),
+                'ZOOKEEPER_STATIC_IPS_PORT': environment.get('zookeeper_static_ips_port', ''),
                 'ZOOKEEPER_PREFIX': environment['zookeeper_prefix'],
                 'BUBUKU_MODE': environment['bubuku_mode'],
                 'BUKU_FEATURES': environment['buku_features'],
