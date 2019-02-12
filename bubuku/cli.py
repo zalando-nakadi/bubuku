@@ -110,7 +110,7 @@ def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, p
     if throttle and throttle < get_max_bytes_in():
         print('Throttle value must be set above the max BytesIn for the replication to progress. '
               'The current max BytesIn is {}'.format(get_max_bytes_in()))
-        return
+        exit(1)
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
