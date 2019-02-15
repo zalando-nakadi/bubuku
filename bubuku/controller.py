@@ -79,9 +79,11 @@ class Controller(object):
     def cancel_changes(self, name):
         result = len(self.changes.get(name, {}))
         if result:
+            if name in self.zk.get_running_changes():
+                for change in self.changes[name]:
+                    change.on_remove()
             with self.zk.lock(self.provider_id):
                 self.zk.unregister_change(name)
-
             del self.changes[name]
         return result
 

@@ -9,13 +9,21 @@ _LOG = logging.getLogger('MetricCollector')
 class MetricCollector:
     _OFFLINE_PARTITIONS_MBEAN = {
         'name': 'OfflinePartitions',
-        'mbean': 'kafka.controller:type=KafkaController,name=OfflinePartitionsCount'}
+        'mbean': 'kafka.controller:type=KafkaController,name=OfflinePartitionsCount',
+        'field': 'Value'}
     _UNDER_REPLICATED_PARTITIONS_MBEAN = {
         'name': 'UnderReplicatedPartitions',
-        'mbean': 'kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions'}
+        'mbean': 'kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions',
+        'field': 'Value'}
     _PREFERRED_REPLICA_IMBALANCE_MBEAN = {
         'name': 'PreferredReplicaImbalance',
-        'mbean': 'kafka.controller:name=PreferredReplicaImbalanceCount,type=KafkaController'}
+        'mbean': 'kafka.controller:name=PreferredReplicaImbalanceCount,type=KafkaController',
+        'field': 'Value'}
+    _BYTES_IN_MBEAN = {
+        'name': 'BytesIn',
+        'mbean': 'kafka.server:name=BytesInPerSec,type=BrokerTopicMetrics',
+        'field': 'OneMinuteRate'
+    }
     _JOLOKIA_PORT = 8778
 
     def __init__(self, zk: BukuExhibitor):
@@ -32,8 +40,8 @@ class MetricCollector:
                 if response.status_code == 200:
                     response_body = response.json()
                     if response_body.get('status') == 200:
-                        if response_body.get('value', {}).get('Value') is not None:
-                            data['metrics'][metric['name']] = response_body['value']['Value']
+                        if response_body.get('value', {}).get(metric['field']) is not None:
+                            data['metrics'][metric['name']] = response_body['value'][metric['field']]
                             metric_fetched = True
                 if not metric_fetched:
                     _LOG.error("Fetching metric {} for broker: {} failed. Response from broker: {}:{}".format(
@@ -75,5 +83,6 @@ class MetricCollector:
         return [
             cls._OFFLINE_PARTITIONS_MBEAN,
             cls._UNDER_REPLICATED_PARTITIONS_MBEAN,
-            cls._PREFERRED_REPLICA_IMBALANCE_MBEAN
+            cls._PREFERRED_REPLICA_IMBALANCE_MBEAN,
+            cls._BYTES_IN_MBEAN,
         ]

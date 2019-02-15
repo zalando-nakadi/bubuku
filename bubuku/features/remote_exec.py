@@ -51,7 +51,7 @@ class RemoteCommandExecutorCheck(Check):
 
             elif data['name'] == 'migrate':
                 return MigrationChange(self.zk, data['from'], data['to'], data['shrink'],
-                                       int(data.get('parallelism', '1')))
+                                       int(data.get('parallelism', '1')), data['throttle'])
             elif data['name'] == 'fatboyslim':
                 return SwapPartitionsChange(self.zk,
                                             lambda x: load_swap_data(x, self.api_port, int(data['threshold_kb'])))
@@ -104,7 +104,7 @@ class RemoteCommandExecutorCheck(Check):
 
     @staticmethod
     def register_migration(zk: BukuExhibitor, brokers_from: list, brokers_to: list, shrink: bool, broker_id: str,
-                           parallelism: int):
+                           throttle: int, parallelism: int):
         if len(brokers_from) != len(brokers_to):
             raise Exception('Brokers list {} and {} must have the same size'.format(brokers_from, brokers_to))
         if any(b in brokers_from for b in brokers_to) or any(b in brokers_to for b in brokers_from):
@@ -127,7 +127,7 @@ class RemoteCommandExecutorCheck(Check):
 
         with zk.lock():
             action = {'name': 'migrate', 'from': brokers_from, 'to': brokers_to, 'shrink': bool(shrink),
-                      'parallelism': int(parallelism)}
+                      'parallelism': int(parallelism), 'throttle': int(throttle)}
             if broker_id:
                 zk.register_action(action, str(broker_id))
             else:
