@@ -104,15 +104,18 @@ def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, 
               help="Amount of partitions to move in a single rebalance step")
 @click.option('--throttle', type=click.INT, default=100000000, help="Upper bound on bandwidth (in bytes/sec) used for "
                                                                     "rebalance")
+@click.option('--remove-throttle', is_flag=True, help="Don't trigger rebalance but remove throttling "
+                                                      "configuration from all the brokers and topics")
 def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, parallelism: int, bin_packing: bool,
-                         throttle: int):
-
+                         throttle: int, remove_throttle: bool):
     if throttle and throttle < get_max_bytes_in():
         print('Throttle value must be set above the max BytesIn for the replication to progress. '
               'The current max BytesIn is {}'.format(get_max_bytes_in()))
         exit(1)
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        if remove_throttle:
+            return RebalanceThrottleManager.remove_all_throttle_configurations(zookeeper)
         empty_brokers_list = [] if empty_brokers is None else empty_brokers.split(',')
         exclude_topics_list = [] if exclude_topics is None else exclude_topics.split(',')
         __check_all_broker_ids_exist(empty_brokers_list, zookeeper)
@@ -248,13 +251,6 @@ def show_stats():
                 'Used kb': disk.get('used_kb')
             })
         _print_table(table)
-
-
-@cli.command('remove_throttle', help='Remove throttle configuration from all brokers and topics')
-def remove_all_throttle_config():
-    config, env_provider = prepare_configs()
-    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
-        RebalanceThrottleManager.remove_all_throttle_configurations(zookeeper)
 
 
 @cli.group(name='validate', help='Validates internal structures of kafka/zk')
