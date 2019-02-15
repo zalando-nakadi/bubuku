@@ -1,18 +1,20 @@
 import logging
 
 from bubuku.features.rebalance import BaseRebalanceChange
-from bubuku.zookeeper import BukuExhibitor
+from bubuku.zookeeper import BukuExhibitor, RebalanceThrottleManager
 
 _LOG = logging.getLogger('bubuku.features.migrate')
 
 
 class MigrationChange(BaseRebalanceChange):
-    def __init__(self, zk: BukuExhibitor, from_: list, to: list, shrink: bool, parallelism: int = 1):
+    def __init__(self, zk: BukuExhibitor, from_: list, to: list, shrink: bool, parallelism: int = 1,
+                 throttle: int = 100000000):
         self.zk = zk
         self.migration = {int(from_[i]): int(to[i]) for i in range(0, len(from_))}
         self.shrink = shrink
         self.data_to_migrate = None
         self.parallelism = parallelism
+        self.throttle_manager = RebalanceThrottleManager(self.zk, throttle)
 
     def run(self, current_actions) -> bool:
         if self.should_be_paused(current_actions):
@@ -35,6 +37,7 @@ class MigrationChange(BaseRebalanceChange):
             return True
 
         items_to_migrate = []
+        self.throttle_manager.remove_old_throttle_configurations()
         while self.data_to_migrate and len(items_to_migrate) < self.parallelism:
             topic, partition, replicas = self.data_to_migrate.pop()
             replaced_replicas = self._replace_replicas(replicas)
@@ -43,6 +46,7 @@ class MigrationChange(BaseRebalanceChange):
             items_to_migrate.append((topic, partition, replicas, replaced_replicas))
         if not items_to_migrate:
             return False
+        self.throttle_manager.apply_throttle([(t, p, rr) for t, p, _, rr in items_to_migrate])
         if not self.zk.reallocate_partitions([(t, p, rr) for t, p, _, rr in items_to_migrate]):
             for topic, partition, replicas, _ in items_to_migrate:
                 self.data_to_migrate.append((topic, partition, replicas))
@@ -67,3 +71,6 @@ class MigrationChange(BaseRebalanceChange):
             return result
         else:
             return replicas + [k for k in replacement if k not in replicas]
+
+    def on_remove(self):
+        RebalanceThrottleManager.remove_all_throttle_configurations(self.zk)

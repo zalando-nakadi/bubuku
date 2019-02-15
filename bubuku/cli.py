@@ -132,14 +132,21 @@ def rebalance_partitions(broker: str, empty_brokers: str, exclude_topics: str, p
 @click.option('--shrink', is_flag=True, default=False, show_default=True,
               help='Whether or not to shrink replaced broker ids form partition assignment')
 @click.option('--broker', type=click.STRING, help='Optional broker id to execute check on')
+@click.option('--throttle', type=click.INT, default=100000000, help="Upper bound on bandwidth (in bytes/sec) used for "
+                                                                    "reassigning partitions")
 @click.option('--parallelism', type=click.INT, show_default=True, default=1,
               help="Amount of partitions to move in a single migration step")
-def migrate_broker(from_: str, to: str, shrink: bool, broker: str, parallelism: int):
+@click.option('--remove-throttle', is_flag=True, help="Don't trigger rebalance but remove throttling "
+                                                      "configuration from all the brokers and topics")
+def migrate_broker(from_: str, to: str, shrink: bool, broker: str, throttle: int, parallelism: int,
+                   remove_throttle: bool):
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        if remove_throttle:
+            return RebalanceThrottleManager.remove_all_throttle_configurations(zookeeper)
         broker_id = get_opt_broker_id(broker, config, zookeeper, env_provider) if broker else None
         RemoteCommandExecutorCheck.register_migration(zookeeper, from_.split(','), to.split(','), shrink, broker_id,
-                                                      parallelism)
+                                                      throttle, parallelism)
 
 
 @cli.command('swap_fat_slim', help='Move one partition from fat broker to slim one')
