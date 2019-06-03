@@ -16,8 +16,8 @@ Options:
   --broker TEXT  Broker id to delete actions on. By default actions are
                  deleted on all brokers
   --help         Show this message and exit.
-
 ```
+
 #### actions list
 
 ```
@@ -29,8 +29,8 @@ Options:
   --broker TEXT  Broker id to list actions on. By default all brokers are
                  enumerated
   --help         Show this message and exit.
-
 ```
+
 #### migrate
 
 ```
@@ -51,8 +51,8 @@ Options:
   --remove-throttle      Don't trigger rebalance but remove throttling
                          configuration from all the brokers and topics
   --help                 Show this message and exit.
-
 ```
+
 #### rebalance
 
 ```
@@ -77,8 +77,8 @@ Options:
   --remove-throttle      Don't trigger rebalance but remove throttling
                          configuration from all the brokers and topics
   --help                 Show this message and exit.
-
 ```
+
 #### restart
 
 ```
@@ -90,8 +90,8 @@ Options:
   --broker TEXT  Broker id to restart. By default current broker id is
                  restarted
   --help         Show this message and exit.
-
 ```
+
 #### rolling-restart
 
 ```
@@ -109,8 +109,8 @@ Options:
                         task to another broker, after cluster is stable
                         [default: 20]
   --help                Show this message and exit.
-
 ```
+
 #### stats
 
 ```
@@ -120,8 +120,8 @@ Usage: bubuku-cli stats [OPTIONS]
 
 Options:
   --help  Show this message and exit.
-
 ```
+
 #### swap_fat_slim
 
 ```
@@ -132,8 +132,8 @@ Usage: bubuku-cli swap_fat_slim [OPTIONS]
 Options:
   --threshold INTEGER  Threshold in kb to run swap  [default: 100000]
   --help               Show this message and exit.
-
 ```
+
 #### validate replication
 
 ```
@@ -145,5 +145,4 @@ Usage: bubuku-cli validate replication [OPTIONS]
 Options:
   --factor INTEGER  Replication factor  [default: 3]
   --help            Show this message and exit.
-
 ```
