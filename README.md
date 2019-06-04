@@ -122,6 +122,11 @@ Pluggable features are defined in configuration and are disabled by default. Lis
   export STARTUP_TIMEOUT_STEP="60"
  ```
  
+# Command line interface
+
+Bubuku provides a command line tool `bubuku-cli` which should be used directly on the instance. See detailed
+description of all commands [here](https://github.com/zalando-nakadi/bubuku/blob/master/cli.md).
+
 # How to contribute
 
 If you have any features or bugfixes - make pull request providing feature/bugfix and tests that will test your 
