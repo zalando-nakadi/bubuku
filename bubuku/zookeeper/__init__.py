@@ -122,6 +122,13 @@ class _ZookeeperProxy(object):
         self.hosts_cache.touch()
         return self.client.retry(self.client.get, *params)
 
+    def is_node_present(self, node):
+        try:
+            _, stat = self.get(node)
+            return stat is not None
+        except NoNodeError:
+            return False
+
     def get_async(self, *params):
         # Exhibitor is not polled here and it's totally fine!
         self.async_counter.increment()
