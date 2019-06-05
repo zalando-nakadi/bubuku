@@ -48,6 +48,6 @@ def generate_command_docs(name, command, md_file, parent_ctx=None):
 
 
 if __name__ == '__main__':
-    print("Generating docs for bubuku-cli (based on bubuku version that is currently installed on the system)...")
+    print("Generating docs for bubuku-cli (make sure you installed the latest version of bubuku on a system)...")
     generate_docs("bubuku-cli", "cli.md")
     print("Done (updated 'cli.md' with latest docs)")
