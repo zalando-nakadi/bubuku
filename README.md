@@ -125,7 +125,7 @@ Pluggable features are defined in configuration and are disabled by default. Lis
 # Command line interface
 
 Bubuku provides a command line tool `bubuku-cli` which should be used directly on the instance. See detailed
-description of all commands [here](https://github.com/zalando-nakadi/bubuku/blob/master/cli.md).
+description of all commands [here](https://github.com/zalando-nakadi/bubuku/blob/master/cli_docs/cli.md).
 
 # How to contribute
 
