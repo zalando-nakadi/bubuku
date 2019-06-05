@@ -1,4 +1,7 @@
+#!/usr/bin/env python3
+import json
 import logging
+import time
 
 import click
 import requests
@@ -57,6 +60,73 @@ def cli():
     print('Start, monitor and rebalance kafka cluster in AWS setup')
     print()
     pass
+
+
+@cli.command('preferred-replica-election',
+             help='Do preferred replica election, as command line tool from kafka have a number of limitations. '
+                  'Only partitions, that are improperly allocated will be affected. In case if size of resulting json '
+                  'is too big, it will be split into several parts, and they will be executed one after another.')
+@click.option('--dry-run', is_flag=True, help="Do not apply the changes. Instead just prepare json file(s)")
+@click.option('--max-json-size', type=click.INT, default=512000, help="Maximum size of json data to write to zk",
+              show_default=True)
+def trigger_preferred_replica_election(dry_run: bool, max_json_size: int):
+    config, env_provider = prepare_configs()
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        dd = {}
+        for topic, partition, state in zookeeper.load_partition_states():
+            dd[(topic, partition)] = state
+
+        wrong_assignment = []
+        for topic, partition, replica_list in zookeeper.load_partition_assignment():
+            key = (topic, partition)
+            if not replica_list:
+                _LOG.warning('Replica list is not defined for %s', key)
+                continue
+            if key not in dd:
+                _LOG.warning("Topic partition %s is not found in active states list. will skip it", key)
+                continue
+            leader = dd[key].get('leader')
+            if leader is None:
+                _LOG.warning('Current leader is not defined for ')
+                continue
+            expected_leader = replica_list[0]
+            if leader != expected_leader:
+                _LOG.info("Found incorrect assignment: %s, leader is %d, but should be the first one in %s",
+                          key, leader, replica_list)
+                wrong_assignment.append(key)
+        while wrong_assignment:
+            items_to_take = len(wrong_assignment)
+            change_applied = False
+            while not change_applied:
+                json_element = {
+                    "version": 1,
+                    "partitions": [{'topic': v[0], 'partition': int(v[1])} for v in wrong_assignment[:items_to_take]]
+                }
+
+                res = json.dumps(json_element).encode('utf-8')
+                if len(res) > max_json_size:
+                    new_items_to_take = int(items_to_take / 2)
+                    _LOG.info("Not fitting to %d bytes with %d items, will try %d items",
+                              max_json_size, items_to_take, new_items_to_take)
+                    items_to_take = new_items_to_take
+                    if items_to_take <= 0:
+                        _LOG.error("Incorrect configuration - even one key is not fitting to proposed size %d. "
+                                   "Stop playing and do the job!", max_json_size)
+                        exit(1)
+                    continue
+                if dry_run:
+                    print(res.decode('utf-8'))
+                else:
+                    _LOG.info("Applying %s", res.decode('utf-8'))
+                    zookeeper.exhibitor.create('/admin/preferred_replica_election', res)
+
+                    while zookeeper.exhibitor.is_node_present('/admin/preferred_replica_election'):
+                        _LOG.info("Waiting for node to disappear")
+                        time.sleep(1)
+                change_applied = True
+                del wrong_assignment[:items_to_take]
+
+        _LOG.info("Done with assignment")
 
 
 @cli.command('restart', help='Restart kafka instance')
