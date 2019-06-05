@@ -67,14 +67,14 @@ def cli():
                   'Only partitions, that are improperly allocated will be affected. In case if size of resulting json '
                   'is too big, it will be split into several parts, and they will be executed one after another.')
 @click.option('--dry-run', is_flag=True, help="Do not apply the changes. Instead just prepare json file(s)")
-@click.option('--max-json-size', type=click.INT, default=512000, help="Maximum size of json data to write to zk",
-              show_default=True)
+@click.option('--max-json-size', type=click.INT, default=512000, 
+              help="Maximum size of json data in bytes to write to zk", show_default=True)
 def trigger_preferred_replica_election(dry_run: bool, max_json_size: int):
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
-        dd = {}
+        partitions_state = {}
         for topic, partition, state in zookeeper.load_partition_states():
-            dd[(topic, partition)] = state
+            partitions_state[(topic, partition)] = state
 
         wrong_assignment = []
         for topic, partition, replica_list in zookeeper.load_partition_assignment():
@@ -82,10 +82,10 @@ def trigger_preferred_replica_election(dry_run: bool, max_json_size: int):
             if not replica_list:
                 _LOG.warning('Replica list is not defined for %s', key)
                 continue
-            if key not in dd:
+            if key not in partitions_state:
                 _LOG.warning("Topic partition %s is not found in active states list. will skip it", key)
                 continue
-            leader = dd[key].get('leader')
+            leader = partitions_state[key].get('leader')
             if leader is None:
                 _LOG.warning('Current leader is not defined for ')
                 continue
