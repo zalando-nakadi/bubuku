@@ -9,8 +9,8 @@ from pkg_resources import iter_entry_points
 def generate_docs(name, filename):
     console_scripts = [ep for ep in iter_entry_points('console_scripts', name=name)]
 
-    if len(console_scripts) < 1:
-        raise click.ClickException('"{0}" is not an installed console script.'.format(name))
+    if len(console_scripts) == 0:
+        raise click.ClickException('"{}" is not an installed console script.'.format(name))
 
     # read all lines from original file
     original_lines = []
@@ -18,7 +18,6 @@ def generate_docs(name, filename):
         original_lines = md_file.readlines()
 
     with open(filename, "w") as md_file:
-
         # copy header from original file
         for line in original_lines:
             md_file.write(line)

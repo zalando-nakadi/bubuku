@@ -3,4 +3,7 @@ python:
   - "3.5"
   - "3.6"
 install: "pip3 install -r requirements.txt"
-script: "python3 setup.py test"
+script:
+  - "python3 setup.py test"
+  - "update_wiki.sh"
+#  - if [ "$TRAVIS_BRANCH" = "master" ]; then update_wiki.sh; fi
