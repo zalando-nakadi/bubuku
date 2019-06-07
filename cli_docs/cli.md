@@ -2,8 +2,6 @@
 
 Bubuku provides a command line tool `bubuku-cli` which should be used directly on the instance. Available commands:
 
-[comment]: # (bubuku-cli help below is auto-generated, do not edit manually)
-[comment]: # (AUTOGEN_START)
 #### preferred-replica-election
 ```
 Usage: bubuku-cli preferred-replica-election [OPTIONS]

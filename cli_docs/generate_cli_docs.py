@@ -1,33 +1,14 @@
 #!/usr/bin/env python3
 
-import sys
-
 import click
-from pkg_resources import iter_entry_points
 
+from bubuku import cli
 
-def generate_docs(name, filename):
-    console_scripts = [ep for ep in iter_entry_points('console_scripts', name=name)]
+_HEADER = """# Bubuku command line interface
 
-    if len(console_scripts) == 0:
-        raise click.ClickException('"{}" is not an installed console script.'.format(name))
+Bubuku provides a command line tool `bubuku-cli` which should be used directly on the instance. Available commands:
 
-    # read all lines from original file
-    original_lines = []
-    with open(filename, "r") as md_file:
-        original_lines = md_file.readlines()
-
-    with open(filename, "w") as md_file:
-        # copy header from original file
-        for line in original_lines:
-            md_file.write(line)
-            if "AUTOGEN_START" in line:
-                break
-
-        # generate docs for cli
-        for entry_point in console_scripts:
-            cli = entry_point.resolve()
-            generate_command_docs(name, cli, md_file)
+"""
 
 
 def generate_command_docs(name, command, md_file, parent_ctx=None):
@@ -47,6 +28,10 @@ def generate_command_docs(name, command, md_file, parent_ctx=None):
 
 
 if __name__ == '__main__':
-    print("Generating docs for bubuku-cli (make sure you installed the latest version of bubuku on a system)...")
-    generate_docs("bubuku-cli", "cli.md")
-    print("Done (updated 'cli.md' with latest docs)")
+    print("Generating 'cli.md'...")
+    
+    with open("cli.md", "w") as md_file:
+        md_file.write(_HEADER)
+        generate_command_docs("bubuku-cli", cli.cli, md_file)
+
+    print("Done")
