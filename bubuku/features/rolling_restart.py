@@ -305,8 +305,8 @@ class RegisterRollingRestart(State):
                           'restart_assignment': self.state_context.restart_assignment,
                           'image': self.state_context.cluster_config.get_application_version(),
                           'instance_type': self.state_context.cluster_config.get_instance_type(),
-                          'scalyr_key': self.state_context.cluster_config.get_scalyr_region(),
-                          'scalyr_region': self.state_context.cluster_config.get_scalyr_account_key(),
+                          'scalyr_key': self.state_context.cluster_config.get_scalyr_account_key(),
+                          'scalyr_region': self.state_context.cluster_config.get_scalyr_region(),
                           'kms_key_id': self.state_context.cluster_config.get_kms_key_id(),
                           'cool_down': self.state_context.cool_down}
                 next_broker_id = list(self.state_context.restart_assignment.keys())[0]
