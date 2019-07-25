@@ -309,7 +309,7 @@ class RegisterRollingRestart(State):
                           'scalyr_region': self.state_context.cluster_config.get_scalyr_region(),
                           'kms_key_id': self.state_context.cluster_config.get_kms_key_id(),
                           'cool_down': self.state_context.cool_down}
-                next_broker_id = sorted(list(self.state_context.restart_assignment.keys())[0])
+                next_broker_id = sorted(list(self.state_context.restart_assignment.keys()))[0]
                 self.state_context.zk.register_action(action, broker_id=next_broker_id)
                 return True
             return False
