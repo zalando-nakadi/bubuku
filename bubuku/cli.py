@@ -140,12 +140,12 @@ def restart_broker(broker: str):
 
 
 @cli.command('rolling-restart', help='Rolling restart of Kafka cluster')
-@click.option('--image-tag', type=click.STRING, help='Docker image to run Kafka broker')
+@click.option('--image-tag', type=click.STRING, required=True, help='Docker image to run Kafka broker')
 @click.option('--instance-type', type=click.STRING, default='m4.4xlarge',
               help='AWS instance type to run Kafka broker on')
-@click.option('--scalyr-key', type=click.STRING, help='Scalyr account key')
-@click.option('--scalyr-region', type=click.STRING, help='Scalyr region to use')
-@click.option('--kms-key-id', type=click.STRING, help='Kms key id to decrypt data with')
+@click.option('--scalyr-key', type=click.STRING, required=True, help='Scalyr account key')
+@click.option('--scalyr-region', type=click.STRING, required=True, help='Scalyr region to use')
+@click.option('--kms-key-id', type=click.STRING, required=True, help='Kms key id to decrypt data with')
 @click.option('--cool-down', type=click.INT, default=20, show_default=True,
               help='Number of seconds to wait before passing the restart task to another broker, after cluster is '
                    'stable')
