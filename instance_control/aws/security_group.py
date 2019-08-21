@@ -8,7 +8,7 @@ _LOG = logging.getLogger('bubuku.cluster.aws.security_group')
 def create_or_get_security_group(aws_: AWSResources, cluster_config: dict) -> dict:
     _LOG.info('Configuring security group ...')
     security_groups = aws_.ec2_client.describe_security_groups(
-        Filters=[{'Name': 'group-name', 'Values': [cluster_config['cluster_name']]}])
+        Filters=[{'Name': 'group-name', 'Values': [cluster_config['cluster_name']] }, {'Name': 'vpc-id', 'Values': [cluster_config['vpc_id']]}])
     if security_groups['SecurityGroups']:
         sg = security_groups['SecurityGroups'][0]
         _LOG.info('Security group for %s exists, will use it %s', cluster_config['cluster_name'], sg['GroupId'])
