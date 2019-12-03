@@ -1,5 +1,5 @@
-FROM registry.opensource.zalan.do/stups/openjdk:1.8.0-162-16
-MAINTAINER dmitriy.sorokin@zalando.de
+FROM registry.opensource.zalan.do/stups/openjdk:1.8.0-222-22
+MAINTAINER Team Aruha, team-aruha@zalando.de
 
 ENV KAFKA_VERSION="2.3.0" SCALA_VERSION="2.12" JOLOKIA_VERSION="1.3.3"
 ENV KAFKA_LOGS_DIR="/data/logs"
@@ -10,27 +10,24 @@ ENV BUKU_FEATURES="restart_on_exhibitor,rebalance_on_start,graceful_terminate,us
 ENV KAFKA_OPTS="-server -Dlog4j.configuration=file:${KAFKA_DIR}/config/log4j.properties -Dkafka.logs.dir=${KAFKA_LOGS_DIR} -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=32M -javaagent:/opt/jolokia-jvm-agent.jar=host=0.0.0.0"
 ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
 
-ADD download_kafka.sh /tmp/download_kafka.sh
+ADD docker/download_kafka.sh /tmp/download_kafka.sh
 
-RUN sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
+RUN sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION} && apt-get update && apt-get install -y python3-pip 
 
-ADD server.properties ${KAFKA_DIR}/config/
-ADD run_bubuku_daemon.sh /
-ADD server.properties ${KAFKA_SETTINGS}
-ADD log4j.properties ${KAFKA_DIR}/config/
+ADD docker/server.properties ${KAFKA_DIR}/config/
+ADD docker/server.properties ${KAFKA_SETTINGS}
+ADD docker/log4j.properties ${KAFKA_DIR}/config/
 
-RUN mkdir -p $KAFKA_LOGS_DIR/ && \
-    apt-get update && \
-    apt-get install -y python3-pip && \
-    pip3 install --upgrade kazoo boto3 && \
-    pip3 install --upgrade bubuku==0.10.48 && \
-    chmod 777 /run_bubuku_daemon.sh && \
-    chmod -R 777 $KAFKA_LOGS_DIR && \
-    chmod 777 ${KAFKA_SETTINGS}
+ENV SRC_PATH="/bubuku"
 
-WORKDIR $KAFKA_DIR
+ADD ./bubuku "${SRC_PATH}/bubuku"
+ADD ./requirements.txt "${SRC_PATH}/"
+ADD ./setup.py "${SRC_PATH}/"
+RUN cd "${SRC_PATH}" && pip3 install --no-cache-dir -r "requirements.txt" && python3 setup.py develop
 
-ENTRYPOINT ["/bin/bash", "/run_bubuku_daemon.sh"]
+EXPOSE 9092 8080 8778 8888
 
-EXPOSE 9092 8004 8080
+ENTRYPOINT ["/bin/bash", "-c", "exec bubuku-daemon"]
+
+
 
