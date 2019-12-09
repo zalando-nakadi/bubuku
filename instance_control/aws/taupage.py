@@ -42,8 +42,10 @@ def generate_user_data(cluster_config: dict) -> str:
                       '8778': '8778',
                       environment['health_port']: environment['health_port']},
             'enhanced_cloudwatch_metrics': True,
-            'application_logrotate_size': '100M',
-            'application_logrotate_rotate': 4,
+            'application_logrotate_disable_copytruncate': 'true',
+            'application_logrotate_interval': 'hourly',
+            'application_logrotate_size': '256M',
+            'application_logrotate_rotate': 1,
             'environment': {
                 'CLUSTER_NAME': cluster_config['cluster_name'],
                 'ZOOKEEPER_STACK_NAME': environment.get('zookeeper_stack_name', ''),

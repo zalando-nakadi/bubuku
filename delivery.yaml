@@ -1,0 +1,34 @@
+version: "2017-09-20"
+pipeline:
+  - id: build
+    type: script
+    overlay: guild-python/legacy
+    env:
+        PYENV_VERSION: 3.6.9
+    commands:
+      - desc: Install Docker
+        cmd: |
+          curl -fLOsS https://delivery.cloud.zalando.com/utils/ensure-docker && sh ensure-docker && rm ensure-docker
+
+      - desc: Run tests
+        cmd: |
+          pip3 install -r requirements.txt 
+          python3 setup.py test
+
+      - desc: Build and push Docker image
+        cmd: |
+
+          IMAGE=registry-write.opensource.zalan.do/aruha/bubuku:${CDP_BUILD_VERSION}
+
+          docker build -t $IMAGE .
+
+          if [ -z "$CDP_PULL_REQUEST_NUMBER" ]; then
+            docker push $IMAGE
+          fi
+          TEST_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku:test-${CDP_BUILD_VERSION}"
+          docker tag "$IMAGE" "$TEST_IMAGE"
+          docker push "$TEST_IMAGE"
+notifications:
+  - channel: google_chat
+    rooms:
+      - AAAAmX_hkRQ
