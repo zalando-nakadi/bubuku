@@ -25,7 +25,7 @@ ADD ./requirements.txt "${SRC_PATH}/"
 ADD ./setup.py "${SRC_PATH}/"
 RUN cd "${SRC_PATH}" && pip3 install --no-cache-dir -r "requirements.txt" && python3 setup.py develop
 
-EXPOSE 9092 8080 8778 8888
+EXPOSE 9092 8080 8778
 
 ENTRYPOINT ["/bin/bash", "-c", "exec bubuku-daemon"]
 
