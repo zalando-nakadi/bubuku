@@ -21,5 +21,8 @@
     "startup_timeout_type": "linear",
     "startup_timeout_initial": 300,
     "startup_timeout_step": 60
+  },
+  "sysctl": {
+    "vm.max_map_count": 100000
   }
 }
