@@ -60,6 +60,7 @@ def generate_user_data(cluster_config: dict) -> str:
                 'STARTUP_TIMEOUT_INITIAL': environment.get('startup_timeout_initial', ),
                 'STARTUP_TIMEOUT_STEP': environment.get('startup_timeout_step')
             },
+            'sysctl': cluster_config.get('sysctl'),
             'volumes': {
                 'ebs': {
                     '/dev/xvdk': None
