@@ -7,6 +7,7 @@ import click
 from instance_control.command.attach import AttachCommand
 from instance_control.command.create import CreateCommand
 from instance_control.command.get import GetCommand
+from instance_control.command.replace import replace_volumes_command
 from instance_control.command.terminate import TerminateCommand
 from instance_control.command.upgrade import UpgradeCommand
 
@@ -54,6 +55,17 @@ def create(instance_count: int, availability_zone: str, image_version: str, clus
 @click.option('--odd', required=True)
 def terminate(cluster_config: str, ip: str, user: str, odd: str):
     TerminateCommand(cluster_config, ip, user, odd).run()
+
+
+@cli.command('replace-volume', help='Replaces volumes for specific instances')
+@click.option('--cluster-config', required=False)
+@click.option('--ip', required=False)
+@click.option('--user', required=False)
+@click.option('--odd', required=False)
+@click.option('--size', required=False, type=int)
+@click.option('--progress', help='File in which replacement activity should be tracked', required=True)
+def replace_volume(cluster_config: str, ip: str, user: str, odd: str, size: int, progress: str):
+    replace_volumes_command(cluster_config, ip, user, odd, size, progress)
 
 
 @cli.command('get', help='Cluster nodes overview: ip, instance id and volume id')

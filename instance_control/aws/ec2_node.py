@@ -117,6 +117,7 @@ class EC2(object):
                     security_group_id=cluster_config['security_group']['GroupId'],
                     cluster_config=cluster_config))
         # wait for all instances to start
+        time.sleep(10) # Instances are sometimes lazy and aws produces exceptions
         while starting_instances:
             _LOG.info("Waiting for instances to start: {}".format(starting_instances))
             time.sleep(5)
