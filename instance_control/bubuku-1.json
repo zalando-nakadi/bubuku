@@ -1,6 +1,6 @@
 {
   "cluster_name": "bubuku-1",
-  "application_id": "bubuku-appliance",
+  "application_id": "bubuku",
   "account": "aruha-test",
   "region": "eu-central-1",
   "vpc_id": "vpc-12345678",
@@ -9,7 +9,7 @@
   "volume_size": 500,
   "scalyr_key": "key-1234",
   "scalyr_region": "eu",
-  "image_version": "bubuku-appliance",
+  "image_version": "bubuku",
   "environment": {
     "ZOOKEEPER_STACK_NAME": "exhibitor-staging",
     "HEALTH_PORT": 8888,

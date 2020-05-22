@@ -131,7 +131,7 @@ class EC2(object):
                 metric.create_auto_recovery_alarm(self.aws, cluster_config['cluster_name'], instance_id)
 
     def create(self, cluster_config: dict, instance_count: int):
-        artifact_name = 'bubuku-appliance'
+        artifact_name = 'bubuku'
         cluster_config['docker_image'] = 'registry.opensource.zalan.do/aruha/{}:{}'.format(
             artifact_name, cluster_config['image_version'])
         _LOG.info('Preparing AWS configuration for ec2 instance creation')
