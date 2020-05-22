@@ -1,7 +1,7 @@
-FROM registry.opensource.zalan.do/stups/openjdk:1.8.0-222-22
+FROM registry.opensource.zalan.do/stups/openjdk:1.8.0-232-23
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
-ENV KAFKA_VERSION="2.3.0" SCALA_VERSION="2.12" JOLOKIA_VERSION="1.6.2"
+ENV KAFKA_VERSION="2.4.1" SCALA_VERSION="2.12" JOLOKIA_VERSION="1.6.2"
 ENV KAFKA_LOGS_DIR="/data/logs"
 ENV KAFKA_DIR="/opt/kafka"
 ENV HEALTH_PORT=8080
