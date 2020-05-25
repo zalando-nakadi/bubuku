@@ -1,7 +1,7 @@
 import requests
 import yaml
 
-_ARTIFACT_NAME = 'bubuku'
+_ARTIFACT_NAME = 'bubuku-appliance'
 
 
 class ConfigLoader():

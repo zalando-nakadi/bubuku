@@ -26,7 +26,7 @@ def validate_config(cluster_config: dict):
     if not cluster_config['region']:
         raise Exception('Please specify at least one region')
 
-    artifact_name = 'bubuku'
+    artifact_name = 'bubuku-appliance'
     url = 'https://registry.opensource.zalan.do/teams/aruha/artifacts/{}/tags'.format(artifact_name)
     if not next((tag for tag in requests.get(url).json() if tag['name'] == cluster_config['image_version']), None):
         raise Exception('Docker image was not found')
