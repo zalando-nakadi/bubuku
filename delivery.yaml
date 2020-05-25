@@ -18,7 +18,7 @@ pipeline:
       - desc: Build and push Docker image
         cmd: |
 
-          IMAGE=registry-write.opensource.zalan.do/aruha/bubuku:${CDP_BUILD_VERSION}
+          IMAGE=registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}
 
           docker build -t $IMAGE .
 
