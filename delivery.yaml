@@ -3,6 +3,8 @@ pipeline:
   - id: build
     type: script
     overlay: guild-python/legacy
+    env:
+        PYENV_VERSION: 3.6.10
     commands:
       - desc: Install Docker
         cmd: |
