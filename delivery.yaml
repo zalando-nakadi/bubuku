@@ -25,7 +25,7 @@ pipeline:
           if [ -z "$CDP_PULL_REQUEST_NUMBER" ]; then
             docker push $IMAGE
           fi
-          TEST_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku:test-${CDP_BUILD_VERSION}"
+          TEST_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-test-${CDP_BUILD_VERSION}"
           docker tag "$IMAGE" "$TEST_IMAGE"
           docker push "$TEST_IMAGE"
 notifications:
