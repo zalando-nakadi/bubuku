@@ -23,7 +23,8 @@ ENV SRC_PATH="/bubuku"
 ADD ./bubuku "${SRC_PATH}/bubuku"
 ADD ./requirements.txt "${SRC_PATH}/"
 ADD ./setup.py "${SRC_PATH}/"
-RUN cd "${SRC_PATH}" && \
+RUN mkdir -p $KAFKA_LOGS_DIR/ && \
+    cd "${SRC_PATH}" && \
     pip3 install --no-cache-dir -r "requirements.txt" && \
     python3 setup.py develop && \
     chmod -R 777 $KAFKA_LOGS_DIR && \
