@@ -180,9 +180,9 @@ class ConfigEntityType(object):
 
 
 class BukuExhibitor(object):
-    def __init__(self, exhibitor: _ZookeeperProxy, async=True):
+    def __init__(self, exhibitor: _ZookeeperProxy, async_=True):
         self.exhibitor = exhibitor
-        self.async = async
+        self.async_ = async_
         for node in ('changes', 'actions/global'):
             try:
                 self.exhibitor.create('/bubuku/{}'.format(node), makepath=True)
@@ -227,7 +227,7 @@ class BukuExhibitor(object):
         :returns generator of tuples (topic_name:str, partition:int, replica_list:list(int)), for ex. "test", 0, [1,2,3]
         """
         topics_ = self.exhibitor.get_children('/brokers/topics') if topics is None else topics
-        if self.async:
+        if self.async_:
             results = [(topic, self.exhibitor.get_async('/brokers/topics/{}'.format(topic))) for topic in topics_]
             for topic, cb in results:
                 try:
@@ -252,7 +252,7 @@ class BukuExhibitor(object):
         """
         if not partitions:
             return
-        if self.async:
+        if self.async_:
             results = [(topic, partition, self.exhibitor.get_async(
                 '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))) for topic, partition in
                        partitions]
@@ -274,14 +274,14 @@ class BukuExhibitor(object):
         :return: generator of tuples
         (topic_name: str, partition: int, state: json from /brokers/topics/{}/partitions/{}/state)
         """
-        if self.async:
+        if self.async_:
             asyncs = []
             for topic, partition, _ in self.load_partition_assignment(topics):
                 asyncs.append((topic, partition, self.exhibitor.get_async(
                     '/brokers/topics/{}/partitions/{}/state'.format(topic, partition))))
-            for topic, partition, async in asyncs:
+            for topic, partition, async_ in asyncs:
                 try:
-                    value, stat = async.get(block=True)
+                    value, stat = async_.get(block=True)
                 except ConnectionLossException:
                     value, stat = self.exhibitor.get('/brokers/topics/{}/partitions/{}/state'.format(topic, partition))
                 yield (topic, int(partition), json.loads(value.decode('utf-8')))
@@ -313,10 +313,10 @@ class BukuExhibitor(object):
         zk_config_path = "/config/{}".format(entity_type)
         entities = self.exhibitor.get_children(zk_config_path) if not entities else entities
         asyncs = {entity: self.exhibitor.get_async("/config/{}/{}".format(entity_type, entity)) for entity
-                  in entities} if self.async else {}
+                  in entities} if self.async_ else {}
         to_change_entities = set()
         for entity in entities:
-            if self.async:
+            if self.async_:
                 try:
                     config, stats = asyncs.get(entity).get(block=True)
                 except ConnectionLossException:

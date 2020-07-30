@@ -47,7 +47,7 @@ def test_is_broker_registered():
     assert not buku.is_broker_registered('333')
 
 
-def _test_load_partition_assignment(async: bool):
+def _test_load_partition_assignment(async_: bool):
     exhibitor_mock = MagicMock()
 
     def _get_children(path):
@@ -77,7 +77,7 @@ def _test_load_partition_assignment(async: bool):
     exhibitor_mock.get_async = _get_async
     exhibitor_mock.get_children = _get_children
 
-    buku_ex = BukuExhibitor(exhibitor_mock, async)
+    buku_ex = BukuExhibitor(exhibitor_mock, async_)
 
     expected_result = [
         ('t01', 0, [1, 2, 3]),
@@ -99,7 +99,7 @@ def test_load_partition_assignment_async():
     _test_load_partition_assignment(True)
 
 
-def _test_load_partition_states(async: bool):
+def _test_load_partition_states(async_: bool):
     exhibitor_mock = MagicMock()
 
     def _get_children(path):
@@ -144,7 +144,7 @@ def _test_load_partition_states(async: bool):
     exhibitor_mock.get_async = _get_async
     exhibitor_mock.get_children = _get_children
 
-    buku_ex = BukuExhibitor(exhibitor_mock, async=async)
+    buku_ex = BukuExhibitor(exhibitor_mock, async_=async_)
 
     expected_result = [
         ('t01', 0, {'fake_data': 100}),
