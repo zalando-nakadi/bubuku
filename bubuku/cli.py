@@ -146,9 +146,10 @@ def restart_broker(broker: str):
 @click.option('--scalyr-key', type=click.STRING, help='Scalyr account key')
 @click.option('--scalyr-region', type=click.STRING, help='Scalyr region to use')
 @click.option('--kms-key-id', type=click.STRING, help='Kms key id to decrypt data with')
-@click.option('--cool-down', type=click.INT, default=20, show_default=True,
+@click.option('--cool-down', type=click.INT, default=600, show_default=True,
               help='Number of seconds to wait before passing the restart task to another broker, after cluster is '
-                   'stable')
+                   'stable. Default value of 10 minutes is recommended for production in order to give consumers enough '
+                   'time to stabize in between restarts. This is particularly important for KStream applications')
 def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, scalyr_region: str, kms_key_id: str,
                            cool_down: int):
     if not is_cluster_healthy():
