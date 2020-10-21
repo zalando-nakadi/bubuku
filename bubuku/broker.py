@@ -124,8 +124,7 @@ class BrokerManager(object):
         :raise LeaderElectionInProgress: raised when broker can not be started because leader election is in progress
         """
         if not self.process.is_running():
-            if not self._is_leadership_transferred(active_broker_ids=self.exhibitor.get_broker_ids()):
-                raise LeaderElectionInProgress()
+            self.wait_while_leadership_transferred(active_broker_ids=self.exhibitor.get_broker_ids())
 
             _LOG.info('Using ZK address: {}'.format(zookeeper_address))
             self.kafka_properties.set_property('zookeeper.connect', zookeeper_address)
@@ -148,11 +147,18 @@ class BrokerManager(object):
                 _LOG.error(
                     'Failed to wait for broker to start up, probably will kill, next timeout is'.format(self.timeout))
 
+    def wait_while_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
+        while not self._is_leadership_transferred(active_broker_ids, dead_broker_ids):
+            _LOG.info(
+                "Waiting for leadership to transfer for topics before starting kafka process")
+            sleep(5)
+
     def _is_leadership_transferred(self, active_broker_ids=None, dead_broker_ids=None):
         _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
             active_broker_ids, dead_broker_ids))
         if self._is_clean_election():
-            for topic, partition, state in self.exhibitor.load_partition_states():
+            topics = self.exhibitor.load_topics(minimum_age_seconds=120)
+            for topic, partition, state in self.exhibitor.load_partition_states(topics=topics):
                 leader = str(state['leader'])
                 if active_broker_ids and leader not in active_broker_ids:
                     if any(str(x) in active_broker_ids for x in state.get('isr', [])):
