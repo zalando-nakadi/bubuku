@@ -221,12 +221,13 @@ class BukuExhibitor(object):
         int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for
         broker in self.get_broker_ids()}
 
-    def load_topics(self, minimum_age_seconds=None) -> Iterable[str]:
+    def load_active_topics(self, minimum_age_seconds=None) -> Iterable[str]:
         """
-        Lists the topics in Kafka. Newer topics can be excluded with specifying a min age
+        Lists the topics that are not being deleted from Kafka. Newer topics can be excluded with specifying a min age
         :return: a list of topics
         """
-        topics = self.exhibitor.get_children('/brokers/topics')
+        topics = [topic for topic in self.exhibitor.get_children('/brokers/topics')
+                  if topic not in self.exhibitor.get_children('/admin/delete_topics')]
         if not minimum_age_seconds:
             return iter(topics)
         

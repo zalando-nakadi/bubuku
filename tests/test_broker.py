@@ -47,7 +47,7 @@ class TestBroker(unittest.TestCase):
         exhibitor = MagicMock()
         states = [2, 2]
 
-        def _load_states():
+        def _load_states(topics=None):
             for idx in range(0, len(states)):
                 states[idx] -= 1
             return [
@@ -81,7 +81,7 @@ class TestBroker(unittest.TestCase):
         # suppose that leader is not present
         try:
             broker.start_kafka_process(zk_fake_host)
-            assert False, 'broker 1 must be in leaders, it must be impossible to start it'
+            assert False, 'broker 2 must be in leaders, it must be impossible to start 1'
         except LeaderElectionInProgress:
             pass
 
