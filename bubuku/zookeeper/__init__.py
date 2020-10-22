@@ -4,6 +4,7 @@ import threading
 import time
 import uuid
 from typing import Dict, List, Iterable, Tuple
+from datetime import datetime, timezone, timedelta
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import NodeExistsError, NoNodeError, ConnectionLossException
@@ -219,6 +220,24 @@ class BukuExhibitor(object):
         return {
         int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for
         broker in self.get_broker_ids()}
+
+    def load_active_topics(self, minimum_age_seconds=None) -> List[str]:
+        """
+        Lists the topics that are not being deleted from Kafka. Newer topics can be excluded with specifying a min age
+        :return: a list of topics
+        """
+        topics = [topic_ for topic_ in self.exhibitor.get_children('/brokers/topics')
+                  if topic_ not in self.exhibitor.get_children('/admin/delete_topics')]
+        if not minimum_age_seconds:
+            return topics
+
+        topics_ = []
+        for topic in topics:
+            metadata = self.exhibitor.get('/brokers/topics/{}'.format(topic))[1]
+            if datetime.fromtimestamp(metadata.created, timezone.utc) < \
+                    datetime.now(timezone.utc) - timedelta(seconds=minimum_age_seconds):
+                topics_.append(topic)
+        return topics_
 
     def load_partition_assignment(self, topics=None) -> Iterable[Tuple[str, int, List[int]]]:
         """

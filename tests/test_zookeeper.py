@@ -26,6 +26,23 @@ def test_get_broker_ids():
     assert ['1', '2', '3'] == buku.get_broker_ids()  # ensure that return list is sorted
 
 
+def test_load_active_topics():
+    exhibitor_mock = MagicMock()
+
+    def _get_children(path):
+        if path == '/brokers/topics':
+            return ['3', '1', '2']
+        elif path == '/admin/delete_topics':
+            return ['3', '1']
+        else:
+            raise NotImplementedError()
+
+    exhibitor_mock.get_children = _get_children
+    buku = BukuExhibitor(exhibitor_mock)
+
+    assert ['2'] == buku.load_active_topics()
+
+
 def test_is_broker_registered():
     def _get(path):
         if path == '/brokers/ids/123':

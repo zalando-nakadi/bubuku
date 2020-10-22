@@ -152,7 +152,8 @@ class BrokerManager(object):
         _LOG.info('Checking if leadership is transferred: active_broker_ids={}, dead_broker_ids={}'.format(
             active_broker_ids, dead_broker_ids))
         if self._is_clean_election():
-            for topic, partition, state in self.exhibitor.load_partition_states():
+            topics = self.exhibitor.load_active_topics()
+            for topic, partition, state in self.exhibitor.load_partition_states(topics=topics):
                 leader = str(state['leader'])
                 if active_broker_ids and leader not in active_broker_ids:
                     if any(str(x) in active_broker_ids for x in state.get('isr', [])):
