@@ -221,32 +221,23 @@ class BukuExhibitor(object):
         int(broker): json.loads(self.exhibitor.get('/brokers/ids/{}'.format(broker))[0].decode('utf-8')).get('rack') for
         broker in self.get_broker_ids()}
 
-    def load_active_topics(self, minimum_age_seconds=None) -> Iterable[str]:
+    def load_active_topics(self, minimum_age_seconds=None) -> List[str]:
         """
         Lists the topics that are not being deleted from Kafka. Newer topics can be excluded with specifying a min age
         :return: a list of topics
         """
-        topics = [topic for topic in self.exhibitor.get_children('/brokers/topics')
-                  if topic not in self.exhibitor.get_children('/admin/delete_topics')]
+        topics = [topic_ for topic_ in self.exhibitor.get_children('/brokers/topics')
+                  if topic_ not in self.exhibitor.get_children('/admin/delete_topics')]
         if not minimum_age_seconds:
-            return iter(topics)
-        
-        if self.async_:
-            results = [(topic, self.exhibitor.get_async('/brokers/topics/{}'.format(topic))) for topic in topics]
-            for topic, cb in results:
-                try:
-                    _, metadata = cb.get(block=True)
-                except ConnectionLossException:
-                    metadata = self.exhibitor.get('/brokers/topics/{}'.format(topic))[1]
-                if datetime.fromtimestamp(metadata.created, timezone.utc) < \
-                        datetime.now(timezone.utc) - timedelta(seconds=minimum_age_seconds):
-                    yield topic
-        else:
-            for topic in topics:
-                metadata = self.exhibitor.get('/brokers/topics/{}'.format(topic))[1]
-                if datetime.fromtimestamp(metadata.created, timezone.utc) < \
-                        datetime.now(timezone.utc) - timedelta(seconds=minimum_age_seconds):
-                    yield topic
+            return topics
+
+        topics_ = []
+        for topic in topics:
+            metadata = self.exhibitor.get('/brokers/topics/{}'.format(topic))[1]
+            if datetime.fromtimestamp(metadata.created, timezone.utc) < \
+                    datetime.now(timezone.utc) - timedelta(seconds=minimum_age_seconds):
+                topics_.append(topic)
+        return topics_
 
     def load_partition_assignment(self, topics=None) -> Iterable[Tuple[str, int, List[int]]]:
         """
