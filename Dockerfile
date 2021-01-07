@@ -1,4 +1,4 @@
-FROM registry.opensource.zalan.do/stups/openjdk:1.8.0-232-23
+FROM registry.opensource.zalan.do/library/openjdk-8:8-20210107
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
 ENV KAFKA_VERSION="2.6.0" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
