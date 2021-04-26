@@ -141,15 +141,15 @@ def restart_broker(broker: str):
 
 @cli.command('rolling-restart', help='Rolling restart of Kafka cluster')
 @click.option('--image-tag', type=click.STRING, help='Docker image to run Kafka broker')
-@click.option('--instance-type', type=click.STRING, default='m4.4xlarge',
-              help='AWS instance type to run Kafka broker on')
+@click.option('--instance-type', type=click.STRING, required=True, help='AWS instance type to run Kafka broker on')
 @click.option('--scalyr-key', type=click.STRING, help='Scalyr account key')
 @click.option('--scalyr-region', type=click.STRING, help='Scalyr region to use')
 @click.option('--kms-key-id', type=click.STRING, help='Kms key id to decrypt data with')
 @click.option('--cool-down', type=click.INT, default=600, show_default=True,
               help='Number of seconds to wait before passing the restart task to another broker, after cluster is '
-                   'stable. Default value of 10 minutes is recommended for production in order to give consumers enough '
-                   'time to stabize in between restarts. This is particularly important for KStream applications')
+                   'stable. Default value of 10 minutes is recommended for production in order to give consumers '
+                   'enough time to stabilize in between restarts. This is particularly important for KStream '
+                   'applications')
 def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, scalyr_region: str, kms_key_id: str,
                            cool_down: int):
     if not is_cluster_healthy():
