@@ -7,7 +7,7 @@ from bubuku.features.terminate import get_registration
 from test_config import build_test_properties
 
 
-class TestController(object):
+class _TestController(object):
     def __init__(self):
         self.checks = []
 
@@ -18,7 +18,7 @@ def test_load_restart_on_exhibitor():
     exhibitor = object()
     broker = object()
 
-    controller = TestController()
+    controller = _TestController()
 
     apply_features(-1, {'restart_on_exhibitor': {}}, controller, exhibitor, broker, None, None)
 
@@ -33,7 +33,7 @@ def test_rebalance_on_start():
     exhibitor = object()
     broker = object()
 
-    controller = TestController()
+    controller = _TestController()
 
     apply_features(-1, {'rebalance_on_start': {}}, controller, exhibitor, broker, None, None)
 
@@ -49,7 +49,7 @@ def test_rebalance_on_broker_list_change():
     exhibitor = object()
     broker = object()
 
-    controller = TestController()
+    controller = _TestController()
 
     apply_features(-1, {'rebalance_on_brokers_change': {}}, controller, exhibitor, broker, None, None)
 
@@ -67,7 +67,7 @@ def test_graceful_terminate():
 
     broker = object()
 
-    controller = TestController()
+    controller = _TestController()
 
     apply_features(-1, {'graceful_terminate': {}}, controller, None, broker, None, None)
 
