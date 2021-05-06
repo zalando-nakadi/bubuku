@@ -3,7 +3,7 @@ import logging
 from time import time, sleep
 
 from bubuku.config import KafkaProperties
-from bubuku.id_generator import BrokerIdGenerator
+from bubuku.id_extractor import BrokerIdExtractor
 from bubuku.process import KafkaProcess
 from bubuku.zookeeper import BukuExhibitor
 
@@ -76,7 +76,7 @@ class NoTimeout(StartupTimeout):
 
 class BrokerManager(object):
     def __init__(self, process: KafkaProcess, exhibitor: BukuExhibitor,
-                 id_manager: BrokerIdGenerator, kafka_properties: KafkaProperties, timeout: StartupTimeout):
+                 id_manager: BrokerIdExtractor, kafka_properties: KafkaProperties, timeout: StartupTimeout):
         self.id_manager = id_manager
         self.exhibitor = exhibitor
         self.kafka_properties = kafka_properties

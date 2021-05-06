@@ -3,7 +3,7 @@ from time import sleep
 
 
 def test_check_time_period():
-    test_check = TestCheck()
+    test_check = _TestCheck()
 
     assert test_check.check_if_time() is not None  # first time it should always run
     assert test_check.check_if_time() is None  # time has not come yet
@@ -14,7 +14,7 @@ def test_check_time_period():
     assert 0.0 < test_check.time_till_check() < 1  # there's still some time before the check can be run again
 
 
-class TestCheck(Check):
+class _TestCheck(Check):
     def __init__(self):
         super().__init__(check_interval_s=0.5)
 
