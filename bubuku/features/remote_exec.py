@@ -65,10 +65,8 @@ class RemoteCommandExecutorCheck(Check):
                                             data['scalyr_region'],
                                             data['kms_key_id'],
                                             data['cool_down'])
-            if data['name'] == 'stop':
+            elif data['name'] == 'stop':
                 return StopBrokerChange(self.broker_manager)
-            if data['name'] == 'start':
-                return StartBrokerChange(self.zk, self.broker_manager)
             else:
                 _LOG.error('Action {} not supported'.format(data))
         except Exception as e:
@@ -172,7 +170,3 @@ class RemoteCommandExecutorCheck(Check):
     @staticmethod
     def register_stop(zk: BukuExhibitor, broker_id: str):
         zk.register_action({'name': 'stop'}, broker_id=broker_id)
-
-    @staticmethod
-    def register_start(zk: BukuExhibitor, broker_id: str):
-        zk.register_action({'name': 'start'}, broker_id=broker_id)

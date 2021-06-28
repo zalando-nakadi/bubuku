@@ -248,24 +248,11 @@ class WaitVolumeAttached(State):
         return self.run_with_timeout(func)
 
     def next(self):
-        return StartKafka(self.state_context)
+        return WaitKafkaRunning(self.state_context)
 
     def __str__(self):
         return 'WaitVolumeAttached: waiting for volume {} to be attached'.format(
             self.state_context.ec_node.get_volume_id())
-
-
-class StartKafka(State):
-    def run(self):
-        from bubuku.features.remote_exec import RemoteCommandExecutorCheck
-        RemoteCommandExecutorCheck.register_start(self.state_context.zk, self.state_context.broker_id_to_restart)
-        return True
-
-    def next(self):
-        return WaitKafkaRunning(self.state_context)
-
-    def __str__(self):
-        return 'StartKafka: starting broker {}'.format(self.state_context.broker_id_to_restart)
 
 
 class WaitKafkaRunning(State):
