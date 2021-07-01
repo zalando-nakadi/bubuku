@@ -49,7 +49,7 @@ class RollingRestartChange(Change):
         return 'rolling_restart'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['stop', 'restart', 'rebalance']])
+        return all([a not in current_actions for a in ['stop', 'complete_stop', 'restart', 'rebalance']])
 
     def run(self, current_actions) -> bool:
         return self.state_context.run()
@@ -64,7 +64,7 @@ class StartBrokerChange(Change):
         return 'start'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['restart', 'stop']])
+        return all([a not in current_actions for a in ['restart', 'stop', 'complete_stop']])
 
     def run(self, current_actions):
         zk_conn_str = self.zk.get_conn_str()

@@ -18,7 +18,7 @@ class StopBrokerChange(Change):
         return 'StopBrokerChange ({})'.format(self.get_name())
 
     def can_run(self, current_actions):
-        return all([action not in current_actions for action in ['start', 'restart', 'stop']])
+        return all([action not in current_actions for action in ['start', 'restart', 'stop', 'complete_stop']])
 
     def run(self, current_actions):
         _LOG.info('Stopping kafka process')
@@ -27,6 +27,29 @@ class StopBrokerChange(Change):
 
     def can_run_at_exit(self):
         return True
+
+
+class CompleteStopChange(Change):
+    def __init__(self, broker: BrokerManager, controller: Controller):
+        self.broker = broker
+        self.controller = controller
+
+    def get_name(self):
+        return 'complete_stop'
+
+    def __str__(self):
+        return 'CompleteStopChange ({})'.format(self.get_name())
+
+    def can_run(self, current_actions):
+        return all([action not in current_actions for action in ['start', 'restart', 'stop', 'complete_stop']])
+
+    def run(self, current_actions):
+        _LOG.info('Stopping kafka process and the controller')
+        self.controller.stop(StopBrokerChange(self.broker))
+        return False
+
+    def can_run_at_exit(self):
+        return False
 
 
 __REGISTERED = None

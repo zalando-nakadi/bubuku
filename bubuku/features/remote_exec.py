@@ -2,24 +2,25 @@ import logging
 
 from bubuku.aws.cluster_config import ClusterConfig, AwsInstanceUserDataLoader
 from bubuku.broker import BrokerManager
-from bubuku.controller import Check, Change
+from bubuku.controller import Check, Change, Controller
 from bubuku.features.migrate import MigrationChange
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.rebalance.change_simple import SimpleRebalanceChange
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
 from bubuku.features.rolling_restart import RollingRestartChange, StartBrokerChange
 from bubuku.features.swap_partitions import SwapPartitionsChange, load_swap_data
-from bubuku.features.terminate import StopBrokerChange
+from bubuku.features.terminate import CompleteStopChange
 from bubuku.zookeeper import BukuExhibitor
 
 _LOG = logging.getLogger('bubuku.features.remote_exec')
 
 
 class RemoteCommandExecutorCheck(Check):
-    def __init__(self, zk: BukuExhibitor, broker_manager: BrokerManager, api_port):
+    def __init__(self, zk: BukuExhibitor, broker_manager: BrokerManager, controller: Controller, api_port: int):
         super().__init__(check_interval_s=30)
         self.zk = zk
         self.broker_manager = broker_manager
+        self.controller = controller
         self.api_port = api_port
 
     def check(self) -> Change:
@@ -66,7 +67,7 @@ class RemoteCommandExecutorCheck(Check):
                                             data['kms_key_id'],
                                             data['cool_down'])
             elif data['name'] == 'stop':
-                return StopBrokerChange(self.broker_manager)
+                return CompleteStopChange(self.broker_manager, self.controller)
             else:
                 _LOG.error('Action {} not supported'.format(data))
         except Exception as e:
