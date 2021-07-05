@@ -22,7 +22,7 @@ class RestartBrokerChange(Change):
         return 'restart'
 
     def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['start', 'restart', 'stop', 'complete_stop', 'rolling_restart']])
+        return all([a not in current_actions for a in ['start', 'restart', 'stop', 'complete_stop']])
 
     def run(self, current_actions):
         if self.stage == _STAGE_STOP:

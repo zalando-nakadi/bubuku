@@ -55,27 +55,6 @@ class RollingRestartChange(Change):
         return self.state_context.run()
 
 
-class StartBrokerChange(Change):
-    def __init__(self, zk: BukuExhibitor, broker: BrokerManager):
-        self.zk = zk
-        self.broker = broker
-
-    def get_name(self):
-        return 'start'
-
-    def can_run(self, current_actions):
-        return all([a not in current_actions for a in ['restart', 'stop', 'complete_stop']])
-
-    def run(self, current_actions):
-        zk_conn_str = self.zk.get_conn_str()
-        try:
-            self.broker.start_kafka_process(zk_conn_str)
-        except Exception as e:
-            _LOG.error('Failed to start kafka process against {}'.format(zk_conn_str), exc_info=e)
-            return True
-        return False
-
-
 class StateContext:
     def __init__(self, zk: BukuExhibitor, aws: AWSResources, ec_node: Ec2Node, ec2_node_launcher: Ec2NodeLauncher,
                  broker_id_to_restart, restart_assignment, cluster_config: ClusterConfig, cool_down: int):
