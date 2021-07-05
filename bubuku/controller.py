@@ -115,7 +115,7 @@ class Controller(object):
 
     def _run_changes(self, running_changes: dict) -> list:
         changes_to_remove = []
-        for name, change_list in self.changes.items():
+        for name, change_list in self.changes.copy().items():
             if name in running_changes and running_changes[name] == self.provider_id:
                 change = change_list[0]
                 _LOG.info('Executing action {} step'.format(change))
