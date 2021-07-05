@@ -7,7 +7,7 @@ from bubuku.features.migrate import MigrationChange
 from bubuku.features.rebalance.change import OptimizedRebalanceChange
 from bubuku.features.rebalance.change_simple import SimpleRebalanceChange
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
-from bubuku.features.rolling_restart import RollingRestartChange, StartBrokerChange
+from bubuku.features.rolling_restart import RollingRestartChange
 from bubuku.features.swap_partitions import SwapPartitionsChange, load_swap_data
 from bubuku.features.terminate import CompleteStopChange
 from bubuku.zookeeper import BukuExhibitor
