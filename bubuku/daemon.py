@@ -67,7 +67,7 @@ def run_daemon_loop(config: Config, process_holder: KafkaProcess, cmd_helper: Cm
         controller = Controller(broker, zookeeper, env_provider)
 
         controller.add_check(CheckBrokerStopped(broker, zookeeper))
-        controller.add_check(RemoteCommandExecutorCheck(zookeeper, broker, config.health_port))
+        controller.add_check(RemoteCommandExecutorCheck(zookeeper, broker, controller, config.health_port))
         controller.add_check(GenerateDataSizeStatistics(zookeeper, broker, cmd_helper,
                                                         kafka_props.get_property("log.dirs").split(",")))
         apply_features(config.health_port, config.features, controller, zookeeper, broker, kafka_props, env_provider)
