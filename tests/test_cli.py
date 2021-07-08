@@ -1,4 +1,4 @@
-from bubuku.cli import _print_table, _dump_replica_assignment_as_json_bytes
+from bubuku.cli import _print_table, _dump_replica_assignment_as_json
 
 
 def test_print_table():
@@ -11,5 +11,5 @@ def test_print_table():
 
 
 def test_dump_replica_assignment():
-    assert _dump_replica_assignment_as_json_bytes([('topic-a', "1")]) \
-        == b'''{"version":1,"partitions":[{"topic":"topic-a","partition":1}]}'''
+    assert _dump_replica_assignment_as_json([('topic-a', "1")]) \
+        == '''{"version":1,"partitions":[{"topic":"topic-a","partition":1}]}'''

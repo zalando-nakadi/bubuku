@@ -60,12 +60,12 @@ def cli():
     sys.stderr.write(logo + "\nStart, monitor and rebalance kafka cluster in AWS setup\n")
 
 
-def _dump_replica_assignment_as_json_bytes(assignment: list) -> str:
+def _dump_replica_assignment_as_json(assignment: list) -> str:
     json_element = {
         "version": 1,
         "partitions": [{'topic': v[0], 'partition': int(v[1])} for v in assignment]
     }
-    return json.dumps(json_element, separators=(',', ':')).encode('utf-8')
+    return json.dumps(json_element, separators=(',', ':'))
 
 
 @cli.command('preferred-replica-election',
@@ -102,14 +102,15 @@ def trigger_preferred_replica_election(dry_run: bool, max_json_size: int):
                 wrong_assignment.append(key)
 
         if dry_run:
-            print(_dump_replica_assignment_as_json_bytes(wrong_assignment).decode('utf-8'))
+            print(_dump_replica_assignment_as_json(wrong_assignment))
         else:
             while wrong_assignment:
                 items_to_take = len(wrong_assignment)
                 change_applied = False
                 while not change_applied:
-                    res = _dump_replica_assignment_as_json(wrong_assignment[:items_to_take])
-                    if len(res) > max_json_size:
+                    payload = _dump_replica_assignment_as_json(wrong_assignment[:items_to_take])
+                    payload_bytes = payload.encode('utf-8')
+                    if len(payload_bytes) > max_json_size:
                         new_items_to_take = int(items_to_take / 2)
                         _LOG.info("Not fitting to %d bytes with %d items, will try %d items",
                                   max_json_size, items_to_take, new_items_to_take)
@@ -120,8 +121,8 @@ def trigger_preferred_replica_election(dry_run: bool, max_json_size: int):
                             exit(1)
                         continue
 
-                    _LOG.info("Applying %s", res.decode('utf-8'))
-                    zookeeper.exhibitor.create('/admin/preferred_replica_election', res)
+                    _LOG.info("Applying %s", payload)
+                    zookeeper.exhibitor.create('/admin/preferred_replica_election', payload_bytes)
                     while zookeeper.exhibitor.is_node_present('/admin/preferred_replica_election'):
                         _LOG.info("Waiting for node to disappear")
                         time.sleep(1)
