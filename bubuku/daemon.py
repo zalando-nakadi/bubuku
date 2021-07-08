@@ -77,7 +77,9 @@ def run_daemon_loop(config: Config, process_holder: KafkaProcess, cmd_helper: Cm
 
 
 def main():
-    logging.basicConfig(level=getattr(logging, 'INFO', None))
+    logging.basicConfig(level=getattr(logging, 'INFO', None),
+                        format='%(asctime)s.%(msecs)03d %(levelname)s:%(name)s:%(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
 
     config = load_config()
     _LOG.info("Using configuration: {}".format(config))
