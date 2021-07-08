@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import logging
+import sys
 import time
 
 import click
@@ -56,10 +57,7 @@ def cli():
      / /_/ / /_/ / /_/ / /_/ / ,< / /_/ / 
     /_____/\__,_/_.___/\__,_/_/|_|\__,_/  
     """
-    print(logo)
-    print('Start, monitor and rebalance kafka cluster in AWS setup')
-    print()
-    pass
+    sys.stderr.write(logo + "\nStart, monitor and rebalance kafka cluster in AWS setup\n")
 
 
 @cli.command('preferred-replica-election',
