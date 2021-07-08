@@ -60,7 +60,7 @@ def cli():
     sys.stderr.write(logo + "\nStart, monitor and rebalance kafka cluster in AWS setup\n")
 
 
-def _dump_replica_assignment_as_json(assignment: list) -> str:
+def _dump_replica_assignment_as_json_bytes(assignment: list) -> str:
     json_element = {
         "version": 1,
         "partitions": [{'topic': v[0], 'partition': int(v[1])} for v in assignment]
@@ -102,7 +102,7 @@ def trigger_preferred_replica_election(dry_run: bool, max_json_size: int):
                 wrong_assignment.append(key)
 
         if dry_run:
-            print(_dump_replica_assignment_as_json(wrong_assignment))
+            print(_dump_replica_assignment_as_json_bytes(wrong_assignment).decode('utf-8'))
         else:
             while wrong_assignment:
                 items_to_take = len(wrong_assignment)
