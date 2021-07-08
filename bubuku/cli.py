@@ -60,6 +60,14 @@ def cli():
     sys.stderr.write(logo + "\nStart, monitor and rebalance kafka cluster in AWS setup\n")
 
 
+def _dump_replica_assignment_as_json(assignment: list) -> str:
+    json_element = {
+        "version": 1,
+        "partitions": [{'topic': v[0], 'partition': int(v[1])} for v in assignment]
+    }
+    return json.dumps(json_element, separators=(',', ':'))
+
+
 @cli.command('preferred-replica-election',
              help='Do preferred replica election, as command line tool from kafka have a number of limitations. '
                   'Only partitions, that are improperly allocated will be affected. In case if size of resulting json '
@@ -92,37 +100,35 @@ def trigger_preferred_replica_election(dry_run: bool, max_json_size: int):
                 _LOG.info("Found incorrect assignment: %s, leader is %d, but should be the first one in %s",
                           key, leader, replica_list)
                 wrong_assignment.append(key)
-        while wrong_assignment:
-            items_to_take = len(wrong_assignment)
-            change_applied = False
-            while not change_applied:
-                json_element = {
-                    "version": 1,
-                    "partitions": [{'topic': v[0], 'partition': int(v[1])} for v in wrong_assignment[:items_to_take]]
-                }
 
-                res = json.dumps(json_element).encode('utf-8')
-                if len(res) > max_json_size:
-                    new_items_to_take = int(items_to_take / 2)
-                    _LOG.info("Not fitting to %d bytes with %d items, will try %d items",
-                              max_json_size, items_to_take, new_items_to_take)
-                    items_to_take = new_items_to_take
-                    if items_to_take <= 0:
-                        _LOG.error("Incorrect configuration - even one key is not fitting to proposed size %d. "
-                                   "Stop playing and do the job!", max_json_size)
-                        exit(1)
-                    continue
-                if dry_run:
-                    print(res.decode('utf-8'))
-                else:
-                    _LOG.info("Applying %s", res.decode('utf-8'))
-                    zookeeper.exhibitor.create('/admin/preferred_replica_election', res)
+        if dry_run:
+            print(_dump_replica_assignment_as_json(wrong_assignment))
+        else:
+            while wrong_assignment:
+                items_to_take = len(wrong_assignment)
+                change_applied = False
+                while not change_applied:
+                    payload = _dump_replica_assignment_as_json(wrong_assignment[:items_to_take])
+                    payload_bytes = payload.encode('utf-8')
+                    if len(payload_bytes) > max_json_size:
+                        new_items_to_take = int(items_to_take / 2)
+                        _LOG.info("Not fitting to %d bytes with %d items, will try %d items",
+                                  max_json_size, items_to_take, new_items_to_take)
+                        items_to_take = new_items_to_take
+                        if items_to_take <= 0:
+                            _LOG.error("Incorrect configuration - even one key is not fitting to proposed size %d. "
+                                       "Stop playing and do the job!", max_json_size)
+                            exit(1)
+                        continue
 
+                    _LOG.info("Applying %s", payload)
+                    zookeeper.exhibitor.create('/admin/preferred_replica_election', payload_bytes)
                     while zookeeper.exhibitor.is_node_present('/admin/preferred_replica_election'):
                         _LOG.info("Waiting for node to disappear")
                         time.sleep(1)
-                change_applied = True
-                del wrong_assignment[:items_to_take]
+
+                    change_applied = True
+                    del wrong_assignment[:items_to_take]
 
         _LOG.info("Done with assignment")
 
