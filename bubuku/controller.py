@@ -1,5 +1,6 @@
 import logging
 from time import time
+from typing import Tuple, Optional
 
 from bubuku.broker import BrokerManager
 from bubuku.communicate import sleep_and_operate
@@ -120,8 +121,9 @@ class Controller(object):
                     _LOG.info('Change {} is waiting for others: {}'.format(name, running_changes))
             return running_changes
 
-    def _run_changes(self, running_changes: dict) -> list:
+    def _run_changes(self, running_changes: dict) -> Tuple[list, Optional[float]]:
         changes_to_remove = []
+        min_time_till_next_change_run = None
         for name, change_list in self.changes.copy().items():
             if name in running_changes and running_changes[name] == self.provider_id:
                 change = change_list[0]
@@ -133,6 +135,11 @@ class Controller(object):
                             changes_to_remove.append(change.get_name())
                         else:
                             _LOG.info('Action {} will be executed on next loop step'.format(change))
+                            time_till_next_run = change.time_till_next_run()
+                            if min_time_till_next_change_run is None:
+                                min_time_till_next_change_run = time_till_next_run
+                            else:
+                                min_time_till_next_change_run = min(time_till_next_run, min_time_till_next_change_run)
                     except Exception as e:
                         _LOG.error('Failed to execute change {} because of exception, removing'.format(change),
                                    exc_info=e)
@@ -141,7 +148,7 @@ class Controller(object):
                     _LOG.info(
                         'Action {} can not be run while stopping, forcing to stop it'.format(change))
                     changes_to_remove.append(change.get_name())
-        return changes_to_remove
+        return changes_to_remove, min_time_till_next_change_run
 
     def _release_changes_lock(self, changes_to_remove):
         if changes_to_remove:
@@ -160,30 +167,34 @@ class Controller(object):
         if change_on_init:
             self._add_change_to_queue(change_on_init)
         while self.running or self.changes:
-            self.make_step()
-            sleep_and_operate(self, self._get_loop_timeout())
+            time_till_next_step = self.make_step()
 
-    def _get_loop_timeout(self) -> float:
-        if self.changes:
-            timeout = min(change.time_till_next_run() for change in self.changes)
-        else:
-            timeout = min(check.time_till_check() for check in self.checks)
-        return timeout
+            timeouts = [check.time_till_check() for check in self.checks]
+            timeouts.append(time_till_next_step or 5.0)
 
-    def make_step(self):
+            sleep_and_operate(self, min(timeouts))
+
+    def make_step(self) -> Optional[float]:
         # register running changes
         running_changes = self._register_running_changes()
+
         # apply changes without holding lock
-        changes_to_remove = self._run_changes(running_changes)
+        changes_to_remove, time_till_next_run = self._run_changes(running_changes)
+
         # remove processed actions
         self._release_changes_lock(changes_to_remove)
+
         if self.running:
             for check in self.checks:
-                self._add_change_to_queue(check.check_if_time())
+                change = check.check_if_time()
+                if change:
+                    self._add_change_to_queue(change)
+                    # prioritize newly appearing change run
+                    time_till_next_run = 0.5
+
+        return time_till_next_run
 
     def _add_change_to_queue(self, change):
-        if not change:
-            return
         _LOG.info('Adding change {} to pending changes'.format(change.get_name()))
         if change.get_name() not in self.changes:
             self.changes[change.get_name()] = []
@@ -192,5 +203,6 @@ class Controller(object):
     def stop(self, change: Change):
         _LOG.info('Stopping controller with additional change: {}'.format(change.get_name() if change else None))
         # clear all pending changes
-        self._add_change_to_queue(change)
+        if change:
+            self._add_change_to_queue(change)
         self.running = False
