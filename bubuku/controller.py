@@ -16,8 +16,15 @@ class Change(object):
     def can_run(self, current_actions) -> bool:
         raise NotImplementedError('Not implemented yet')
 
+    #
+    # Returns a flag indicating if the change should continue running (True).
+    # In that case time_till_next_run() is called to determine when to schedule the next run.
+    #
     def run(self, current_actions) -> bool:
         raise NotImplementedError('Not implemented')
+
+    def time_till_next_run(self) -> float:
+        return 0.5
 
     def can_run_at_exit(self) -> bool:
         return False
@@ -154,12 +161,14 @@ class Controller(object):
             self._add_change_to_queue(change_on_init)
         while self.running or self.changes:
             self.make_step()
+            sleep_and_operate(self, self._get_loop_timeout())
 
-            if self.changes:
-                timeout = 0.5
-            else:
-                timeout = min([check.time_till_check() for check in self.checks])
-            sleep_and_operate(self, timeout)
+    def _get_loop_timeout(self) -> float:
+        if self.changes:
+            timeout = min(change.time_till_next_run() for change in self.changes)
+        else:
+            timeout = min(check.time_till_check() for check in self.checks)
+        return timeout
 
     def make_step(self):
         # register running changes
