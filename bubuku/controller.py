@@ -163,7 +163,7 @@ class Controller(object):
             self.make_step()
             sleep_and_operate(self, self._get_loop_timeout())
 
-    def _get_loop_timeout(self):
+    def _get_loop_timeout(self) -> float:
         if self.changes:
             timeout = min(change.time_till_next_run() for change in self.changes)
         else:
