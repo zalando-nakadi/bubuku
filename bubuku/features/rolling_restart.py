@@ -54,6 +54,9 @@ class RollingRestartChange(Change):
     def run(self, current_actions) -> bool:
         return self.state_context.run()
 
+    def time_till_next_run(self):
+        return 10
+
 
 class StateContext:
     def __init__(self, zk: BukuExhibitor, aws: AWSResources, ec_node: Ec2Node, ec2_node_launcher: Ec2NodeLauncher,
