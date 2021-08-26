@@ -85,5 +85,12 @@ class ClusterConfig():
         if vpc_id:
             self._user_data['vpc_id'] = vpc_id
 
+    def get_tags(self):
+        return self._user_data.get('tags', {})
+
+    def set_tags(self, tags):
+        if tags:
+            self._user_data['tags'] = tags
+
     def get_user_data(self):
         return dict(self._user_data)

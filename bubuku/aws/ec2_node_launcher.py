@@ -71,10 +71,10 @@ class Ec2NodeLauncher(object):
         _LOG.info('Instance %s launched, waiting for it to initialize', instance_id)
         self.aws.ec2_client.create_tags(
             Resources=[instance_id],
-            Tags=[
+            Tags=(self.cluster_config.get_tags() + [
                 {'Key': 'Name', 'Value': self.cluster_config.get_cluster_name()},
                 {'Key': 'StackName', 'Value': self.cluster_config.get_cluster_name()}
-            ]
+            ])
         )
 
         return instance_id
