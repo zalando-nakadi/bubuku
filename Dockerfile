@@ -1,4 +1,4 @@
-FROM registry.opensource.zalan.do/library/openjdk-11-jre-slim:latest
+FROM registry.opensource.zalan.do/library/openjdk-11-jdk-slim:latest
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
 ENV KAFKA_VERSION="2.7.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
@@ -33,6 +33,3 @@ RUN mkdir -p $KAFKA_LOGS_DIR/ && \
 EXPOSE 9092 8080 8778
 
 ENTRYPOINT ["/bin/bash", "-c", "exec bubuku-daemon"]
-
-
-
