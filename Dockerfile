@@ -7,7 +7,7 @@ ENV KAFKA_DIR="/opt/kafka"
 ENV HEALTH_PORT=8080
 ENV KAFKA_SETTINGS="${KAFKA_DIR}/config/server.properties"
 ENV BUKU_FEATURES="restart_on_exhibitor,rebalance_on_start,graceful_terminate,use_ip_address"
-ENV KAFKA_OPTS="-server -Dlog4j.configuration=file:${KAFKA_DIR}/config/log4j.properties -Dkafka.logs.dir=${KAFKA_LOGS_DIR} -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=32M -javaagent:/opt/jolokia-jvm-agent.jar=host=0.0.0.0"
+ENV KAFKA_OPTS="-server -Dlog4j.configuration=file:${KAFKA_DIR}/config/log4j.properties -Dkafka.logs.dir=${KAFKA_LOGS_DIR} -javaagent:/opt/jolokia-jvm-agent.jar=host=0.0.0.0"
 ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
 
 ADD docker/download_kafka.sh /tmp/download_kafka.sh
@@ -23,12 +23,18 @@ ENV SRC_PATH="/bubuku"
 ADD ./bubuku "${SRC_PATH}/bubuku"
 ADD ./requirements.txt "${SRC_PATH}/"
 ADD ./setup.py "${SRC_PATH}/"
+
 RUN mkdir -p $KAFKA_LOGS_DIR/ && \
     cd "${SRC_PATH}" && \
     pip3 install --no-cache-dir -r "requirements.txt" && \
     python3 setup.py develop && \
     chmod -R 777 $KAFKA_LOGS_DIR && \
-    chmod 777 ${KAFKA_SETTINGS}
+    chmod 777 ${KAFKA_SETTINGS} && \
+    \
+    mkdir ${KAFKA_DIR}/logs && \
+    chmod 777 ${KAFKA_DIR}/logs
+#
+# ^^ ${KAFKA_DIR}/logs is for JVM GC logs
 
 EXPOSE 9092 8080 8778
 
