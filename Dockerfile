@@ -12,7 +12,7 @@ ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmx
 
 ADD docker/download_kafka.sh /tmp/download_kafka.sh
 
-RUN sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION} && apt-get update && apt-get install -y python3-pip 
+RUN apt-get update && apt-get install -y curl python3-pip && sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
 
 ADD docker/server.properties ${KAFKA_DIR}/config/
 ADD docker/server.properties ${KAFKA_SETTINGS}
