@@ -1,6 +1,7 @@
 import copy
 import logging
 
+import requests
 import yaml
 
 from bubuku.aws import AWSResources
@@ -106,7 +107,7 @@ class Ec2NodeLauncher(object):
         subnet, ip = ip_address_allocator.allocate_ip_addresses(1)[0]
         return self._launch_instance(ip,
                                      subnet,
-                                     self._find_taupage_amis(),
+                                     self._find_ami(),
                                      self._get_security_group_id(),
                                      self._get_instance_profile())
 
@@ -135,19 +136,15 @@ class Ec2NodeLauncher(object):
             'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
         }
 
-    def _find_taupage_amis(self) -> dict:
-        region = self.cluster_config.get_aws_region()
-        _LOG.info('Finding latest Taupage AMI in %s..', region)
-
-        filters = [{'Name': 'name', 'Values': ['*Taupage-AMI-*']},
-                   {'Name': 'is-public', 'Values': ['false']},
-                   {'Name': 'state', 'Values': ['available']},
-                   {'Name': 'root-device-type', 'Values': ['ebs']}]
+    def _find_ami(self) -> dict:
+        _LOG.info('Finding latest Taupage AMI.')
+        current_ami_id = requests.get('http://169.254.169.254/latest/meta-data/ami-id').text
+        filters = [{'Name': 'image-id', 'Values': [current_ami_id]}]
         images = list(self.aws.ec2_resource.images.filter(Filters=filters))
         if not images:
             raise Exception('No Taupage AMI found')
-        most_recent_image = sorted(images, key=lambda i: i.name)[-1]
+        most_recent_image = sorted(images, key=lambda i: i.name)[-1] # It s expected that image is only one
 
-        _LOG.info('The latest AMI is %s', most_recent_image)
+        _LOG.info('The AMI to use is %s', most_recent_image)
 
         return most_recent_image

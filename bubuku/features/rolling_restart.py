@@ -6,7 +6,6 @@ from bubuku.aws import AWSResources
 from bubuku.aws.cluster_config import ClusterConfig
 from bubuku.aws.ec2_node_launcher import Ec2NodeLauncher
 from bubuku.aws.node import Ec2Node
-from bubuku.broker import BrokerManager
 from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
