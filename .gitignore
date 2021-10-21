@@ -6,3 +6,5 @@ bubuku.egg-info/
 .cache/
 build/
 dist/
+scm-source.json
+build.sh
