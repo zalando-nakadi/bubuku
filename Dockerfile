@@ -1,4 +1,4 @@
-FROM registry.opensource.zalan.do/library/openjdk-11-jdk-slim:latest
+FROM openjdk:jdk-slim
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
 ENV KAFKA_VERSION="2.7.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
