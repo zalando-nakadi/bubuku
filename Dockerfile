@@ -23,6 +23,7 @@ ENV SRC_PATH="/bubuku"
 ADD ./bubuku "${SRC_PATH}/bubuku"
 ADD ./requirements.txt "${SRC_PATH}/"
 ADD ./setup.py "${SRC_PATH}/"
+ADD scm-source.json /scm-source.json
 
 RUN mkdir -p $KAFKA_LOGS_DIR/ && \
     cd "${SRC_PATH}" && \
