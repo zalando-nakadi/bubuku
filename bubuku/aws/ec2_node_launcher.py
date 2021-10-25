@@ -1,7 +1,6 @@
 import copy
 import logging
 
-import requests
 import yaml
 
 from bubuku.aws import AWSResources
@@ -13,9 +12,10 @@ _LOG = logging.getLogger('bubuku.aws.ec2_node')
 
 
 class Ec2NodeLauncher(object):
-    def __init__(self, aws: AWSResources, cluster_config: ClusterConfig):
-        self.aws = aws
-        self.cluster_config = cluster_config
+    def __init__(self, aws: AWSResources, cluster_config: ClusterConfig, az: str):
+        self._aws = aws
+        self._cluster_config = cluster_config
+        self._az = az
 
     def _launch_instance(self, ip: str, subnet: dict, ami: object, security_group_id: str, iam_profile):
         #
@@ -49,18 +49,18 @@ class Ec2NodeLauncher(object):
                     'NoDevice': ''
                 })
 
-        user_data = self.cluster_config.get_user_data()
+        user_data = self._cluster_config.get_user_data()
         user_data['volumes']['ebs']['/dev/xvdk'] = KAFKA_LOGS_EBS
         taupage_user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(user_data))
 
         _LOG.info('Launching node %s in %s', ip, subnet['AvailabilityZone'])
-        resp = self.aws.ec2_client.run_instances(
+        resp = self._aws.ec2_client.run_instances(
             ImageId=ami.id,
             MinCount=1,
             MaxCount=1,
             SecurityGroupIds=[security_group_id],
             UserData=taupage_user_data,
-            InstanceType=self.cluster_config.get_instance_type(),
+            InstanceType=self._cluster_config.get_instance_type(),
             SubnetId=subnet['SubnetId'],
             PrivateIpAddress=ip,
             BlockDeviceMappings=block_devices,
@@ -70,11 +70,11 @@ class Ec2NodeLauncher(object):
 
         instance_id = resp['Instances'][0]['InstanceId']
         _LOG.info('Instance %s launched, waiting for it to initialize', instance_id)
-        self.aws.ec2_client.create_tags(
+        self._aws.ec2_client.create_tags(
             Resources=[instance_id],
-            Tags=(self.cluster_config.get_tags() + [
-                {'Key': 'Name', 'Value': self.cluster_config.get_cluster_name()},
-                {'Key': 'StackName', 'Value': self.cluster_config.get_cluster_name()}
+            Tags=(self._cluster_config.get_tags() + [
+                {'Key': 'Name', 'Value': self._cluster_config.get_cluster_name()},
+                {'Key': 'StackName', 'Value': self._cluster_config.get_cluster_name()}
             ])
         )
 
@@ -82,10 +82,10 @@ class Ec2NodeLauncher(object):
 
     def create_auto_recovery_alarm(self, instance_id):
         _LOG.info('Creating AWS auto recovery alarm for %s', instance_id)
-        alarm_actions = ['arn:aws:automate:{}:ec2:recover'.format(self.aws.region)]
-        alarm_name = '{}-{}-auto-recover'.format(self.cluster_config.get_cluster_name(), instance_id)
+        alarm_actions = ['arn:aws:automate:{}:ec2:recover'.format(self._cluster_config.get_aws_region())]
+        alarm_name = '{}-{}-auto-recover'.format(self._cluster_config.get_cluster_name(), instance_id)
 
-        self.aws.cloudwatch_client.put_metric_alarm(
+        self._aws.cloudwatch_client.put_metric_alarm(
             AlarmName=alarm_name,
             AlarmActions=alarm_actions,
             MetricName='StatusCheckFailed_System',
@@ -103,7 +103,7 @@ class Ec2NodeLauncher(object):
 
     def launch(self):
         _LOG.info('Preparing AWS configuration for ec2 instance creation')
-        ip_address_allocator = IpAddressAllocator(self.aws, self.cluster_config)
+        ip_address_allocator = IpAddressAllocator(self._aws, self._cluster_config.get_vpc_id(), self._az)
         subnet, ip = ip_address_allocator.allocate_ip_addresses(1)[0]
         return self._launch_instance(ip,
                                      subnet,
@@ -112,21 +112,21 @@ class Ec2NodeLauncher(object):
                                      self._get_instance_profile())
 
     def _get_instance_profile(self):
-        profile_name = 'profile-{}'.format(self.cluster_config.get_cluster_name())
-        profile = self.aws.iam_client.get_instance_profile(InstanceProfileName=profile_name)
+        profile_name = 'profile-{}'.format(self._cluster_config.get_cluster_name())
+        profile = self._aws.iam_client.get_instance_profile(InstanceProfileName=profile_name)
         _LOG.info("IAM profile %s exists, using it", profile_name)
         return profile['InstanceProfile']
 
-    def _get_security_group_id(self) -> dict:
+    def _get_security_group_id(self) -> str:
         _LOG.info('Configuring security group ...')
-        security_groups = self.aws.ec2_client.describe_security_groups(
-            Filters=[{'Name': 'group-name', 'Values': [self.cluster_config.get_cluster_name()]}])
+        security_groups = self._aws.ec2_client.describe_security_groups(
+            Filters=[{'Name': 'group-name', 'Values': [self._cluster_config.get_cluster_name()]}])
         if security_groups['SecurityGroups']:
             sg = security_groups['SecurityGroups'][0]
             _LOG.info('Security group for %s exists, will use it %s',
-                      self.cluster_config.get_cluster_name(), sg['GroupId'])
+                      self._cluster_config.get_cluster_name(), sg['GroupId'])
             return sg['GroupId']
-        raise Exception('Security group does not exist for {}'.format(self.cluster_config.get_cluster_name()))
+        raise Exception('Security group does not exist for {}'.format(self._cluster_config.get_cluster_name()))
 
     def _get_ip_permission(self, port: int):
         return {
@@ -138,12 +138,11 @@ class Ec2NodeLauncher(object):
 
     def _find_ami(self) -> dict:
         _LOG.info('Finding latest Taupage AMI.')
-        current_ami_id = requests.get('http://169.254.169.254/latest/meta-data/ami-id').text
-        filters = [{'Name': 'image-id', 'Values': [current_ami_id]}]
-        images = list(self.aws.ec2_resource.images.filter(Filters=filters))
+        filters = [{'Name': 'image-id', 'Values': [self._cluster_config.get_ami_id()]}]
+        images = list(self._aws.ec2_resource.images.filter(Filters=filters))
         if not images:
             raise Exception('No Taupage AMI found')
-        most_recent_image = sorted(images, key=lambda i: i.name)[-1] # It s expected that image is only one
+        most_recent_image = sorted(images, key=lambda i: i.name)[-1]  # It s expected that image is only one
 
         _LOG.info('The AMI to use is %s', most_recent_image)
 

@@ -57,14 +57,12 @@ class RemoteCommandExecutorCheck(Check):
                 return SwapPartitionsChange(self.zk,
                                             lambda x: load_swap_data(x, self.api_port, int(data['threshold_kb'])))
             elif data['name'] == 'rolling_restart':
-                return RollingRestartChange(self.zk, ClusterConfig(AwsInstanceUserDataLoader()),
+                cluster_config = ClusterConfig(AwsInstanceUserDataLoader())
+                cluster_config.set_overrides(**data['overrides'])
+                return RollingRestartChange(self.zk,
+                                            cluster_config,
                                             data['restart_assignment'],
                                             self.broker_manager.id_manager.broker_id,
-                                            data['image'],
-                                            data['instance_type'],
-                                            data['scalyr_key'],
-                                            data['scalyr_region'],
-                                            data['kms_key_id'],
                                             data['cool_down'])
             elif data['name'] == 'stop':
                 return CompleteStopChange(self.broker_manager, self.controller)
@@ -80,21 +78,21 @@ class RemoteCommandExecutorCheck(Check):
     @staticmethod
     def register_restart(zk: BukuExhibitor, broker_id: str):
         with zk.lock():
-            zk.register_action(
-                {'name': 'restart'},
-                broker_id=broker_id)
+            zk.register_action({'name': 'restart'}, broker_id=broker_id)
 
     @staticmethod
     def register_rebalance(zk: BukuExhibitor, broker_id: str, empty_brokers: list, exclude_topics: list,
                            parallelism: int, bin_packing: bool, throttle: int):
         if parallelism <= 0:
             raise Exception('Parallelism for rebalance should be greater than 0')
-        action = {'name': 'rebalance',
-                  'empty_brokers': empty_brokers,
-                  'exclude_topics': exclude_topics,
-                  'parallelism': int(parallelism),
-                  'bin_packing': bool(bin_packing),
-                  'throttle': int(throttle)}
+        action = {
+            'name': 'rebalance',
+            'empty_brokers': empty_brokers,
+            'exclude_topics': exclude_topics,
+            'parallelism': int(parallelism),
+            'bin_packing': bool(bin_packing),
+            'throttle': int(throttle)
+        }
         with zk.lock():
             if broker_id:
                 zk.register_action(action, broker_id=broker_id)
@@ -157,15 +155,19 @@ class RemoteCommandExecutorCheck(Check):
                 broker_to_restart = brokers[idx + 1]
             restart_assignment[broker_to_make_restart] = broker_to_restart
 
-        _LOG.info('Rolling restart assignment\n {}'.format(restart_assignment))
-        action = {'name': 'rolling_restart',
-                  'restart_assignment': restart_assignment,
-                  'image': image,
-                  'instance_type': instance_type,
-                  'scalyr_key': scalyr_key,
-                  'scalyr_region': scalyr_region,
-                  'kms_key_id': kms_key_id,
-                  'cool_down': cool_down}
+        _LOG.info('Rolling restart assignment:\n {}'.format(restart_assignment))
+        action = {
+            'name': 'rolling_restart',
+            'restart_assignment': restart_assignment,
+            'overrides': ClusterConfig.create_overrides_dict(
+                application_version=image,
+                scalyr_account_key=scalyr_key,
+                scalyr_region=scalyr_region,
+                instance_type=instance_type,
+                kms_key_id=kms_key_id,
+            ),
+            'cool_down': cool_down
+        }
         zk.register_action(action, broker_id=broker_id)
 
     @staticmethod
