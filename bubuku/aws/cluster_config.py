@@ -78,6 +78,8 @@ class ClusterConfig(object):
             self._user_data['scalyr_region'] = overrides['scalyr_region']
         if overrides.get('kms_key_id'):
             self._user_data['kms_key_id'] = overrides['kms_key_id']
+        if overrides.get('ami_id'):
+            self._ami_id = overrides['ami_id']
 
         for k, v in overrides.items():
             if k not in ('application_version', 'instance_type', 'scalyr_account_key', 'scalyr_region', 'kms_key_id'):
@@ -89,7 +91,8 @@ class ClusterConfig(object):
             instance_type: str = None,
             scalyr_account_key: str = None,
             scalyr_region: str = None,
-            kms_key_id: str = None):
+            kms_key_id: str = None,
+            ami_id: str = None):
 
         # Pack arguments by the name passed to the method, in case if value for the argument is set
         def _filter_out_empty(**kwargs) -> dict:
@@ -101,4 +104,5 @@ class ClusterConfig(object):
             scalyr_account_key=scalyr_account_key,
             scalyr_region=scalyr_region,
             kms_key_id=kms_key_id,
+            ami_id=ami_id
         )

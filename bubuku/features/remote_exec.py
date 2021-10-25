@@ -140,7 +140,7 @@ class RemoteCommandExecutorCheck(Check):
 
     @staticmethod
     def register_rolling_restart(zk: BukuExhibitor, broker_id: str, image: str, instance_type: str, scalyr_key: str,
-                                 scalyr_region: str, kms_key_id: str, cool_down: int):
+                                 scalyr_region: str, kms_key_id: str, ami_id: str, cool_down: int):
         if zk.is_rolling_restart_in_progress():
             _LOG.warning('Rolling restart in progress, skipping')
             return
@@ -165,6 +165,7 @@ class RemoteCommandExecutorCheck(Check):
                 scalyr_region=scalyr_region,
                 instance_type=instance_type,
                 kms_key_id=kms_key_id,
+                ami_id=ami_id,
             ),
             'cool_down': cool_down
         }
