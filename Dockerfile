@@ -1,4 +1,5 @@
-FROM openjdk:jdk-slim
+ARG BASE_IMAGE=registry.opensource.zalan.do/library/openjdk-11-jdk-slim:latest
+FROM ${BASE_IMAGE}
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
 ENV KAFKA_VERSION="2.7.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
