@@ -2,32 +2,40 @@ version: "2017-09-20"
 pipeline:
   - id: build
     type: script
-    overlay: guild-python/legacy
+    vm_config: 
+      type: linux
+      priority: 3
     env:
         PYENV_VERSION: 3.8.10
     commands:
-      - desc: Install Docker
-        cmd: |
-          curl -fLOsS https://delivery.cloud.zalando.com/utils/ensure-docker && sh ensure-docker && rm ensure-docker
-
       - desc: Run tests
         cmd: |
           pip3 install -r requirements.txt 
           python3 setup.py test
 
-      - desc: Build and push Docker image
+      - desc: Build docker images for different architectures
         cmd: |
 
-          IMAGE=registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}
+          docker run --privileged --rm tonistiigi/binfmt --install all
 
-          docker build -t $IMAGE .
+          for platform in "arm64" "amd64"; do 
+            echo "Building bubuku for platform $platform"
+            IMAGE=registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}-${platform}
+            
+            if [[ $platform == "arm64" ]]; then
+              docker buildx build --build-arg BASE_IMAGE=registry.opensource.zalan.do/library/experimental-openjdk-11-jdk-slim-arm64:latest --platform linux/${platform} -t $IMAGE .
+            else
+              docker buildx build --platform linux/${platform} -t $IMAGE .
+            fi
+            if [ -z "$CDP_PULL_REQUEST_NUMBER" ]; then
+              docker push $IMAGE
+            fi
+            
+            TEST_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-test-${CDP_BUILD_VERSION}-${platform}"
+            docker tag "$IMAGE" "$TEST_IMAGE"
+            docker push "$TEST_IMAGE"
+          done
 
-          if [ -z "$CDP_PULL_REQUEST_NUMBER" ]; then
-            docker push $IMAGE
-          fi
-          TEST_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-test-${CDP_BUILD_VERSION}"
-          docker tag "$IMAGE" "$TEST_IMAGE"
-          docker push "$TEST_IMAGE"
 notifications:
   - channel: google_chat
     rooms:
