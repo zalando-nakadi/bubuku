@@ -21,7 +21,7 @@ class ConfigLoader(object):
 
 class AwsInstanceUserDataLoader(ConfigLoader):
     def load_user_data(self):
-        return yaml.load(requests.get('http://169.254.169.254/latest/user-data').text)
+        return yaml.load(requests.get('http://169.254.169.254/latest/user-data').text, Loader=yaml.FullLoader)
 
     def load_region(self) -> str:
         return requests.get('http://169.254.169.254/latest/meta-data/placement/region').text
