@@ -3,15 +3,15 @@ import logging
 import netaddr
 
 from bubuku.aws import AWSResources
-from bubuku.aws.cluster_config import ClusterConfig
 
 _LOG = logging.getLogger('bubuku.cluster.aws.subnet')
 
 
 class IpAddressAllocator(object):
-    def __init__(self, aws: AWSResources, cluster_config: ClusterConfig):
+    def __init__(self, aws: AWSResources, vpc_id: str, az: str):
         self.aws = aws
-        self.cluster_config = cluster_config
+        self._vpc_id = vpc_id
+        self._az = az
 
     def _get_subnets(self, prefix_filter: str) -> list:
         """
@@ -19,23 +19,20 @@ class IpAddressAllocator(object):
         with the specified prefix (it should be either 'dmz-' or
         'internal-'), sorted by the Availability Zone and filtered by vpc id
         """
-        vpc_id = self.cluster_config.get_vpc_id()
-        availability_zone = self.cluster_config.get_availability_zone()
-        _LOG.info('Getting subnets for vpc_id: %s and availability_zone: %s', vpc_id, availability_zone)
+        _LOG.info('Getting subnets for vpc_id: %s and availability_zone: %s', self._vpc_id, self._az)
 
         resp = self.aws.ec2_client.describe_subnets()
         subnets = []
 
         for subnet in resp['Subnets']:
-            if subnet['VpcId'] != vpc_id:
+            if subnet['VpcId'] != self._vpc_id:
+                continue
+            if subnet['AvailabilityZone'] != self._az:
                 continue
             for tag in subnet['Tags']:
                 if tag['Key'] == 'Name' and tag['Value'].startswith(prefix_filter):
-                    if availability_zone:
-                        if subnet['AvailabilityZone'] == availability_zone:
-                            subnets.append(subnet)
-                    else:
-                        subnets.append(subnet)
+                    subnets.append(subnet)
+                    break
         _LOG.info('Got subnets %s ', subnets)
         return subnets
 

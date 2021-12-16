@@ -149,13 +149,14 @@ def restart_broker(broker: str):
 @click.option('--scalyr-key', type=click.STRING, help='Scalyr account key')
 @click.option('--scalyr-region', type=click.STRING, help='Scalyr region to use')
 @click.option('--kms-key-id', type=click.STRING, help='Kms key id to decrypt data with')
+@click.option('--ami-id', type=click.STRING, help='Ami id to use')
 @click.option('--cool-down', type=click.INT, default=600, show_default=True,
               help='Number of seconds to wait before passing the restart task to another broker, after cluster is '
                    'stable. Default value of 10 minutes is recommended for production in order to give consumers '
                    'enough time to stabilize in between restarts. This is particularly important for KStream '
                    'applications')
 def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, scalyr_region: str, kms_key_id: str,
-                           cool_down: int):
+                           ami_id: str, cool_down: int):
     if not is_cluster_healthy():
         print('Cluster is not healthy, try again later :)')
         return
@@ -164,7 +165,7 @@ def rolling_restart_broker(image_tag: str, instance_type: str, scalyr_key: str, 
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         broker_id = get_opt_broker_id(None, config, zookeeper, env_provider)
         RemoteCommandExecutorCheck.register_rolling_restart(zookeeper, broker_id, image_tag, instance_type, scalyr_key,
-                                                            scalyr_region, kms_key_id, cool_down)
+                                                            scalyr_region, kms_key_id, ami_id, cool_down)
 
 
 @cli.command('rebalance', help='Run rebalance process on one of brokers. If rack-awareness is enabled, replicas will '

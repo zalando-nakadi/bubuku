@@ -6,7 +6,6 @@ from bubuku.aws import AWSResources
 from bubuku.aws.cluster_config import ClusterConfig
 from bubuku.aws.ec2_node_launcher import Ec2NodeLauncher
 from bubuku.aws.node import Ec2Node
-from bubuku.broker import BrokerManager
 from bubuku.controller import Change
 from bubuku.zookeeper import BukuExhibitor
 
@@ -14,14 +13,11 @@ _LOG = logging.getLogger('bubuku.features.rolling_restart')
 
 
 class RollingRestartChange(Change):
-    def __init__(self, zk: BukuExhibitor, cluster_config: ClusterConfig,
+    def __init__(self,
+                 zk: BukuExhibitor,
+                 cluster_config: ClusterConfig,
                  restart_assignment,
                  broker_id: str,
-                 image: str,
-                 instance_type: str,
-                 scalyr_key: str,
-                 scalyr_region: str,
-                 kms_key_id: str,
                  cool_down: int):
         self.zk = zk
         self.restart_assignment = restart_assignment
@@ -30,16 +26,11 @@ class RollingRestartChange(Change):
         self.broker_ip_to_restart = self.zk.get_broker_address(self.broker_id_to_restart)
 
         self.cluster_config = cluster_config
-        self.cluster_config.set_application_version(image)
-        self.cluster_config.set_instance_type(instance_type)
-        self.cluster_config.set_scalyr_account_key(scalyr_key)
-        self.cluster_config.set_scalyr_region(scalyr_region)
-        self.cluster_config.set_kms_key_id(kms_key_id)
 
         self.aws = AWSResources(region=self.cluster_config.get_aws_region())
         self.ec_node = Ec2Node(self.aws, self.cluster_config, self.broker_ip_to_restart)
-        self.ec2_node_launcher = Ec2NodeLauncher(self.aws, self.cluster_config)
-        self.cluster_config.set_availability_zone(self.ec_node.get_node_availability_zone())
+        self.ec2_node_launcher = Ec2NodeLauncher(
+            self.aws, self.cluster_config, self.ec_node.get_node_availability_zone())
 
         self.state_context = StateContext(self.zk, self.aws, self.ec_node, self.ec2_node_launcher,
                                           self.broker_id_to_restart, self.restart_assignment,
@@ -117,7 +108,6 @@ class State:
         """
         Runs func() with timeout
         :param func function to execute
-        :param timeout_s timeout before executing state next time
         """
         if time() >= self.time_to_check_s:
             self.time_to_check_s = time() + 10
@@ -272,11 +262,7 @@ class RegisterRollingRestart(State):
             if time() - self.cluster_is_healthy_from >= self.state_context.cool_down:
                 action = {'name': 'rolling_restart',
                           'restart_assignment': self.state_context.restart_assignment,
-                          'image': self.state_context.cluster_config.get_application_version(),
-                          'instance_type': self.state_context.cluster_config.get_instance_type(),
-                          'scalyr_key': self.state_context.cluster_config.get_scalyr_account_key(),
-                          'scalyr_region': self.state_context.cluster_config.get_scalyr_region(),
-                          'kms_key_id': self.state_context.cluster_config.get_kms_key_id(),
+                          'overrides': self.state_context.cluster_config.get_overrides(),
                           'cool_down': self.state_context.cool_down}
                 next_broker_id = self.state_context.broker_id_to_restart
                 self.state_context.zk.register_action(action, broker_id=next_broker_id)
