@@ -363,5 +363,35 @@ def validate_replication(factor: int):
             print('All replica lists look valid')
 
 
+@cli.group(name='throttle', help='Set or remove replication throttling')
+def throttle():
+    pass
+
+
+@throttle.command('set', help='Set replication throttling for a broker')
+@click.option('--broker', type=click.STRING,
+              help='Broker id to set replication throttling for. By default throttling is set for the current broker.')
+@click.argument('BYTES_PER_SECOND', type=click.INT, required=True)
+def throttle_set(broker: str, bytes_per_second: int):
+
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+
+        broker_id = int(get_opt_broker_id(broker, config, zookeeper, env_provider))
+
+        manager = RebalanceThrottleManager(bytes_per_second)
+        manager.apply_throttle([
+            (topic, partition, replicas)
+            for topic, partition, replicas in zookeeper.load_partition_assignment()
+            if broker_id in replicas
+        ])
+
+
+@throttle.command('remove-all', help='Remove all replication throttling')
+def throttle_remove_all():
+
+    with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
+        RebalanceThrottleManager.remove_all_throttle_configurations(zookeeper)
+
+
 if __name__ == '__main__':
     cli()
