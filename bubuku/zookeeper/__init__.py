@@ -520,17 +520,28 @@ class RebalanceThrottleManager(object):
         Applies throttle to the brokers and partitions based on reassignment-json-file data.
         :param partitions_data: List of (topic, partition, replicas)
         """
+        apply_throttle_in_batches(partitions_data, len(partitions_data))
+
+    def apply_throttle_in_batches(self, partitions_data, partitions_per_batch):
         partitions_data = [(
             topic,
             partition,
             list(map(int, replicas))
         ) for topic, partition, replicas in partitions_data]
+
         if self._throttle_applied and self.throttle == self._current_throttle_value:
             _LOG.info("Throttle with value {} already applied".format(self._current_throttle_value))
+
         elif not self._throttle_applied or self._current_throttle_value != self.throttle:
-            brokers_to_throttle = self._add_throttle_replicas_per_topic(partitions_data)
-            _LOG.info("Applying replication limit to these brokers: {}".format(brokers_to_throttle))
-            self._apply_throttle_to_brokers(brokers_to_throttle)
+
+            for start_index in range(0, len(partitions_data), partitions_per_batch):
+                end_index = start_index + partitions_per_batch
+                batch_data = partitions_data[start_index:end_index]
+
+                brokers_to_throttle = self._add_throttle_replicas_per_topic(batch_data)
+                _LOG.info("Applying replication limit to these brokers: {}".format(brokers_to_throttle))
+                self._apply_throttle_to_brokers(brokers_to_throttle)
+
             self._throttle_applied, self._current_throttle_value = True, self.throttle
 
     def _add_throttle_replicas_per_topic(self, partitions_data):
