@@ -371,24 +371,19 @@ def throttle():
 @throttle.command('set', help='Set replication throttling for a broker')
 @click.option('--broker', type=click.STRING,
               help='Broker id to set replication throttling for. By default throttling is set for the current broker.')
-@click.option('--batch-size', type=click.INT, show_default=True, default=100,
-              help="Amount of partitions to throttle in a single step")
 @click.argument('BYTES_PER_SECOND', type=click.INT, required=True)
-def throttle_set(broker: str, batch_size: int, bytes_per_second: int):
+def throttle_set(broker: str, bytes_per_second: int):
 
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
 
         broker_id = int(get_opt_broker_id(broker, config, zookeeper, env_provider))
 
         manager = RebalanceThrottleManager(bytes_per_second)
-        manager.apply_throttle_in_batches(
-            [
-                (topic, partition, replicas)
-                for topic, partition, replicas in zookeeper.load_partition_assignment()
-                if broker_id in replicas
-            ],
-            batch_size
-        )
+        manager.apply_throttle([
+            (topic, partition, replicas)
+            for topic, partition, replicas in zookeeper.load_partition_assignment()
+            if broker_id in replicas
+        ])
 
 
 @throttle.command('remove-all', help='Remove all replication throttling')
