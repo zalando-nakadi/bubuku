@@ -371,24 +371,31 @@ def throttle():
 @throttle.command('set', help='Set replication throttling for a broker')
 @click.option('--broker', type=click.STRING,
               help='Broker id to set replication throttling for. By default throttling is set for the current broker.')
-@click.argument('BYTES_PER_SECOND', type=click.INT, required=True)
+@click.argument('bytes_per_second', type=click.INT, required=True)
 def throttle_set(broker: str, bytes_per_second: int):
 
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
 
         broker_id = int(get_opt_broker_id(broker, config, zookeeper, env_provider))
 
-        manager = RebalanceThrottleManager(bytes_per_second)
-        manager.apply_throttle([
+        _LOG.info("Loading partition assignment...")
+        assignment = zookeeper.load_partition_assignment()
+
+        to_throttle = [
             (topic, partition, replicas)
-            for topic, partition, replicas in zookeeper.load_partition_assignment()
+            for topic, partition, replicas in assignment
             if broker_id in replicas
-        ])
+        ]
+        _LOG.info("Applying throttling to %d partitions...", len(to_throttle))
+
+        manager = RebalanceThrottleManager(zookeeper, bytes_per_second)
+        manager.apply_throttle(to_throttle)
 
 
 @throttle.command('remove-all', help='Remove all replication throttling')
 def throttle_remove_all():
-
+    config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
         RebalanceThrottleManager.remove_all_throttle_configurations(zookeeper)
 
