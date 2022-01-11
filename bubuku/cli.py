@@ -377,7 +377,7 @@ def throttle_set(broker: str, bytes_per_second: int):
     config, env_provider = prepare_configs()
     with load_exhibitor_proxy(env_provider.get_address_provider(), config.zk_prefix) as zookeeper:
 
-        broker_id = int(get_opt_broker_id(broker, config, zookeeper, env_provider))
+        broker_id = int(get_opt_broker_id(broker, config, zookeeper, env_provider, throw_on_missing=False))
 
         _LOG.info("Loading partition assignment...")
         assignment = zookeeper.load_partition_assignment()
