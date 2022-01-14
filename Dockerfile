@@ -1,5 +1,4 @@
-ARG BASE_IMAGE=registry.opensource.zalan.do/library/openjdk-11-jdk-slim:latest
-FROM ${BASE_IMAGE}
+FROM amazoncorretto:11
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
 ENV KAFKA_VERSION="2.7.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
@@ -13,7 +12,7 @@ ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmx
 
 ADD docker/download_kafka.sh /tmp/download_kafka.sh
 
-RUN apt-get update && apt-get install -y curl python3-pip && sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
+RUN yum -y update && yum install -y curl gzip tar python3-pip && sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
 
 ADD docker/server.properties ${KAFKA_DIR}/config/
 ADD docker/server.properties ${KAFKA_SETTINGS}
