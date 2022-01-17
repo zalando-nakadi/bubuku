@@ -1,5 +1,12 @@
-FROM amazoncorretto:11
+FROM registry.opensource.zalan.do/library/ubuntu-20.04:latest
 MAINTAINER Team Aruha, team-aruha@zalando.de
+
+RUN apt-get update && apt-get install -y curl python3-pip
+
+RUN curl -s https://apt.corretto.aws/corretto.key | apt-key add -
+RUN echo 'deb https://apt.corretto.aws stable main' >/etc/apt/sources.list.d/amazon-corretto-jdk.list
+
+RUN apt-get update && apt-get install -y java-11-amazon-corretto-jdk
 
 ENV KAFKA_VERSION="2.7.2" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
 ENV KAFKA_LOGS_DIR="/data/logs"
@@ -10,9 +17,9 @@ ENV BUKU_FEATURES="restart_on_exhibitor,rebalance_on_start,graceful_terminate,us
 ENV KAFKA_OPTS="-server -Dlog4j.configuration=file:${KAFKA_DIR}/config/log4j.properties -Dkafka.logs.dir=${KAFKA_LOGS_DIR} -javaagent:/opt/jolokia-jvm-agent.jar=host=0.0.0.0"
 ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
 
-ADD docker/download_kafka.sh /tmp/download_kafka.sh
+ADD docker/download_kafka.sh /tmp
 
-RUN yum -y update && yum install -y curl gzip tar python3-pip && sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
+RUN sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
 
 ADD docker/server.properties ${KAFKA_DIR}/config/
 ADD docker/server.properties ${KAFKA_SETTINGS}
