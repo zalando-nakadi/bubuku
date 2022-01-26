@@ -44,19 +44,6 @@ def _prepare_for_start_fail(broker_ids, leader, isr):
 
 
 class TestBroker(unittest.TestCase):
-    def test_broker_retries_before_it_restarts(self):
-        processManager = MagicMock()
-        processManager.is_running = lambda: True
-
-        id_manager = MagicMock()
-        id_manager.is_registered = MagicMock(return_value=None)
-
-        broker = BrokerManager(processManager, MagicMock(
-        ), id_manager, build_test_properties(), StartupTimeout.build({'type': 'linear'}))
-        broker.is_running_and_registered(3, 0.1)
-
-        assert 3 == id_manager.is_registered.call_count
-
     def test_broker_checks_death(self):
         exhibitor = MagicMock()
         states = [2, 2]
