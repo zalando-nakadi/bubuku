@@ -83,10 +83,16 @@ class BrokerManager(object):
         self.process = process
         self.timeout = timeout
 
-    def is_running_and_registered(self):
+    def is_running_and_registered(self, retries = 1, interval = 2):
         if not self.process.is_running():
             return False
-        return self.id_manager.is_registered()
+        for x in range(0, retries):
+            if self.id_manager.is_registered():
+                return True
+            if x == retries - 1:
+                break
+            sleep(interval)
+        return False
 
     def stop_kafka_process(self):
         if self.process.is_running():

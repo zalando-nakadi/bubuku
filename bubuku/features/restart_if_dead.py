@@ -18,7 +18,7 @@ class CheckBrokerStopped(Check):
     def check(self) -> Change:
         if not self.need_check:
             return None
-        if self.broker.is_running_and_registered():
+        if self.broker.is_running_and_registered(3):
             return None
 
         _LOG.info('Oops! Broker is dead, triggering restart')
