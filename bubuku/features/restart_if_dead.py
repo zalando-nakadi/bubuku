@@ -26,7 +26,7 @@ class CheckBrokerStopped(Check):
     def check(self) -> Change:
         if not self.need_check:
             return None
-        if self.is_running_and_registered(tries=self.is_broker_registered_attempts):
+        if self.is_running_and_registered(attempts=self.is_broker_registered_attempts):
             return None
 
         _LOG.info('Oops! Broker is dead, triggering restart')
@@ -38,8 +38,8 @@ class CheckBrokerStopped(Check):
 
         return RestartBrokerChange(self.zk, self.broker, _cancel_if, self.on_check_removed)
 
-    def is_running_and_registered(self, tries=1):
-        for x in range(0, tries):
+    def is_running_and_registered(self, attempts=1):
+        for x in range(0, attempts):
             if (x > 0):
                 sleep(self.check_sleep_time_ms / 1000)
             # The process might have died already, so no reason to attempt to wait for zookeeper session to restore
