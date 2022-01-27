@@ -1,4 +1,3 @@
-from curses.ascii import NUL
 import unittest
 from unittest.mock import MagicMock
 
@@ -52,10 +51,8 @@ class TestBroker(unittest.TestCase):
             for idx in range(0, len(states)):
                 states[idx] -= 1
             return [
-                ('t1', 0, {'leader': states[0], 'isr': [
-                 1, 3] if states[0] >= 1 else [3]}),
-                ('t2', 0, {'leader': states[1], 'isr': [
-                 1, 3] if states[1] >= 1 else [3]})
+                ('t1', 0, {'leader': states[0], 'isr': [1, 3] if states[0] >= 1 else [3]}),
+                ('t2', 0, {'leader': states[1], 'isr': [1, 3] if states[1] >= 1 else [3]})
             ]
 
         exhibitor.load_partition_states = _load_states
