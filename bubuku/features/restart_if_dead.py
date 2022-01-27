@@ -42,6 +42,7 @@ class CheckBrokerStopped(Check):
         for x in range(0, tries):
             if (x > 0):
                 sleep(self.check_sleep_time_ms / 1000)
+            # The process might have died already, so no reason to attempt to wait for zookeeper session to restore
             if not self.broker.process.is_running():
                 return False
             if self.broker.id_manager.is_registered():
