@@ -15,11 +15,18 @@ class CheckBrokerStopped(Check):
         self.broker = broker
         self.zk = zk
         self.need_check = True
+        self.check_sleep_time_ms = 500
+        # Attempt to check if broker is not registered in zookeeper for twice as long as the zookeeper session timeout
+        # with 500ms interval in between attempts.
+        # Zookeeper client will attempt to create a new session after it is lost after the timeout of the configured value
+        # of zookeeper.connection.timeout.ms.
+        self.is_broker_registered_attempts = round(((self.broker.kafka_properties.get_property(
+            "zookeeper.connection.timeout.ms") or 6000) / self.check_sleep_time_ms) * 2)
 
     def check(self) -> Change:
         if not self.need_check:
             return None
-        if self.is_running_and_registered(tries=3):
+        if self.is_running_and_registered(tries=self.is_broker_registered_attempts):
             return None
 
         _LOG.info('Oops! Broker is dead, triggering restart')
@@ -32,16 +39,15 @@ class CheckBrokerStopped(Check):
         return RestartBrokerChange(self.zk, self.broker, _cancel_if, self.on_check_removed)
 
     def is_running_and_registered(self, tries=1):
-        if not self.broker.process.is_running():
-            return False
-        # Retry with a sleep of 2 seconds in between
         for x in range(0, tries):
             if (x > 0):
-                sleep(2)
-            _LOG.info(
-                'Broker is not registered in zookeeper, {} attempt to retry'.format(x + 1))
+                sleep(self.check_sleep_time_ms / 1000)
+            if not self.broker.process.is_running():
+                return False
             if self.broker.id_manager.is_registered():
                 return True
+            _LOG.info(
+                'Broker is not registered in zookeeper, {} attempt to retry'.format(x + 1))
         return False
 
     def on_check_removed(self):

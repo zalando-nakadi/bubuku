@@ -8,7 +8,7 @@ services:
     environment:
       BUBUKU_MODE: "local"
       HEALTH_PORT: "8080"
-      BUKU_FEATURES: "restart_on_exhibitor,rebalance_on_brokers_change,graceful_terminate"
+      BUKU_FEATURES: ""
 
   zookeeper:
     image: wurstmeister/zookeeper:3.4.6
