@@ -7,8 +7,8 @@ class TestRestartIfDeadCheck(unittest.TestCase):
     def test_broker_retries_before_it_restarts(self):
         brokerManager = MagicMock()
         isRegistered = MagicMock(return_value=False)
-        attrs = {'process.is_running.return_value': True,
-                 'id_manager.is_registered': isRegistered,
+        attrs = {'is_running.return_value': True,
+                 'is_registered_in_zookeeper': isRegistered,
                  'kafka_properties.get_property.return_value': 1000}
         brokerManager.configure_mock(**attrs)
 
@@ -16,5 +16,4 @@ class TestRestartIfDeadCheck(unittest.TestCase):
 
         checkBrokerStopped = CheckBrokerStopped(brokerManager, exhibitor)
         checkBrokerStopped.check()
-        print('Received:{}, Expected:{}'.format(isRegistered.call_count, checkBrokerStopped.is_broker_registered_attempts))
         assert isRegistered.call_count == checkBrokerStopped.is_broker_registered_attempts

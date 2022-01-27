@@ -83,6 +83,12 @@ class BrokerManager(object):
         self.process = process
         self.timeout = timeout
 
+    def is_running(self):
+        return self.process.is_running()
+
+    def is_registered_in_zookeeper(self):
+        return self.id_manager.is_registered()
+
     def is_running_and_registered(self):
         if not self.process.is_running():
             return False
