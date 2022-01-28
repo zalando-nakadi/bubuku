@@ -89,6 +89,10 @@ class BrokerManager(object):
     def is_registered_in_zookeeper(self):
         return self.id_manager.is_registered()
 
+    def get_zookeeper_session_timeout(self):
+        return int(self.kafka_properties.get_property(
+            "zookeeper.connection.timeout.ms")or 6000) 
+
     def is_running_and_registered(self):
         if not self.process.is_running():
             return False

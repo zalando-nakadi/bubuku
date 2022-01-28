@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
 from bubuku.features.restart_if_dead import CheckBrokerStopped
-from datetime import datetime, timedelta
 from timeout_decorator import timeout
 
 class TestRestartIfDeadCheck(unittest.TestCase):
@@ -11,7 +10,7 @@ class TestRestartIfDeadCheck(unittest.TestCase):
         isRegistered = MagicMock(return_value=False)
         attrs = {'is_running.return_value': True,
                  'is_registered_in_zookeeper': isRegistered,
-                 'kafka_properties.get_property.return_value': 1}
+                 'get_zookeeper_session_timeout.return_value': 1}
         brokerManager.configure_mock(**attrs)
 
         exhibitor = MagicMock()

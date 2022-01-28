@@ -1,7 +1,6 @@
 import logging
 
 from datetime import datetime, timedelta
-from time import sleep
 from bubuku.broker import BrokerManager
 from bubuku.controller import Change, Check
 from bubuku.features.restart_on_zk_change import RestartBrokerChange
@@ -16,14 +15,12 @@ class CheckBrokerStopped(Check):
         self.broker = broker
         self.zk = zk
         self.need_check = True
-        self.last_succesful_attempt = datetime.now()
-        self.session_wait_interval_ms = round(((self.broker.kafka_properties.get_property(
-            "zookeeper.connection.timeout.ms") or 6000)) * 2)
+        self.last_zk_session_check = datetime.now()
 
     def check(self) -> Change:
         if not self.need_check:
             return None
-        if self.is_running_and_registered():
+        if self.is_running_and_registered(should_retry=True):
             return None
 
         _LOG.warning('Oops! Broker is dead, triggering restart')
@@ -37,16 +34,17 @@ class CheckBrokerStopped(Check):
 
     # Attempt to verify that broker is not registered in zookeeper for twice as long as the zookeeper session timeout.
     # Allow zookeeper client to try to restore the session before killing tha kafka process as soon as zookeeper session is dead.
-    def is_running_and_registered(self):
+    def is_running_and_registered(self, should_retry=False):
         if not self.broker.is_running():
             return False
         if not self.broker.is_registered_in_zookeeper():
-            _LOG.warning('Broker is to not be regiestered in Zookeeper. Last time it was registered was {}'.format(
-                self.last_succesful_attempt))
-            if datetime.now() > self.last_succesful_attempt + timedelta(milliseconds=self.session_wait_interval_ms):
+            _LOG.warning('Broker is to not be regiestered in Zookeeper')
+            time_to_return = self.last_zk_session_check + timedelta(milliseconds=self.broker.get_zookeeper_session_timeout() * 2)
+            if datetime.now() > time_to_return or not should_retry:
+                self.last_zk_session_check = datetime.now()
                 return False
         else:
-            self.last_succesful_attempt = datetime.now()
+            self.last_zk_session_check = datetime.now()
         return True
 
     def on_check_removed(self):
