@@ -38,7 +38,7 @@ class CheckBrokerStopped(Check):
         if not self.broker.is_running():
             return False
         if not self.broker.is_registered_in_zookeeper():
-            _LOG.warning('Broker is to not be regiestered in Zookeeper')
+            _LOG.warning('Broker is not regiestered in Zookeeper')
             time_to_return = self.last_zk_session_check + timedelta(milliseconds=self.broker.get_zookeeper_session_timeout() * 2)
             if datetime.now() > time_to_return or not should_retry:
                 self.last_zk_session_check = datetime.now()
