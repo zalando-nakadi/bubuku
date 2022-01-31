@@ -27,9 +27,9 @@ class CheckBrokerStopped(Check):
 
         # Do not start if broker is running and registered
         def _cancel_if():
-            return not self.broker.is_running() or self.broker.is_registered_in_zookeeper()
+            return self.broker.is_running() and self.broker.is_registered_in_zookeeper()
 
-        return RestartBrokerChange(self.zk, self.broker, _cancel_if, self.on_check_removed)
+        return RestartBrokerChange(self.zk, self.broker, _cancel_if, self.on_change_executed)
 
     # Attempt to verify that broker is not registered in zookeeper for twice as long as the zookeeper session timeout.
     # Allow zookeeper client to try to restore the session before killing tha kafka process as soon as zookeeper session is dead.
@@ -41,12 +41,12 @@ class CheckBrokerStopped(Check):
             _LOG.warning('Broker is not regiestered in Zookeeper')
             if not self.last_zk_session_failed_check:
                 self.last_zk_session_failed_check = current_time
-            time_to_restart = self.last_zk_session_failed_check + timedelta(milliseconds=self.broker.get_zookeeper_session_timeout() * 2)
-            if current_time > time_to_restart:
+            time_to_restart_at = self.last_zk_session_failed_check + timedelta(milliseconds=self.broker.get_zookeeper_session_timeout() * 2)
+            if current_time > time_to_restart_at:
                 return True
         return False
 
-    def on_check_removed(self):
+    def on_change_executed(self):
         self.need_check = True
         self.last_zk_session_failed_check = None
 
