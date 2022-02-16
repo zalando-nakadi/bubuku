@@ -1,3 +1,4 @@
+# Essential part - use base image from dockerhub to utilize multiarch
 FROM python:3.9
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
