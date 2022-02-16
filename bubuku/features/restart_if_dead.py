@@ -44,6 +44,8 @@ class CheckBrokerStopped(Check):
             time_to_restart_at = self.last_zk_session_failed_check + timedelta(milliseconds=self.broker.get_zookeeper_session_timeout() * 2)
             if current_time > time_to_restart_at:
                 return True
+        else:
+            self.last_zk_session_failed_check = None
         return False
 
     def on_change_executed(self):
