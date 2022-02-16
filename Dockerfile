@@ -9,13 +9,7 @@ RUN apt-get update && apt-get install -y java-11-amazon-corretto-jdk
 
 # Install kafka
 ENV KAFKA_VERSION="2.7.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
-ENV KAFKA_LOGS_DIR="/data/logs"
-ENV KAFKA_DIR="/opt/kafka"
-ENV HEALTH_PORT=8080
-ENV KAFKA_SETTINGS="${KAFKA_DIR}/config/server.properties"
-ENV BUKU_FEATURES="restart_on_exhibitor,rebalance_on_start,graceful_terminate,use_ip_address"
-ENV KAFKA_OPTS="-server -Dlog4j.configuration=file:${KAFKA_DIR}/config/log4j.properties -Dkafka.logs.dir=${KAFKA_LOGS_DIR} -javaagent:/opt/jolokia-jvm-agent.jar=host=0.0.0.0"
-ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+ENV KAFKA_DIR="/opt/kafka" KAFKA_LOGS_DIR="/data/logs" KAFKA_SETTINGS="/opt/kafka/config/server.properties"
 
 ADD docker/download_kafka.sh /tmp/download_kafka.sh
 
@@ -46,6 +40,12 @@ RUN mkdir -p $KAFKA_LOGS_DIR/ && \
 FROM registry.opensource.zalan.do/library/scratch:latest
 
 COPY --from=0 / /
+
+ENV KAFKA_DIR="/opt/kafka" KAFKA_LOGS_DIR="/data/logs" KAFKA_SETTINGS="/opt/kafka/config/server.properties"
+ENV HEALTH_PORT=8080
+ENV BUKU_FEATURES="restart_on_exhibitor,rebalance_on_start,graceful_terminate,use_ip_address"
+ENV KAFKA_OPTS="-server -Dlog4j.configuration=file:${KAFKA_DIR}/config/log4j.properties -Dkafka.logs.dir=${KAFKA_LOGS_DIR} -javaagent:/opt/jolokia-jvm-agent.jar=host=0.0.0.0"
+ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
 
 EXPOSE 9092 8080 8778
 
