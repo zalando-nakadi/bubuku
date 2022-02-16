@@ -1,7 +1,12 @@
-ARG BASE_IMAGE=registry.opensource.zalan.do/library/openjdk-11-jdk-slim:latest
-FROM ${BASE_IMAGE}
+FROM python:3.9
 MAINTAINER Team Aruha, team-aruha@zalando.de
 
+# Install corretto JDK: https://docs.aws.amazon.com/corretto/latest/corretto-11-ug/generic-linux-install.html
+RUN wget -O- https://apt.corretto.aws/corretto.key | apt-key add - 
+RUN echo 'deb https://apt.corretto.aws stable main' >/etc/apt/sources.list.d/amazon-corretto-jdk.list
+RUN apt-get update && apt-get install -y java-11-amazon-corretto-jdk
+
+# Install kafka
 ENV KAFKA_VERSION="2.7.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
 ENV KAFKA_LOGS_DIR="/data/logs"
 ENV KAFKA_DIR="/opt/kafka"
@@ -13,12 +18,13 @@ ENV KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmx
 
 ADD docker/download_kafka.sh /tmp/download_kafka.sh
 
-RUN apt-get update && apt-get install -y curl python3-pip && sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
+RUN sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
 
 ADD docker/server.properties ${KAFKA_DIR}/config/
 ADD docker/server.properties ${KAFKA_SETTINGS}
 ADD docker/log4j.properties ${KAFKA_DIR}/config/
 
+# Install bubuku
 ENV SRC_PATH="/bubuku"
 
 ADD ./bubuku "${SRC_PATH}/bubuku"
@@ -34,8 +40,11 @@ RUN mkdir -p $KAFKA_LOGS_DIR/ && \
     \
     mkdir ${KAFKA_DIR}/logs && \
     chmod 777 ${KAFKA_DIR}/logs
-#
-# ^^ ${KAFKA_DIR}/logs is for JVM GC logs
+
+
+FROM registry.opensource.zalan.do/library/scratch:latest
+
+COPY --from=0 / /
 
 EXPOSE 9092 8080 8778
 
