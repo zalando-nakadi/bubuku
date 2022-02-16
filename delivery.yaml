@@ -22,7 +22,11 @@ pipeline:
             echo "Building bubuku for platform $platform"
             IMAGE=registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}-${platform}
             
-            docker buildx build --platform linux/${platform} -t $IMAGE .
+            if [[ $platform == "arm64" ]]; then
+              docker buildx build --build-arg BASE_IMAGE=registry.opensource.zalan.do/library/experimental-openjdk-11-jdk-slim-arm64:latest --platform linux/${platform} -t $IMAGE .
+            else
+              docker buildx build --platform linux/${platform} -t $IMAGE .
+            fi
             if [ -z "$CDP_PULL_REQUEST_NUMBER" ]; then
               docker push $IMAGE
             fi
