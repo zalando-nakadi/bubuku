@@ -5,7 +5,7 @@ MAINTAINER Team Aruha, team-aruha@zalando.de
 # Install corretto JDK: https://docs.aws.amazon.com/corretto/latest/corretto-11-ug/generic-linux-install.html
 RUN wget -O- https://apt.corretto.aws/corretto.key | apt-key add - 
 RUN echo 'deb https://apt.corretto.aws stable main' >/etc/apt/sources.list.d/amazon-corretto-jdk.list
-RUN apt-get update && apt-get install -y java-11-amazon-corretto-jdk
+RUN apt-get update && apt-get install -y java-17-amazon-corretto-jdk
 
 # Install kafka
 ENV KAFKA_VERSION="2.7.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
