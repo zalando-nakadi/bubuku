@@ -1,6 +1,6 @@
 import copy
 import logging
-
+import time
 import yaml
 
 from bubuku.aws import AWSResources
@@ -69,14 +69,24 @@ class Ec2NodeLauncher(object):
             EbsOptimized=True)
 
         instance_id = resp['Instances'][0]['InstanceId']
-        _LOG.info('Instance %s launched, waiting for it to initialize', instance_id)
-        self._aws.ec2_client.create_tags(
-            Resources=[instance_id],
-            Tags=(self._cluster_config.get_tags() + [
-                {'Key': 'Name', 'Value': self._cluster_config.get_cluster_name()},
-                {'Key': 'StackName', 'Value': self._cluster_config.get_cluster_name()}
-            ])
-        )
+        _LOG.info('Instance %s launched', instance_id)
+
+        attempts = 2
+        while attempts > 0:
+            try:
+                self._aws.ec2_client.create_tags(
+                    Resources=[instance_id],
+                    Tags=(self._cluster_config.get_tags() + [
+                        {'Key': 'Name', 'Value': self._cluster_config.get_cluster_name()},
+                        {'Key': 'StackName', 'Value': self._cluster_config.get_cluster_name()}
+                    ])
+                )
+                break
+
+            except Exception as e:
+                _LOG.error('Failed to create instance tags', exc_info=e)
+                time.sleep(5)
+                attempts -= 1
 
         return instance_id
 
