@@ -72,7 +72,7 @@ class Ec2NodeLauncher(object):
         _LOG.info('Instance %s launched', instance_id)
 
         attempts = 2
-        while attempts > 0:
+        while True:
             try:
                 self._aws.ec2_client.create_tags(
                     Resources=[instance_id],
@@ -84,9 +84,11 @@ class Ec2NodeLauncher(object):
                 break
 
             except Exception as e:
-                _LOG.error('Failed to create instance tags', exc_info=e)
-                time.sleep(5)
                 attempts -= 1
+                if attempts == 0:
+                    raise e
+                _LOG.error('Failed to create instance tags, will retry...', exc_info=e)
+                time.sleep(5)
 
         return instance_id
 
