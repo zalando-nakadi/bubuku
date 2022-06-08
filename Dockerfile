@@ -15,7 +15,6 @@ ADD docker/download_kafka.sh /tmp/download_kafka.sh
 
 RUN sh /tmp/download_kafka.sh ${SCALA_VERSION} ${KAFKA_VERSION} ${KAFKA_DIR} ${JOLOKIA_VERSION}
 
-ADD docker/server.properties ${KAFKA_DIR}/config/
 ADD docker/server.properties ${KAFKA_SETTINGS}
 ADD docker/log4j.properties ${KAFKA_DIR}/config/
 
