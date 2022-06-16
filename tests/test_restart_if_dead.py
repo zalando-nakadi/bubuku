@@ -1,10 +1,9 @@
 import unittest
 from unittest.mock import MagicMock
 from bubuku.features.restart_if_dead import CheckBrokerStopped
-from timeout_decorator import timeout
 
 class TestRestartIfDeadCheck(unittest.TestCase):
-    @timeout(0.5)
+
     def test_broker_retries_before_it_restarts(self):
         brokerManager = MagicMock()
         isRegistered = MagicMock(return_value=False)

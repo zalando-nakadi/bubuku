@@ -82,7 +82,7 @@ def test_use_ip_address_default():
     props = build_test_properties()
 
     amazon = MagicMock()
-    amazon.get_id = MagicMock(return_value='172.31.146.57')
+    amazon.get_ip = MagicMock(return_value='172.31.146.57')
 
     apply_features(-1, {'use_ip_address': {}}, None, None, None, props, amazon)
 
@@ -94,7 +94,7 @@ def test_use_ip_address_custom():
     props.set_property("listeners", "CUSTOM://:9094")
 
     amazon = MagicMock()
-    amazon.get_id = MagicMock(return_value='172.31.146.57')
+    amazon.get_ip = MagicMock(return_value='172.31.146.57')
 
     apply_features(-1, {'use_ip_address': {}}, None, None, None, props, amazon)
 
