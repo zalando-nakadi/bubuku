@@ -16,7 +16,7 @@ _LOG = logging.getLogger('bubuku.amazon')
 
 
 class EnvProvider(object):
-    def get_id(self) -> str:
+    def get_ip(self) -> str:
         raise NotImplementedError('Not implemented')
 
     def get_address_provider(self):
@@ -53,7 +53,7 @@ class AmazonEnvProvider(EnvProvider):
             _LOG.info("Amazon specific information loaded from AWS: {}".format(json.dumps(self._document, indent=2)))
         return self._document
 
-    def get_id(self) -> str:
+    def get_ip(self) -> str:
         if not self.ip_address:
             self.ip_address = self._get_document()['privateIp']
         return self.ip_address
@@ -105,10 +105,9 @@ class StaticAddressesProvider(AddressListProvider):
 
 
 class LocalEnvProvider(EnvProvider):
-    unique_id = str(uuid.uuid4())
 
-    def get_id(self) -> str:
-        return self.unique_id
+    def get_ip(self) -> str:
+        return '127.0.0.1'
 
     def get_address_provider(self):
         return _LocalAddressProvider()

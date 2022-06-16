@@ -45,7 +45,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
                 protocol, _ignore, port = listener.split(":")
                 new_listeners.append("{protocol}://{host}:{port}".format(
                     protocol=protocol,
-                    host=env_provider.get_id(),
+                    host=env_provider.get_ip(),
                     port=port
                 ))
             kafka_properties.set_property('listeners', ",".join(new_listeners))
