@@ -5,7 +5,6 @@ from bubuku.config import KafkaProperties, load_config, _load_timeout_dict
 
 __PROPS = """
 log.dirs=/data/kafka-logs
-port=9092
 auto.create.topics.enable=false
 delete.topic.enable=true
 auto.leader.rebalance.enable=true
