@@ -100,5 +100,4 @@ def test_use_ip_address_custom():
     apply_features(-1, {'use_ip_address': {}}, None, None, None, props, amazon)
     
     assert props.get_property('advertised.listeners') == 'CUSTOM://172.31.146.57:9094,CUSTOM2://172.31.146.57:9095'
-    print(props.get_property('listeners'))
     assert props.get_property('listeners') == 'CUSTOM://172.31.146.57:9094,CUSTOM://127.0.0.1:9094,CUSTOM2://172.31.146.57:9095,CUSTOM2://127.0.0.1:9095'
