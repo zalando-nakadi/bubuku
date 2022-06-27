@@ -48,7 +48,10 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
                     host=env_provider.get_ip(),
                     port=port
                 ))
+            kafka_properties.set_property('advertised.listeners', ",".join(new_listeners))
+            new_listeners.append("PLAINTEXT://localhost:9092")
             kafka_properties.set_property('listeners', ",".join(new_listeners))
+
         else:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
