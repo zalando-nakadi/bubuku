@@ -40,18 +40,28 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
             old_listeners = kafka_properties.get_property("listeners")
             if not old_listeners:
                 old_listeners = 'PLAINTEXT://:9092'
-            new_listeners = []
+            adv_listeners = []
             for listener in old_listeners.split(","):
                 protocol, _ignore, port = listener.split(":")
-                new_listeners.append("{protocol}://{host}:{port}".format(
+                adv_listeners.append("{protocol}://{host}:{port}".format(
                     protocol=protocol,
                     host=env_provider.get_ip(),
                     port=port
                 ))
-            kafka_properties.set_property('advertised.listeners', ",".join(new_listeners))
-            new_listeners.append("PLAINTEXT://localhost:9092")
+            
+            unique_adv_listeners = list(dict.fromkeys(adv_listeners))
+            kafka_properties.set_property('advertised.listeners', ",".join(unique_adv_listeners))
+            
+            new_listeners = []
+            for adv_listener in unique_adv_listeners:
+                new_listeners.append(adv_listener)
+                protocol, _ignore, port = adv_listener.split(":")
+                new_listeners.append("{protocol}://{host}:{port}".format(
+                    protocol=protocol,
+                    host='127.0.0.1',
+                    port=port
+                ))
             kafka_properties.set_property('listeners', ",".join(new_listeners))
-
         else:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
