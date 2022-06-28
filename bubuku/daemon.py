@@ -46,7 +46,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
         else:
             _LOG.error('Using of unsupported feature "{}", skipping it'.format(feature))
 
-def __get_transformed_listeners(kafka_properties, ip_addr, listener_property):
+def __get_transformed_listeners(kafka_properties: KafkaProperties, ip_addr, listener_property):
     old_listeners = kafka_properties.get_property(listener_property)            
     if not old_listeners:
         old_listeners = 'PLAINTEXT://:9092'            
