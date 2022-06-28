@@ -49,7 +49,7 @@ def apply_features(api_port, features: dict, controller: Controller, buku_proxy:
                     port=port
                 ))
             
-            unique_adv_listeners = list(dict.fromkeys(adv_listeners))
+            unique_adv_listeners = sorted(set(adv_listeners))
             kafka_properties.set_property('advertised.listeners', ",".join(unique_adv_listeners))
             
             new_listeners = []
