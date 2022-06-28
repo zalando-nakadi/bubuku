@@ -87,17 +87,19 @@ def test_use_ip_address_default():
     apply_features(-1, {'use_ip_address': {}}, None, None, None, props, amazon)
 
     assert props.get_property('advertised.listeners') == 'PLAINTEXT://172.31.146.57:9092'
-    assert props.get_property('listeners') == 'PLAINTEXT://172.31.146.57:9092,PLAINTEXT://127.0.0.1:9092'
+    assert props.get_property('listeners') == 'PLAINTEXT://0.0.0.0:9092'
 
 
 def test_use_ip_address_custom():
     props = build_test_properties()
     props.set_property("listeners", "CUSTOM://:9094,CUSTOM2://:9095,CUSTOM2://:9095")
+    props.set_property("advertised.listeners", "CUSTOM://:9094,CUSTOM2://:9095,CUSTOM2://:9095")
 
     amazon = MagicMock()
     amazon.get_ip = MagicMock(return_value='172.31.146.57')
 
     apply_features(-1, {'use_ip_address': {}}, None, None, None, props, amazon)
     
+    print(props.get_property('advertised.listeners'))
     assert props.get_property('advertised.listeners') == 'CUSTOM2://172.31.146.57:9095,CUSTOM://172.31.146.57:9094'
-    assert props.get_property('listeners') == 'CUSTOM2://172.31.146.57:9095,CUSTOM2://127.0.0.1:9095,CUSTOM://172.31.146.57:9094,CUSTOM://127.0.0.1:9094'
+    assert props.get_property('listeners') == 'CUSTOM2://0.0.0.0:9095,CUSTOM://0.0.0.0:9094'
