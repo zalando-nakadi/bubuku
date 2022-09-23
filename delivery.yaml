@@ -4,6 +4,7 @@ pipeline:
     type: script
     vm_config: 
       type: linux
+      size: large
       image: cdp-runtime/python-3.9
     commands:
       - desc: Run tests
