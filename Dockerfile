@@ -1,6 +1,8 @@
-# Essential part - use base image from dockerhub to utilize multiarch
-FROM python:3.9
+FROM container-registry.zalando.net/library/python-3.9-slim:latest
 MAINTAINER Team Aruha, team-aruha@zalando.de
+
+RUN apt-get update
+RUN apt-get install -y --mark-auto curl wget gnupg
 
 # Install corretto JDK: https://docs.aws.amazon.com/corretto/latest/corretto-11-ug/generic-linux-install.html
 RUN wget -O- https://apt.corretto.aws/corretto.key | apt-key add - 
@@ -35,12 +37,10 @@ RUN mkdir -p $KAFKA_LOGS_DIR/ && \
     mkdir ${KAFKA_DIR}/logs && \
     chmod 777 ${KAFKA_DIR}/logs
 
+RUN apt-get -y autoremove && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-FROM registry.opensource.zalan.do/library/scratch:latest
-
-COPY --from=0 / /
-
-ENV KAFKA_DIR="/opt/kafka" KAFKA_LOGS_DIR="/data/logs" KAFKA_SETTINGS="/opt/kafka/config/server.properties"
 ENV HEALTH_PORT=8080
 ENV BUKU_FEATURES="restart_on_exhibitor,rebalance_on_start,graceful_terminate,use_ip_address"
 ENV KAFKA_OPTS="-server -Dlog4j.configuration=file:${KAFKA_DIR}/config/log4j.properties -Dkafka.logs.dir=${KAFKA_LOGS_DIR} -javaagent:/opt/jolokia-jvm-agent.jar=host=0.0.0.0"

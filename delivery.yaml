@@ -4,9 +4,8 @@ pipeline:
     type: script
     vm_config: 
       type: linux
-      priority: 3
-    env:
-        PYENV_VERSION: 3.8.10
+      size: large
+      image: cdp-runtime/python-3.9
     commands:
       - desc: Run tests
         cmd: |
@@ -15,22 +14,59 @@ pipeline:
 
       - desc: Build docker images for different architectures
         cmd: |
+          IMAGE="container-registry-test.zalando.net/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}"
 
-          docker run --privileged --rm tonistiigi/binfmt --install all
+          # create a Buildkit builder with CDP specific configuration
+          docker buildx create \
+                --config /etc/cdp-buildkitd.toml \
+                --driver-opt network=host \
+                --name cdpbuildx \
+                --bootstrap \
+                --use
 
-          for platform in "arm64" "amd64"; do 
-            echo "Building bubuku for platform $platform"
-            IMAGE=registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}-${platform}
-            
-            docker buildx build --platform linux/${platform} -t $IMAGE .
-            if [ -z "$CDP_PULL_REQUEST_NUMBER" ]; then
-              docker push $IMAGE
-            fi
-            
-            TEST_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-test-${CDP_BUILD_VERSION}-${platform}"
-            docker tag "$IMAGE" "$TEST_IMAGE"
-            docker push "$TEST_IMAGE"
-          done
+          # (1) build image for AMD64 and ARM64 and push it to the Zalando Container Registry
+          docker buildx build \
+                --platform linux/amd64,linux/arm64 \
+                -t ${IMAGE} \
+                --push \
+                .
+
+          # (2) promote it from `container-registry-test` to `container-registry`, marking it production-ready
+          cdp-promote-image ${IMAGE}
+
+  - id: push-pierone-arm64
+    type: script
+    when:
+      event: push
+    vm_config:
+      type: linux
+      image: cdp-runtime/base
+    commands:
+      - desc: Push ARM64 image to PierOne
+        cmd: |
+          IMAGE="container-registry.zalando.net/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}"
+          PIERONE_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}-arm64"
+
+          docker pull --platform linux/arm64 $IMAGE
+          docker tag $IMAGE $PIERONE_IMAGE
+          docker push $PIERONE_IMAGE
+
+  - id: push-pierone-amd64
+    type: script
+    when:
+      event: push
+    vm_config:
+      type: linux
+      image: cdp-runtime/base
+    commands:
+      - desc: Push AMD64 image to PierOne
+        cmd: |
+          IMAGE="container-registry.zalando.net/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}"
+          PIERONE_IMAGE="registry-write.opensource.zalan.do/aruha/bubuku-appliance:oss-${CDP_BUILD_VERSION}-amd64"
+
+          docker pull --platform linux/amd64 $IMAGE
+          docker tag $IMAGE $PIERONE_IMAGE
+          docker push $PIERONE_IMAGE
 
 notifications:
   - channel: google_chat
