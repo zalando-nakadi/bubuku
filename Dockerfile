@@ -10,7 +10,7 @@ RUN echo 'deb https://apt.corretto.aws stable main' >/etc/apt/sources.list.d/ama
 RUN apt-get update && apt-get install -y java-17-amazon-corretto-jdk
 
 # Install kafka
-ENV KAFKA_VERSION="3.1.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
+ENV KAFKA_VERSION="3.3.1" SCALA_VERSION="2.13" JOLOKIA_VERSION="1.6.2"
 ENV KAFKA_DIR="/opt/kafka" KAFKA_LOGS_DIR="/data/logs" KAFKA_SETTINGS="/opt/kafka/config/server.properties"
 
 ADD docker/download_kafka.sh /tmp/download_kafka.sh
