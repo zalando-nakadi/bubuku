@@ -1,3 +1,8 @@
+# Archived
+
+**This repository is now archived.**
+
+
 [![Build Status](https://travis-ci.org/zalando-incubator/bubuku.svg)](https://travis-ci.org/zalando-incubator/bubuku)
 # Introduction
 
